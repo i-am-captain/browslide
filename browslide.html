@@ -107,6 +107,8 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 #aspect-custom label{flex-direction:row;align-items:center}
 #aspect-custom input{width:64px}
 #inspector label.row{display:flex;flex-direction:row;align-items:center}
+#present-settings{display:flex;flex-direction:column;gap:6px}
+#present-settings summary{cursor:pointer;color:var(--muted);font-size:12px}
 /* ---- slides ---- */
 .slide{width:100%;margin:auto;aspect-ratio:16/9;overflow:auto;background:var(--slide-bg);color:var(--slide-ink);
   border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.12);
@@ -191,7 +193,11 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
         <option value="dark">Dark</option>
       </select>
     </label>
-    <label class="row"><input type="checkbox" id="opt-showbar" checked> Show toolbar in presentation</label>
+    <details id="present-settings">
+      <summary>Presentation settings</summary>
+      <label class="row"><input type="checkbox" id="opt-showbar" checked> Toolbar in presentation</label>
+      <label class="row"><input type="checkbox" id="opt-tight"> Maximum fullscreen (no border)</label>
+    </details>
     <label>Speaker notes
       <textarea id="notes" rows="6" placeholder="Notes for this slide (not shown on stage)"></textarea>
     </label>
@@ -227,7 +233,7 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 <input type="file" id="insert-video" accept="video/*" hidden>
 
 <script type="application/json" id="slider-data">
-{"app":"browslide","version":2,"title":"My Talk","theme":"dark","slideOrder":["s1","s2","s3"],"nextId":4,"slides":{"s1":{"title":"My Talk","layout":"title","transition":"fade","html":"<h1>My Talk</h1><p>A presentation made with Browslide — one file, no server.</p>","notes":""},"s2":{"title":"How to use","layout":"title-body","transition":"fade","html":"<h1>How to use</h1><ul><li>Click the slide and type — everything saves into this one file.</li><li><b>Save</b> downloads an updated copy (also Ctrl+S). <b>Open</b> loads another copy. <b>Present</b> starts the show.</li><li>Drag slides in the left list to reorder. Right panel: layout, transition, theme, notes.</li><li>Media is deduplicated and compressed on save; Media & sizes shows per-slide usage.</li><li>Keys: ↑/↓ in the slide list, PageUp/PageDown outside the slide, Space/→ while presenting.</li></ul>","notes":""},"s3":{"title":"Thanks","layout":"title","transition":"fade","html":"<h1>Thanks</h1><p>Questions?</p>","notes":""}},"resources":{},"nextResId":1,"settings":{"compress":true,"downscale":false,"maxDim":1920,"showBar":true},"aspect":{"w":16,"h":9}}
+{"app":"browslide","version":2,"title":"My Talk","theme":"dark","slideOrder":["s1","s2","s3"],"nextId":4,"slides":{"s1":{"title":"My Talk","layout":"title","transition":"fade","html":"<h1>My Talk</h1><p>A presentation made with Browslide — one file, no server.</p>","notes":""},"s2":{"title":"How to use","layout":"title-body","transition":"fade","html":"<h1>How to use</h1><ul><li>Click the slide and type — everything saves into this one file.</li><li><b>Save</b> downloads an updated copy (also Ctrl+S). <b>Open</b> loads another copy. <b>Present</b> starts the show.</li><li>Drag slides in the left list to reorder. Right panel: layout, transition, theme, notes.</li><li>Media is deduplicated and compressed on save; Media & sizes shows per-slide usage.</li><li>Keys: ↑/↓ in the slide list, PageUp/PageDown outside the slide, Space/→ while presenting.</li></ul>","notes":""},"s3":{"title":"Thanks","layout":"title","transition":"fade","html":"<h1>Thanks</h1><p>Questions?</p>","notes":""}},"resources":{},"nextResId":1,"settings":{"compress":true,"downscale":false,"maxDim":1920,"showBar":true,"tight":false},"aspect":{"w":16,"h":9}}
 </script>
 
 <script>
@@ -317,7 +323,7 @@ function normalizeModel(raw){
   var st = (raw.settings && typeof raw.settings === 'object') ? raw.settings : {};
   m.settings = { compress: st.compress !== false, downscale: !!st.downscale,
     maxDim: (st.maxDim === 1280 || st.maxDim === 2560) ? st.maxDim : 1920,
-    showBar: st.showBar !== false };
+    showBar: st.showBar !== false, tight: !!st.tight };
   var ax = (raw.aspect && typeof raw.aspect === 'object') ? raw.aspect : null;
   var awd = ax ? parseInt(ax.w, 10) : NaN, aht = ax ? parseInt(ax.h, 10) : NaN;
   m.aspect = (awd >= 1 && awd <= 99 && aht >= 1 && aht <= 99) ? { w: awd, h: aht } : { w: 16, h: 9 };
@@ -721,8 +727,10 @@ function fitPresent(){
   var ov = $('#present-overlay'), sec = $('#present-slide .slide');
   if (!ov || ov.hidden || !sec || !App.model) return;
   var bar = $('#present-bar');
-  var reserved = ((App.model.settings.showBar !== false && bar) ? bar.offsetHeight : 0) + 48;
-  fitSlideBox(sec, Math.max(200, ov.clientWidth - 40), Math.max(200, ov.clientHeight - reserved));
+  var tight = !!App.model.settings.tight;
+  var bh = (App.model.settings.showBar !== false && bar) ? bar.offsetHeight : 0;
+  var reserved = bh + (tight ? 0 : 48);
+  fitSlideBox(sec, Math.max(200, ov.clientWidth - (tight ? 0 : 40)), Math.max(200, ov.clientHeight - reserved));
 }
 function renderInspector(){
   var s = activeSlide();
@@ -765,6 +773,7 @@ function renderAll(){
   $('#opt-downscale').checked = !!App.model.settings.downscale;
   $('#opt-maxdim').value = String(App.model.settings.maxDim);
   $('#opt-showbar').checked = !!App.model.settings.showBar;
+  $('#opt-tight').checked = !!App.model.settings.tight;
 }
 var onStageInput = debounce(function(){
   syncStageToModel();
@@ -929,11 +938,11 @@ var PLAYER_JS = [
   "var idx=0;",
   "var count=document.getElementById('count');",
   "var deckTitle=document.title.replace(/ \\(viewer\\)$/,'');",
-  "var AR_W=@AR_W@,AR_H=@AR_H@;",
+  "var AR_W=@AR_W@,AR_H=@AR_H@,TIGHT=@TIGHT@;",
   "function fit(){",
   "var bar=document.getElementById('bar');",
-  "var aw=Math.max(200,window.innerWidth-40);",
-  "var ah=Math.max(200,window.innerHeight-(bar?bar.offsetHeight+24:60)-40);",
+  "var aw=Math.max(200,window.innerWidth-(TIGHT?0:40));",
+  "var ah=Math.max(200,window.innerHeight-(bar?bar.offsetHeight+(TIGHT?0:24):(TIGHT?0:60))-(TIGHT?0:40));",
   "var w=Math.min(aw,ah*AR_W/AR_H);",
   "var h=w*AR_H/AR_W;",
   "slides.forEach(function(s){s.style.width=Math.floor(w)+'px';s.style.height=Math.floor(h)+'px';s.style.aspectRatio=AR_W+'/'+AR_H;s.style.fontSize=Math.max(10,16*w/880).toFixed(1)+'px';});",
@@ -978,7 +987,7 @@ function exportViewer(){
   var ar = deckAR();
   var css = document.querySelector('style').textContent;
   css += '\n#deck .slide{aspect-ratio:' + ar.w + '/' + ar.h + '}\n';
-  var playerJs = PLAYER_JS.split('@AR_W@').join(ar.w).split('@AR_H@').join(ar.h);
+  var playerJs = PLAYER_JS.split('@AR_W@').join(ar.w).split('@AR_H@').join(ar.h).split('@TIGHT@').join(App.model.settings.tight ? 1 : 0);
   var barHtml = App.model.settings.showBar === false ? '' :
     '<div id="bar"><button id="prev" title="Previous">Prev</button><span id="count"></span>' +
     '<button id="next" title="Next">Next</button><button id="fs" title="Fullscreen">Fullscreen</button>' +
@@ -1159,6 +1168,7 @@ function bind(){
     refreshDirty(); scheduleAutosave();
   });
   $('#opt-showbar').addEventListener('change', function(e){ App.model.settings.showBar = !!e.target.checked; refreshDirty(); scheduleAutosave(); });
+  $('#opt-tight').addEventListener('change', function(e){ App.model.settings.tight = !!e.target.checked; refreshDirty(); scheduleAutosave(); });
   $('#insert-image').addEventListener('change', function(e){ if (e.target.files[0]) insertFile(e.target.files[0], 'image'); e.target.value = ''; });
   $('#insert-video').addEventListener('change', function(e){ if (e.target.files[0]) insertFile(e.target.files[0], 'video'); e.target.value = ''; });
   $('#deck-title').addEventListener('input', debounce(function(e){

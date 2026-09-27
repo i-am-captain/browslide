@@ -489,7 +489,7 @@ DF.querySelector('#btn-export').click();
 await wait(100);
 const exT = await blobToText(WF.__savedBlob, WF);
 check('export bakes aspect css', exT.includes('#deck .slide{aspect-ratio:7/5}'));
-check('export player gets AR constants', exT.includes('var AR_W=7,AR_H=5;') && !exT.includes('@AR_'));
+check('export player gets AR constants', exT.includes('AR_W=7') && exT.includes('AR_H=5') && !exT.includes('@AR_'));
 const domG = makeDom(exT);
 await wait(400);
 check('exported viewer fits slide', !!domG.window.document.querySelector('#deck .slide').style.width);
@@ -543,6 +543,32 @@ const noSet = { app: 'browslide', version: 2, title: 'T', theme: 'dark', slideOr
 check('showBar defaults true', NMK(JSON.parse(JSON.stringify(noSet))).settings.showBar === true);
 noSet.settings = { showBar: false };
 check('showBar false preserved', NMK(JSON.parse(JSON.stringify(noSet))).settings.showBar === false);
+
+// ---------- 15. maximum fullscreen toggle ----------
+const domM = makeDom(html);
+await wait(400);
+const WM = domM.window, DM = WM.document;
+check('tight defaults off', WM.App.model.settings.tight === false && DM.querySelector('#opt-tight').checked === false);
+check('present settings group exists', !!DM.querySelector('#present-settings summary') && !!DM.querySelector('#opt-showbar') && !!DM.querySelector('#opt-tight'));
+DM.querySelector('#btn-export').click();
+await wait(300);
+check('export bakes TIGHT=0 by default', (await blobToText(WM.__savedBlob, WM)).includes('TIGHT=0'));
+DM.querySelector('#opt-tight').checked = true;
+DM.querySelector('#opt-tight').dispatchEvent(new WM.Event('change', { bubbles: true }));
+DM.querySelector('#btn-save').click();
+await wait(300);
+const tM = await blobToText(WM.__savedBlob, WM);
+check('tight persists in save', JSON.parse(new JSDOM(tM).window.document.querySelector('#slider-data').textContent).settings.tight === true);
+DM.querySelector('#btn-export').click();
+await wait(300);
+const exM = await blobToText(WM.__savedBlob, WM);
+check('export bakes TIGHT=1 and no tokens left', exM.includes('TIGHT=1') && !exM.includes('@TIGHT@') && !exM.includes('@AR_'));
+const domN = makeDom(exM);
+await wait(400);
+check('tight viewer boots fitted', !!domN.window.document.querySelector('#deck .slide').style.width);
+const NMT = WM.normalizeModel;
+const nsM = { app: 'browslide', version: 2, title: 'T', theme: 'dark', slideOrder: ['s1'], nextId: 2, slides: { s1: { title: 'T', layout: 'blank', transition: 'none', html: '<p>x</p>', notes: '' } } };
+check('tight defaults false in model', NMT(JSON.parse(JSON.stringify(nsM))).settings.tight === false);
 
 console.log(failures === 0 ? '\nALL TESTS PASSED' : `\n${failures} TEST(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);

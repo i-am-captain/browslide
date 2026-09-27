@@ -18,7 +18,7 @@ Repo file vs. saved copies: `browslide.html` in this repo is the maintained **te
 |---|---|
 | + Slide / Duplicate / Delete | Add after current, copy current, remove current (delete asks first; a deck always keeps ≥ 1 slide) |
 | ◀ ▶ | Previous / next slide |
-| Present | Fullscreen show (`Space`/`→` next, `←` prev, `Home`/`End`, `Esc` exit, click advances). Inspector checkbox toggles the bottom toolbar for true fullscreen. |
+| Present | Fullscreen show (`Space`/`→` next, `←` prev, `Home`/`End`, `Esc` exit, click advances). Presentation settings (inspector): toolbar on/off, aesthetic border vs maximum fullscreen. |
 | Export viewer | Downloads a small standalone copy (`<title>-viewer.html`) for sharing: slides + player only, no editor code, no notes. Works from `file://` everywhere. |
 | Open | Load another saved copy (picker or drag-drop) |
 | New | Fresh starter deck (asks first if you have unsaved changes) |
