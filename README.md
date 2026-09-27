@@ -23,6 +23,7 @@ Repo file vs. saved copies: `browslide.html` in this repo is the maintained **te
 | Format bar | Paragraph style (H1–H3), font (system fonts only) and size, bold/italic/underline/strikethrough, alignment, bullet/numbered lists, clear formatting. Applies to selected text — or set it first, then type. |
 | Blocks | Slide content lives in freely positionable blocks: click once to select, drag the ⋮⋮ grip to move, click again to edit text. Images land in blocks too. |
 | Shapes | 12 insertable vector symbols (arrows, line, circle, square, triangle, star, check, cross) as movable blocks. |
+| Animations | Per-element fade in/out, move-in (4 directions), rotate-in with click-advance steps — set in the Animation panel on any selected block or image, plays in Present and viewer exports. |
 | Open | Load another saved copy (picker or drag-drop) |
 | New | Fresh starter deck (asks first if you have unsaved changes) |
 | Save (or Ctrl+S) | Downloads the whole deck as one `.html` file. Note: browsers can't silently overwrite the file you opened, so each Save is a new download — replace the old file with it. |

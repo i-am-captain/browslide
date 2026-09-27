@@ -156,6 +156,21 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 .trans-slide{animation:slideIn .35s ease}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 @keyframes slideIn{from{opacity:0;transform:translateX(48px)}to{opacity:1;transform:none}}
+/* per-element step animations (present mode + viewer export) */
+@keyframes animFadeIn{from{opacity:0}to{opacity:1}}
+@keyframes animFadeOut{to{opacity:0}}
+@keyframes animMoveL{from{opacity:0;transform:translateX(-60px)}to{opacity:1;transform:none}}
+@keyframes animMoveR{from{opacity:0;transform:translateX(60px)}to{opacity:1;transform:none}}
+@keyframes animMoveU{from{opacity:0;transform:translateY(-60px)}to{opacity:1;transform:none}}
+@keyframes animMoveD{from{opacity:0;transform:translateY(60px)}to{opacity:1;transform:none}}
+@keyframes animRotate{from{opacity:0;transform:rotate(-30deg) scale(.8)}to{opacity:1;transform:none}}
+.anim-fade-in{animation:animFadeIn .5s ease both}
+.anim-fade-out{animation:animFadeOut .5s ease both}
+.anim-move-left{animation:animMoveL .5s ease both}
+.anim-move-right{animation:animMoveR .5s ease both}
+.anim-move-up{animation:animMoveU .5s ease both}
+.anim-move-down{animation:animMoveD .5s ease both}
+.anim-rotate{animation:animRotate .6s ease both}
 @media (max-width:900px){#main{grid-template-columns:1fr}#filmstrip,#inspector{display:none}}
 </style>
 </head>
@@ -273,6 +288,30 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
       <label class="row"><input type="checkbox" id="opt-showbar" checked> Toolbar in presentation</label>
       <label class="row"><input type="checkbox" id="opt-tight"> Maximum fullscreen (no border)</label>
     </details>
+    <details id="anim-wrap">
+      <summary>Animation</summary>
+      <div id="anim-hint">Select a block or image first.</div>
+      <div id="anim-controls">
+        <label>Effect
+          <select id="anim-effect">
+            <option value="">None</option>
+            <option value="fade-in">Fade in</option>
+            <option value="fade-out">Fade out</option>
+            <option value="move">Move in</option>
+            <option value="rotate">Rotate in</option>
+          </select>
+        </label>
+        <label>Direction
+          <select id="anim-dir">
+            <option value="left">From left</option>
+            <option value="right">From right</option>
+            <option value="up">From top</option>
+            <option value="down">From bottom</option>
+          </select>
+        </label>
+        <label>Step <input id="anim-step" type="number" min="1" max="99"></label>
+      </div>
+    </details>
     <label>Speaker notes
       <textarea id="notes" rows="6" placeholder="Notes for this slide (not shown on stage)"></textarea>
     </label>
@@ -321,7 +360,7 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 <input type="file" id="insert-video" accept="video/*" hidden>
 
 <script type="application/json" id="slider-data">
-{"app":"browslide","version":2,"title":"My Talk","theme":"dark","slideOrder":["s1","s2","s3"],"nextId":4,"slides":{"s1":{"title":"My Talk","layout":"title","transition":"fade","html":"<div class=\"blk\" style=\"left:10%;top:30%;width:80%;text-align:center\"><h1>My Talk</h1><p>A presentation made with Browslide — one file, no server.</p></div>","notes":""},"s2":{"title":"How to use","layout":"title-body","transition":"fade","html":"<div class=\"blk\" style=\"left:8%;top:5%;width:84%\"><h1>How to use</h1></div><div class=\"blk\" style=\"left:8%;top:26%;width:84%\"><ul><li>Click the slide and type — everything saves into this one file.</li><li><b>Save</b> downloads an updated copy (also Ctrl+S). <b>Open</b> loads another copy. <b>Present</b> starts the show.</li><li>Drag slides in the left list to reorder. Right panel: layout, transition, theme, notes.</li><li>Click a text block to select it, drag its grip to move it. Click images to resize them.</li><li>Media is deduplicated and compressed on save; Media & sizes shows per-slide usage.</li><li>Keys: ↑/↓ in the slide list, PageUp/PageDown outside the slide, Space/→ while presenting.</li></ul></div>","notes":""},"s3":{"title":"Thanks","layout":"title","transition":"fade","html":"<div class=\"blk\" style=\"left:10%;top:34%;width:80%;text-align:center\"><h1>Thanks</h1><p>Questions?</p></div>","notes":""}},"resources":{},"nextResId":1,"settings":{"compress":true,"downscale":false,"maxDim":1920,"showBar":true,"tight":false},"aspect":{"w":16,"h":9}}
+{"app":"browslide","version":2,"title":"My Talk","theme":"dark","slideOrder":["s1","s2","s3"],"nextId":4,"slides":{"s1":{"title":"My Talk","layout":"title","transition":"fade","html":"<div class=\"blk\" style=\"left:10%;top:30%;width:80%;text-align:center\"><h1>My Talk</h1><p>A presentation made with Browslide — one file, no server.</p></div>","notes":""},"s2":{"title":"How to use","layout":"title-body","transition":"fade","html":"<div class=\"blk\" style=\"left:8%;top:5%;width:84%\"><h1>How to use</h1></div><div class=\"blk\" style=\"left:8%;top:26%;width:84%\"><ul><li>Click the slide and type — everything saves into this one file.</li><li><b>Save</b> downloads an updated copy (also Ctrl+S). <b>Open</b> loads another copy. <b>Present</b> starts the show.</li><li>Drag slides in the left list to reorder. Right panel: layout, transition, theme, notes.</li><li>Click a text block to select it, drag its grip to move it. Click images to resize them.</li><li>Media is deduplicated and compressed on save; Media & sizes shows per-slide usage.</li><li>Keys: PageUp/PageDown to move between slides, Space/→ while presenting.</li></ul></div>","notes":""},"s3":{"title":"Thanks","layout":"title","transition":"fade","html":"<div class=\"blk\" style=\"left:10%;top:34%;width:80%;text-align:center\"><h1>Thanks</h1><p>Questions?</p></div>","notes":""}},"resources":{},"nextResId":1,"settings":{"compress":true,"downscale":false,"maxDim":1920,"showBar":true,"tight":false},"aspect":{"w":16,"h":9}}
 </script>
 
 <script>
@@ -917,6 +956,7 @@ function renderAll(){
   renderInspector();
   refreshDirty();
   updateSize();
+  refreshAnimUI();
   $('#opt-compress').checked = !!App.model.settings.compress;
   $('#opt-downscale').checked = !!App.model.settings.downscale;
   $('#opt-maxdim').value = String(App.model.settings.maxDim);
@@ -1620,12 +1660,42 @@ function selectMedia(el){
   resizer.el = (blk && sec.contains(blk)) ? blk : el;
   resizerOverlay();
   positionResizer();
+  refreshAnimUI();
   return true;
 }
 function deselectMedia(){
   resizer.el = null;
   var ov = $('#media-resizer');
   if (ov) ov.hidden = true;
+  refreshAnimUI();
+}
+function selectedAnimTarget(){
+  var el = resizer.el;
+  return (el && document.contains(el)) ? el : null;
+}
+function maxStepOnSlide(){
+  var sec = $('#stage .slide'), mx = 0;
+  if (sec) Array.prototype.forEach.call(sec.querySelectorAll('[data-step]'), function(n){
+    var v = parseInt(n.getAttribute('data-step'), 10);
+    if (!isNaN(v) && v > mx) mx = v;
+  });
+  return mx;
+}
+function refreshAnimUI(){
+  var el = selectedAnimTarget();
+  var hint = $('#anim-hint'), ctl = $('#anim-controls');
+  if (!hint || !ctl) return;
+  if (!el) { hint.hidden = false; ctl.hidden = true; return; }
+  hint.hidden = true;
+  ctl.hidden = false;
+  var fx = el.getAttribute('data-anim') || '';
+  $('#anim-effect').value = ANIM_FX.indexOf(fx) >= 0 ? fx : '';
+  $('#anim-dir').value = el.getAttribute('data-dir') || 'left';
+  var st = el.getAttribute('data-step') || '';
+  if (document.activeElement !== $('#anim-step')) $('#anim-step').value = st;
+}
+function writeAnimAttrs(){
+  syncStageToModel(); refreshDirty(); scheduleSize(); scheduleAutosave(); refreshAnimUI();
 }
 function onHandleDown(e){
   if (!resizer.el) return;
@@ -1666,7 +1736,7 @@ function openPresent(){
   showPresent(App.presentIdx);
   try { var p = document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); if (p && p.catch) p.catch(function(){}); } catch (e) {}
 }
-function showPresent(i){
+function showPresent(i, revealAll){
   var order = App.model.slideOrder;
   App.presentIdx = Math.max(0, Math.min(order.length - 1, i));
   var s = App.model.slides[order[App.presentIdx]];
@@ -1677,8 +1747,54 @@ function showPresent(i){
   sec.innerHTML = expandHtml(s.html, App.model.resources);
   host.appendChild(sec);
   void sec.offsetWidth; /* restart CSS animation */
-  $('#present-count').textContent = (App.presentIdx + 1) + ' / ' + order.length;
+  resetSteps(sec, !!revealAll);
+  updatePresentCount();
   fitPresent();
+}
+/* ---- per-element step animations (click-advance reveal) ---- */
+var ANIM_FX = ['fade-in', 'fade-out', 'move', 'rotate'];
+var ANIM_CLASSES = ['anim-fade-in', 'anim-fade-out', 'anim-move-left', 'anim-move-right', 'anim-move-up', 'anim-move-down', 'anim-rotate'];
+var presentSteps = [], presentStepIdx = 0;
+function animClass(effect, dir){ return 'anim-' + effect + (effect === 'move' ? '-' + (dir || 'left') : ''); }
+function collectSteps(sec){
+  var nodes = Array.prototype.slice.call(sec.querySelectorAll('[data-anim]'));
+  nodes = nodes.filter(function(n){ return ANIM_FX.indexOf(n.getAttribute('data-anim')) >= 0; });
+  nodes.sort(function(a, b){
+    var x = parseInt(a.getAttribute('data-step'), 10), y = parseInt(b.getAttribute('data-step'), 10);
+    return (isNaN(x) ? 1e9 : x) - (isNaN(y) ? 1e9 : y);
+  });
+  return nodes;
+}
+function resetSteps(sec, revealAll){
+  var steps = collectSteps(sec);
+  steps.forEach(function(n){
+    ANIM_CLASSES.forEach(function(c){ n.classList.remove(c); });
+    n.style.visibility = (revealAll || n.getAttribute('data-anim') === 'fade-out') ? 'visible' : 'hidden';
+  });
+  presentSteps = revealAll ? [] : steps;
+  presentStepIdx = 0;
+}
+function playAnimNode(n){
+  var fx = n.getAttribute('data-anim');
+  n.style.visibility = 'visible';
+  void n.offsetWidth;
+  n.classList.add(animClass(fx, n.getAttribute('data-dir')));
+  if (fx === 'fade-out') setTimeout(function(){ n.style.visibility = 'hidden'; }, 500);
+}
+function playPresentStep(){
+  var n = presentSteps[presentStepIdx++];
+  if (!n) return false;
+  playAnimNode(n);
+  updatePresentCount();
+  return true;
+}
+function advancePresent(){
+  if (presentStepIdx < presentSteps.length) playPresentStep();
+  else showPresent(App.presentIdx + 1);
+}
+function updatePresentCount(){
+  var n = App.model.slideOrder.length;
+  $('#present-count').textContent = (App.presentIdx + 1) + ' / ' + n + (presentSteps.length ? ' · ' + presentStepIdx + '/' + presentSteps.length : '');
 }
 function closePresent(){
   $('#present-overlay').hidden = true;
@@ -1713,7 +1829,7 @@ var PLAYER_JS = [
   "slides.forEach(function(s){s.style.width=Math.floor(w)+'px';s.style.height=Math.floor(h)+'px';s.style.aspectRatio=AR_W+'/'+AR_H;s.style.fontSize=Math.max(10,16*w/880).toFixed(1)+'px';});",
   "}",
   "window.addEventListener('resize',fit);",
-  "function show(i){",
+  "function show(i,reveal){",
   "idx=Math.max(0,Math.min(slides.length-1,i));",
   "slides.forEach(function(s,j){",
   "s.hidden=(j!==idx);",
@@ -1724,19 +1840,31 @@ var PLAYER_JS = [
   "if(t&&t!=='none'){s.classList.add('trans-'+t);}",
   "document.title=s.getAttribute('data-title')+' — '+deckTitle;",
   "}});",
-  "if(count){count.textContent=(idx+1)+' / '+slides.length;}",
+  "collect();reset(!!reveal);updateCount();",
   "}",
+  "var ANIM_FX=['fade-in','fade-out','move','rotate'];",
+  "var ANIM_CLASSES=['anim-fade-in','anim-fade-out','anim-move-left','anim-move-right','anim-move-up','anim-move-down','anim-rotate'];",
+  "var steps=[],stepIdx=0;",
+  "function animClass(e,d){return 'anim-'+e+(e==='move'?'-'+(d||'left'):'');}",
+  "function collect(){steps=Array.prototype.slice.call(slides[idx].querySelectorAll('[data-anim]'));",
+  "steps=steps.filter(function(s){return ANIM_FX.indexOf(s.getAttribute('data-anim'))>=0;});",
+  "steps.sort(function(a,b){var x=parseInt(a.getAttribute('data-step'),10),y=parseInt(b.getAttribute('data-step'),10);return (isNaN(x)?1e9:x)-(isNaN(y)?1e9:y);});",
+  "stepIdx=0;}",
+  "function reset(reveal){steps.forEach(function(s){var e=s.getAttribute('data-anim');ANIM_CLASSES.forEach(function(c){s.classList.remove(c);});s.style.visibility=(reveal||e==='fade-out')?'visible':'hidden';});if(reveal){steps=[];}}",
+  "function playStep(){var s=steps[stepIdx++];if(!s)return false;var e=s.getAttribute('data-anim');var d=s.getAttribute('data-dir')||'left';s.style.visibility='visible';void s.offsetWidth;s.classList.add(animClass(e,d));if(e==='fade-out'){setTimeout(function(){s.style.visibility='hidden';},500);}updateCount();return true;}",
+  "function advance(){if(stepIdx<steps.length){playStep();}else{show(idx+1);}}",
+  "function updateCount(){if(count){count.textContent=(idx+1)+' / '+slides.length+(steps.length?' · '+stepIdx+'/'+steps.length:'');}}",
   "function fs(){try{if(document.fullscreenElement){document.exitFullscreen();}else if(document.documentElement.requestFullscreen){document.documentElement.requestFullscreen();}}catch(e){}}",
   "function on(id,ev,fn){var b=document.getElementById(id);if(b){b.addEventListener(ev,function(e){e.stopPropagation();fn();});}}",
-  "on('prev','click',function(){show(idx-1);});",
-  "on('next','click',function(){show(idx+1);});",
+  "on('prev','click',function(){show(idx-1,true);});",
+  "on('next','click',function(){advance();});",
   "on('fs','click',function(){fs();});",
-  "document.getElementById('deck').addEventListener('click',function(){show(idx+1);});",
+  "document.getElementById('deck').addEventListener('click',function(){advance();});",
   "document.addEventListener('keydown',function(e){",
-  "if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown'||e.key==='Enter'){e.preventDefault();show(idx+1);}",
-  "else if(e.key==='ArrowLeft'||e.key==='PageUp'){e.preventDefault();show(idx-1);}",
-  "else if(e.key==='Home'){e.preventDefault();show(0);}",
-  "else if(e.key==='End'){e.preventDefault();show(slides.length-1);}",
+  "if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown'||e.key==='Enter'){e.preventDefault();advance();}",
+  "else if(e.key==='ArrowLeft'||e.key==='PageUp'){e.preventDefault();show(idx-1,true);}",
+  "else if(e.key==='Home'){e.preventDefault();show(0,true);}",
+  "else if(e.key==='End'){e.preventDefault();show(slides.length-1,true);}",
   "else if(e.key==='f'||e.key==='F'){fs();}",
   "});",
   "fit();",
@@ -1927,7 +2055,7 @@ function bind(){
   $('#btn-next').addEventListener('click', function(){ step(1); });
   $('#btn-present').addEventListener('click', openPresent);
   $('#btn-present-close').addEventListener('click', function(e){ e.stopPropagation(); closePresent(); });
-  $('#present-overlay').addEventListener('click', function(){ showPresent(App.presentIdx + 1); });
+  $('#present-overlay').addEventListener('click', function(){ advancePresent(); });
   $('#btn-save').addEventListener('click', saveNow);
   $('#btn-export').addEventListener('click', exportViewer);
   $('#btn-new').addEventListener('click', newDeck);
@@ -1937,6 +2065,34 @@ function bind(){
   $('#btn-video').addEventListener('click', function(){ $('#insert-video').click(); });
   $('#btn-clean-media').addEventListener('click', removeUnusedMedia);
   $('#btn-shape').addEventListener('click', function(){ insertShape($('#shape-select').value); });
+  $('#anim-effect').addEventListener('change', function(e){
+    var el = selectedAnimTarget();
+    if (!el) return;
+    var v = e.target.value;
+    if (!v || ANIM_FX.indexOf(v) < 0) {
+      el.removeAttribute('data-anim');
+      el.removeAttribute('data-dir');
+      el.removeAttribute('data-step');
+    } else {
+      el.setAttribute('data-anim', v);
+      if (!el.hasAttribute('data-step')) el.setAttribute('data-step', String(maxStepOnSlide() + 1));
+    }
+    writeAnimAttrs();
+  });
+  $('#anim-dir').addEventListener('change', function(e){
+    var el = selectedAnimTarget();
+    if (!el) return;
+    el.setAttribute('data-dir', e.target.value);
+    writeAnimAttrs();
+  });
+  $('#anim-step').addEventListener('change', function(e){
+    var el = selectedAnimTarget();
+    if (!el) return;
+    var v = parseInt(e.target.value, 10);
+    if (v >= 1 && v <= 99) el.setAttribute('data-step', String(v));
+    else el.removeAttribute('data-step');
+    writeAnimAttrs();
+  });
   var fbar = $('#formatbar');
   fbar.addEventListener('mousedown', function(e){ if (e.target.closest('button')) e.preventDefault(); });
   fbar.addEventListener('click', function(e){
@@ -2030,10 +2186,10 @@ function bind(){
     var presenting = !$('#present-overlay').hidden;
     if (presenting) {
       if (e.key === 'Escape') { e.preventDefault(); closePresent(); }
-      else if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown' || e.key === 'Enter') { e.preventDefault(); showPresent(App.presentIdx + 1); }
-      else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); showPresent(App.presentIdx - 1); }
-      else if (e.key === 'Home') { e.preventDefault(); showPresent(0); }
-      else if (e.key === 'End') { e.preventDefault(); showPresent(App.model.slideOrder.length - 1); }
+      else if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown' || e.key === 'Enter') { e.preventDefault(); advancePresent(); }
+      else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); showPresent(App.presentIdx - 1, true); }
+      else if (e.key === 'Home') { e.preventDefault(); showPresent(0, true); }
+      else if (e.key === 'End') { e.preventDefault(); showPresent(App.model.slideOrder.length - 1, true); }
       return;
     }
     if (e.key === 'Escape' && resizer.el) { deselectMedia(); e.preventDefault(); }
