@@ -87,7 +87,7 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 #filmstrip-list li[draggable="true"]{cursor:grab}
 #filmstrip-list li.drop-before{box-shadow:0 -3px 0 var(--accent)}
 #stage-wrap{overflow:auto;padding:18px;background:var(--panel);border:1px solid var(--border);border-radius:8px}
-#stage{width:100%;max-width:880px;margin:0 auto}
+#stage{width:100%;height:100%}
 #inspector{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:10px;overflow:auto;display:flex;flex-direction:column;gap:10px}
 #inspector label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
 #inspector select,#inspector textarea{width:100%}
@@ -103,8 +103,11 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 #save-opts select{width:auto;padding:2px 4px}
 #compress-stats{color:var(--muted)}
 #sizes-body button{padding:2px 8px;font-size:11px}
+#aspect-custom{display:flex;gap:8px}
+#aspect-custom label{flex-direction:row;align-items:center}
+#aspect-custom input{width:64px}
 /* ---- slides ---- */
-.slide{width:100%;aspect-ratio:16/9;overflow:auto;background:var(--slide-bg);color:var(--slide-ink);
+.slide{width:100%;margin:auto;aspect-ratio:16/9;overflow:auto;background:var(--slide-bg);color:var(--slide-ink);
   border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.12);
   padding:44px 52px;font-size:16px;outline:none}
 .slide:focus{border-color:var(--accent)}
@@ -170,6 +173,17 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
         <option value="slide">Slide</option>
       </select>
     </label>
+    <label>Aspect ratio
+      <select id="aspect-select">
+        <option value="16:9">16:9</option>
+        <option value="4:3">4:3</option>
+        <option value="custom">Custom…</option>
+      </select>
+    </label>
+    <div id="aspect-custom" hidden>
+      <label>W <input id="aspect-w" type="number" min="1" max="99"></label>
+      <label>H <input id="aspect-h" type="number" min="1" max="99"></label>
+    </div>
     <label>Theme
       <select id="theme-select">
         <option value="default">Light</option>
@@ -211,7 +225,7 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 <input type="file" id="insert-video" accept="video/*" hidden>
 
 <script type="application/json" id="slider-data">
-{"app":"browslide","version":2,"title":"My Talk","theme":"default","slideOrder":["s1","s2","s3"],"nextId":4,"slides":{"s1":{"title":"My Talk","layout":"title","transition":"fade","html":"<h1>My Talk</h1><p>A presentation made with Browslide — one file, no server.</p>","notes":""},"s2":{"title":"How to use","layout":"title-body","transition":"fade","html":"<h1>How to use</h1><ul><li>Click the slide and type — everything saves into this one file.</li><li><b>Save</b> downloads an updated copy (also Ctrl+S). <b>Open</b> loads another copy. <b>Present</b> starts the show.</li><li>Drag slides in the left list to reorder. Right panel: layout, transition, theme, notes.</li><li>Media is deduplicated and compressed on save; Media & sizes shows per-slide usage.</li><li>Keys: ↑/↓ in the slide list, PageUp/PageDown outside the slide, Space/→ while presenting.</li></ul>","notes":""},"s3":{"title":"Thanks","layout":"title","transition":"fade","html":"<h1>Thanks</h1><p>Questions?</p>","notes":""}},"resources":{},"nextResId":1,"settings":{"compress":true,"downscale":false,"maxDim":1920}}
+{"app":"browslide","version":2,"title":"My Talk","theme":"default","slideOrder":["s1","s2","s3"],"nextId":4,"slides":{"s1":{"title":"My Talk","layout":"title","transition":"fade","html":"<h1>My Talk</h1><p>A presentation made with Browslide — one file, no server.</p>","notes":""},"s2":{"title":"How to use","layout":"title-body","transition":"fade","html":"<h1>How to use</h1><ul><li>Click the slide and type — everything saves into this one file.</li><li><b>Save</b> downloads an updated copy (also Ctrl+S). <b>Open</b> loads another copy. <b>Present</b> starts the show.</li><li>Drag slides in the left list to reorder. Right panel: layout, transition, theme, notes.</li><li>Media is deduplicated and compressed on save; Media & sizes shows per-slide usage.</li><li>Keys: ↑/↓ in the slide list, PageUp/PageDown outside the slide, Space/→ while presenting.</li></ul>","notes":""},"s3":{"title":"Thanks","layout":"title","transition":"fade","html":"<h1>Thanks</h1><p>Questions?</p>","notes":""}},"resources":{},"nextResId":1,"settings":{"compress":true,"downscale":false,"maxDim":1920},"aspect":{"w":16,"h":9}}
 </script>
 
 <script>
@@ -249,6 +263,11 @@ var App = { model: null, activeId: null, dirty: false, lastClean: '', overhead: 
 function stable(model){ return JSON.stringify(model); }
 function activeSlide(){ return App.model.slides[App.activeId]; }
 function activeIndex(){ return App.model.slideOrder.indexOf(App.activeId); }
+function deckAR(){
+  var a = App.model && App.model.aspect;
+  if (a && a.w > 0 && a.h > 0) return { w: a.w, h: a.h };
+  return { w: 16, h: 9 };
+}
 
 function sanitizeSlideHTML(html){
   var tpl = document.createElement('template');
@@ -296,6 +315,9 @@ function normalizeModel(raw){
   var st = (raw.settings && typeof raw.settings === 'object') ? raw.settings : {};
   m.settings = { compress: st.compress !== false, downscale: !!st.downscale,
     maxDim: (st.maxDim === 1280 || st.maxDim === 2560) ? st.maxDim : 1920 };
+  var ax = (raw.aspect && typeof raw.aspect === 'object') ? raw.aspect : null;
+  var awd = ax ? parseInt(ax.w, 10) : NaN, aht = ax ? parseInt(ax.h, 10) : NaN;
+  m.aspect = (awd >= 1 && awd <= 99 && aht >= 1 && aht <= 99) ? { w: awd, h: aht } : { w: 16, h: 9 };
   if (raw.resources && typeof raw.resources === 'object') {
     // keep only well-formed entries; drop anything else (never trust a file blindly)
     Object.keys(raw.resources).forEach(function(id){
@@ -673,13 +695,59 @@ function renderStage(){
   sec.innerHTML = expandHtml(s.html, App.model.resources);
   sec.addEventListener('input', onStageInput);
   wrap.appendChild(sec);
+  fitStage();
+}
+/* Fit the slide into its container at the deck aspect ratio, scaling type
+   with it (16px at the 880px reference width). Only touches element style,
+   so caret and content are never disturbed. */
+function fitSlideBox(sec, availW, availH){
+  var ar = deckAR();
+  var w = Math.min(availW, availH * ar.w / ar.h);
+  var h = w * ar.h / ar.w;
+  sec.style.width = Math.max(1, Math.floor(w)) + 'px';
+  sec.style.height = Math.max(1, Math.floor(h)) + 'px';
+  sec.style.aspectRatio = ar.w + ' / ' + ar.h;
+  sec.style.fontSize = Math.max(10, 16 * w / 880).toFixed(1) + 'px';
+}
+function fitStage(){
+  var wrap = $('#stage-wrap'), sec = $('#stage .slide');
+  if (!wrap || !sec || !App.model) return;
+  fitSlideBox(sec, Math.max(200, wrap.clientWidth - 36), Math.max(200, wrap.clientHeight - 36));
+}
+function fitPresent(){
+  var ov = $('#present-overlay'), sec = $('#present-slide .slide');
+  if (!ov || ov.hidden || !sec || !App.model) return;
+  var bar = $('#present-bar');
+  var reserved = (bar ? bar.offsetHeight : 24) + 48;
+  fitSlideBox(sec, Math.max(200, ov.clientWidth - 40), Math.max(200, ov.clientHeight - reserved));
 }
 function renderInspector(){
   var s = activeSlide();
   $('#layout-select').value = s.layout;
   $('#transition-select').value = s.transition;
   $('#theme-select').value = App.model.theme;
+  syncAspectUI();
   if (document.activeElement !== $('#notes')) $('#notes').value = s.notes;
+}
+function syncAspectUI(){
+  var a = deckAR();
+  var sel = $('#aspect-select');
+  var preset = (a.w === 16 && a.h === 9) ? '16:9' : ((a.w === 4 && a.h === 3) ? '4:3' : 'custom');
+  sel.value = preset;
+  var custom = preset === 'custom';
+  if (custom) $('#aspect-custom').removeAttribute('hidden');
+  else $('#aspect-custom').setAttribute('hidden', '');
+  if (document.activeElement !== $('#aspect-w')) $('#aspect-w').value = a.w;
+  if (document.activeElement !== $('#aspect-h')) $('#aspect-h').value = a.h;
+}
+function setAspect(w, h){
+  w = Math.floor(+w); h = Math.floor(+h);
+  if (!(w >= 1 && w <= 99 && h >= 1 && h <= 99)) return false;
+  App.model.aspect = { w: w, h: h };
+  syncAspectUI();
+  fitStage();
+  refreshDirty(); scheduleAutosave();
+  return true;
 }
 function renderAll(){
   document.title = (App.model.title || 'Browslide') + ' — Browslide';
@@ -831,6 +899,7 @@ function showPresent(i){
   host.appendChild(sec);
   void sec.offsetWidth; /* restart CSS animation */
   $('#present-count').textContent = (App.presentIdx + 1) + ' / ' + order.length;
+  fitPresent();
 }
 function closePresent(){
   $('#present-overlay').hidden = true;
@@ -855,6 +924,16 @@ var PLAYER_JS = [
   "var idx=0;",
   "var count=document.getElementById('count');",
   "var deckTitle=document.title.replace(/ \\(viewer\\)$/,'');",
+  "var AR_W=@AR_W@,AR_H=@AR_H@;",
+  "function fit(){",
+  "var bar=document.getElementById('bar');",
+  "var aw=Math.max(200,window.innerWidth-40);",
+  "var ah=Math.max(200,window.innerHeight-(bar?bar.offsetHeight+24:60)-40);",
+  "var w=Math.min(aw,ah*AR_W/AR_H);",
+  "var h=w*AR_H/AR_W;",
+  "slides.forEach(function(s){s.style.width=Math.floor(w)+'px';s.style.height=Math.floor(h)+'px';s.style.aspectRatio=AR_W+'/'+AR_H;s.style.fontSize=Math.max(10,16*w/880).toFixed(1)+'px';});",
+  "}",
+  "window.addEventListener('resize',fit);",
   "function show(i){",
   "idx=Math.max(0,Math.min(slides.length-1,i));",
   "slides.forEach(function(s,j){",
@@ -880,6 +959,7 @@ var PLAYER_JS = [
   "else if(e.key==='End'){e.preventDefault();show(slides.length-1);}",
   "else if(e.key==='f'||e.key==='F'){fs();}",
   "});",
+  "fit();",
   "show(0);",
   "})();"
 ].join('\n');
@@ -889,7 +969,10 @@ function exportViewer(){
   syncStageToModel();
   sanitizeAllSlides();
   renderFilmstrip();
+  var ar = deckAR();
   var css = document.querySelector('style').textContent;
+  css += '\n#deck .slide{aspect-ratio:' + ar.w + '/' + ar.h + '}\n';
+  var playerJs = PLAYER_JS.split('@AR_W@').join(ar.w).split('@AR_H@').join(ar.h);
   var sections = App.model.slideOrder.map(function(id, i){
     var s = App.model.slides[id];
     return '<section class="slide layout-' + s.layout + '" data-trans="' + s.transition +
@@ -903,7 +986,7 @@ function exportViewer(){
     '\n</div>\n<div id="bar"><button id="prev" title="Previous">Prev</button><span id="count"></span>' +
     '<button id="next" title="Next">Next</button><button id="fs" title="Fullscreen">Fullscreen</button>' +
     '<span id="hint">Space/arrow keys navigate · F fullscreen · click advances</span></div>\n</div>\n' +
-    '<script>\n' + PLAYER_JS + '\n<\/script>\n</body>\n</html>\n';
+    '<script>\n' + playerJs + '\n<\/script>\n</body>\n</html>\n';
   downloadBlob(new Blob([doc], { type: 'text/html;charset=utf-8' }), slugify(App.model.title) + '-viewer.html');
   refreshDirty(); updateSize(); scheduleAutosave();
 }
@@ -1087,6 +1170,14 @@ function bind(){
     refreshDirty(); scheduleAutosave();
   });
   $('#notes').addEventListener('input', debounce(function(e){ activeSlide().notes = e.target.value; refreshDirty(); scheduleAutosave(); }, 300));
+  $('#aspect-select').addEventListener('change', function(e){
+    if (e.target.value === '16:9') setAspect(16, 9);
+    else if (e.target.value === '4:3') setAspect(4, 3);
+    else syncAspectUI(); /* custom: reveal W/H inputs, keep current values */
+  });
+  $('#aspect-w').addEventListener('change', function(e){ setAspect(e.target.value, App.model.aspect.h); });
+  $('#aspect-h').addEventListener('change', function(e){ setAspect(App.model.aspect.w, e.target.value); });
+  window.addEventListener('resize', debounce(function(){ fitStage(); fitPresent(); }, 100));
   $('#filmstrip-list').addEventListener('keydown', function(e){
     var ids = App.model.slideOrder, i = activeIndex(), j = -1;
     if (e.key === 'ArrowDown') j = Math.min(ids.length - 1, i + 1);

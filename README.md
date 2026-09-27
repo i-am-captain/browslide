@@ -24,7 +24,7 @@ Repo file vs. saved copies: `browslide.html` in this repo is the maintained **te
 | New | Fresh starter deck (asks first if you have unsaved changes) |
 | Save (or Ctrl+S) | Downloads the whole deck as one `.html` file. Note: browsers can't silently overwrite the file you opened, so each Save is a new download — replace the old file with it. |
 
-Right panel: layout (5), transition (none/fade/slide), theme (light/dark), per-slide speaker notes, estimated save size, media insert.
+Right panel: layout, aspect ratio (16:9, 4:3, custom), transition (none/fade/slide), theme (light/dark), per-slide speaker notes, estimated save size, media insert.
 
 Left list: click to jump, **drag to reorder**, `↑`/`↓` move between slides when the list is focused. Outside the slide text, `PageUp`/`PageDown`/`Home`/`End` also navigate.
 

@@ -31,7 +31,7 @@ const headCss = html.match(/<style>([\s\S]*?)<\/style>/)[1];
 const stageWrap = (headCss.match(/#stage-wrap\{[^}]*\}/) || [''])[0];
 check('stage centers without flex overflow cut',
   stageWrap.includes('overflow:auto') && !stageWrap.includes('justify-content') &&
-  /(?:^|\n)\.slide\{width:100%/.test(headCss) && /#stage\{[^}]*margin:0 auto/.test(headCss));
+  /(?:^|\n)\.slide\{width:100%[^}]*margin:auto/.test(headCss) && /#stage\{[^}]*height:100%/.test(headCss));
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function makeDom(source, runScripts = true) {
@@ -454,6 +454,45 @@ await wait(500);
 DD.querySelector('#btn-save').click();
 await wait(300);
 check('stats suggest downscale for big photos', /Downscale/.test(DD.querySelector('#compress-stats').textContent), DD.querySelector('#compress-stats').textContent);
+
+// ---------- 13. responsive sizing + aspect ratio ----------
+const domF = makeDom(html);
+await wait(400);
+const WF = domF.window, DF = WF.document;
+const stSec = () => DF.querySelector('#stage .slide');
+check('default aspect 16:9', JSON.stringify(WF.App.model.aspect) === JSON.stringify({ w: 16, h: 9 }));
+check('stage slide has fitted px size', stSec().style.width === '200px' && stSec().style.height === '112px', stSec().style.width + 'x' + stSec().style.height);
+check('stage slide aspect + scaled type', stSec().style.aspectRatio === '16 / 9' && stSec().style.fontSize === '10px', stSec().style.aspectRatio + ' / ' + stSec().style.fontSize);
+DF.querySelector('#aspect-select').value = '4:3';
+DF.querySelector('#aspect-select').dispatchEvent(new WF.Event('change', { bubbles: true }));
+check('4:3 applies to model + stage', WF.App.model.aspect.w === 4 && WF.App.model.aspect.h === 3 && stSec().style.height === '150px' && DF.querySelector('#aspect-select').value === '4:3');
+DF.querySelector('#aspect-w').value = '7';
+DF.querySelector('#aspect-w').dispatchEvent(new WF.Event('change', { bubbles: true }));
+DF.querySelector('#aspect-h').value = '5';
+DF.querySelector('#aspect-h').dispatchEvent(new WF.Event('change', { bubbles: true }));
+check('custom aspect via inputs', WF.App.model.aspect.w === 7 && WF.App.model.aspect.h === 5 && DF.querySelector('#aspect-select').value === 'custom' && DF.querySelector('#aspect-custom').hidden === false);
+DF.querySelector('#aspect-w').value = '';
+DF.querySelector('#aspect-w').dispatchEvent(new WF.Event('change', { bubbles: true }));
+check('invalid aspect ignored', WF.App.model.aspect.w === 7);
+const NM2 = WF.normalizeModel;
+const baseM = { app: 'browslide', version: 2, title: 'T', theme: 'default', slideOrder: ['s1'], nextId: 2, slides: { s1: { title: 'T', layout: 'blank', transition: 'none', html: '<p>x</p>', notes: '' } } };
+check('bad aspect falls back to 16:9', JSON.stringify(NM2(Object.assign({}, baseM, { aspect: { w: 0, h: 300 } })).aspect) === JSON.stringify({ w: 16, h: 9 }));
+check('valid aspect kept', JSON.stringify(NM2(Object.assign({}, baseM, { aspect: { w: 4, h: 3 } })).aspect) === JSON.stringify({ w: 4, h: 3 }));
+check('missing aspect defaults', JSON.stringify(NM2(baseM).aspect) === JSON.stringify({ w: 16, h: 9 }));
+DF.querySelector('#btn-present').click();
+await wait(100);
+const pSec = DF.querySelector('#present-slide .slide');
+check('present slide fitted, overlay open', !!pSec && !!pSec.style.width && DF.querySelector('#present-overlay').hidden === false, pSec && pSec.style.width);
+DF.dispatchEvent(new WF.KeyboardEvent('keydown', { key: 'Escape' }));
+await wait(100);
+DF.querySelector('#btn-export').click();
+await wait(100);
+const exT = await blobToText(WF.__savedBlob, WF);
+check('export bakes aspect css', exT.includes('#deck .slide{aspect-ratio:7/5}'));
+check('export player gets AR constants', exT.includes('var AR_W=7,AR_H=5;') && !exT.includes('@AR_'));
+const domG = makeDom(exT);
+await wait(400);
+check('exported viewer fits slide', !!domG.window.document.querySelector('#deck .slide').style.width);
 
 console.log(failures === 0 ? '\nALL TESTS PASSED' : `\n${failures} TEST(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);
