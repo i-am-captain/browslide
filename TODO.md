@@ -1,32 +1,33 @@
-# Browslide task list
+# Browslide task list (round 3; rounds 1–2 done and archived)
 
-# Round 2 (all requested together, work in listed order)
+Conventions: commit per task, full suite (`cd tests && npm test`) green before each commit.
+Single file, zero dependencies, `file://`-compatible. No question tool while user is AFK —
+decide, document below, continue.
 
-- [x] 8. Delete key removes selected shapes/textboxes.
-- [x] 9. Multi-select: property changes (width/color/rotate/scale) apply to all selected items.
-- [x] 10. Rotate handle + N/S edge scale handles on the selection box.
-- [x] 11. Parametric shape geometry: arrows/line length (fixed head), square/triangle height, rectangle w+h, circle radius, ellipse w+h. Done, uncapped.
-- [x] 12. Keyframe animation system: per-step positions, parallel groups, click/auto chaining with delay, easing modes (linear/accelerate/accel-decel), per-row step list UI, keyframes cover size/scale/rotation. (Replaces flat data-anim model; prerelease, no migration.) Done: rAF engine shared by presenter + export, data-anim JSON lists, start-hidden flag.
-- [x] 13. Rotation always applied last in transforms (verified: already scale,scale,rotate effect order).
-- [x] 14. Text alignment buttons broken: stay all selected, text doesn't always move. Done: alignment via direct DOM text-align (no execCommand); reflection reads DOM. Plus caret-safe sync (static selection snapshots; jsdom Range objects track live DOM).
-- [x] 15. Text color selection in text settings (format bar). Done: color input, span-wrap + pending + reflection via cssColorToHex.
-- [x] 16. Right toolbar cleanup/reorder: Slide menu, Presentation menu, notes bottom, textblock in Slide, Media & Sizes last with capital S. Done.
-- [x] 17. Keyframe scrub-editing: selecting a step previews its pose; geometry edits land in that step, rest pose preserved. Done.
-- [x] 18. Viewport auto-fit: REVERTED (did not work reliably) — replaced by whole-item grab dragging. Rationale documented below.
+- [ ] 1. Animation settings layout: every label sits left of its field on one row; widen sidebar as needed.
+- [ ] 2. Default line width 3 for all items (template default, code fallbacks, presets).
+- [ ] 3. Step delete refresh: deleting a step rebuilds the rows even when the ✕ button has focus.
+- [ ] 4. Bottom stage scrub slider: global per-slide animation-stage preview with click/auto indication.
+- [ ] 5. Size handles edit geometry values instead of literal scaling; rectangle/ellipse get 3 handles (corner = both, right = width, bottom = height).
+- [ ] 6. Tight selection boxes: per-shape tight viewBoxes so the overlay hugs the icon.
+- [ ] 7. Shape sizes participate in keyframes (capture/apply/play/scrub/present/viewer), so handle drags record into steps.
+- [ ] 8. Docs (README) + full suite green + commits.
 
-Conventions: commit per task, full suite (`cd tests && npm test`) green before each commit. No question tool while user is AFK — decide, document below, continue.
+# Decisions (round 3)
 
-# Decisions & open points (for later review)
-
-- Old flat animation model (data-anim="fade-in" etc.) is inert, not migrated (prerelease, per instruction). Old saved decks with those attrs lose their animations on open; content unaffected.
-- `execCommand` remains only for bold/italic/underline/strike, lists, block type and removeFormat (collapsed typing style + structural ops). Font/size/color/align are manual DOM ops, so `<font>` tags cannot be created by the toolbar.
-- Copy/paste of blocks is internal-only (no system clipboard use): no permissions, no cross-window copy.
-- Pending-format display can lag one step behind exotic edits (e.g. Shift-only keyup clears it); DOM refresh always converges on next input.
-- Paste cleanup handles `<font>` tags; other pasted junk (scripts, handlers) is stripped at model sync, not live.
-- jsdom Range objects track live DOM mutations (spec deviation found during testing) — app stores static node+offset snapshots instead. If jsdom ever fixes this, the snapshots keep working unchanged.
-- Nothing currently open: the earlier cut-off message ("the tex alignment buttons do …") turned out to be the alignment topic, now resolved as item 14.
-- Move drags follow the mouse in screen space even on rotated items (counter-rotated dragging felt wrong).
-- Viewport auto-fit reverted: zoom math never visibly triggered (likely refit timing vs. overlay measurement); replaced by grabbing the whole item, which solves the underlying reachability problem instead of working around it.
-- Whole-item drag uses point-on-text detection (caretRangeFromPoint + glyph proximity): text always edits/selects natively, everything else drags. Multi-select always drags as a group.
-- Keyframe `to` targets with no parseable position fall back to derived/current values; empty-`to` entries are dropped at play time, not at save.
-- A missing regex group in keyframe capture silently produced NaN targets (caught by tests before shipping) — position animation would have been a silent no-op. Lesson: numeric parsing helpers need direct unit tests, which they now have.
+- Scrub slider range is 0..maxGroup, 0 = rest pose (default on slide change). An item with no
+  step at the selected stage shows its last step before that stage, else its rest pose.
+  Selecting a step moves slider + global state to that step's stage; editing a group number
+  moves global state to the new stage. A stage is a click stage if ANY entry in it is click
+  (matches the existing presenter `every(auto)` chain logic — unchanged). Slider never dirties
+  the deck (view-only). Scrub poses are restored before every model sync, like step previews.
+- Geometry drags started while scrubbed auto-enter step-edit on the displayed step, so what you
+  see is what you edit (same contract as scrub-editing). Plain text typing always edits rest.
+- Shape panel Scale X/Y inputs are removed (literal scaling goes away for interactive editing);
+  rotate stays. Keyframe `sx`/`sy` targets stay in the engine + step fields for playback compat.
+- Shape keyframe keys: `slen` (arrow/line length), `sr` (circle radius), `sw`/`sh`
+  (rect/ellipse width/height; square side and triangle height use `sh`).
+- Single-param shape handles: corner uses dx except up/down arrows (dy); right-edge uses dx;
+  bottom uses dy. Fixed-size shapes (star/check/cross) show no size handles.
+- Tight viewBoxes are computed in `renderShape` (stroke-aware pad) and normalized on stage
+  render, so older decks tighten on open. SVG `overflow:visible` already prevents clipping.
