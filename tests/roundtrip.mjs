@@ -1398,5 +1398,45 @@ shWraps[1].dispatchEvent(new WAB.MouseEvent('mousedown', { bubbles: true, cancel
 check('shape rows follow selection', DAB.querySelector('#shape-params input').value === '40');
 check('first shape untouched', shWraps[0].querySelector('svg').getAttribute('data-radius') === '20');
 
+// ---------- 33. step scrub-editing ----------
+const domSC = makeDom(html);
+await wait(400);
+const WSC = domSC.window, DSC = WSC.document;
+WSC.gotoSlide(WSC.App.model.slideOrder[1]);
+await wait(100);
+const scBlks = DSC.querySelectorAll('#stage .blk');
+scBlks[0].dispatchEvent(new WSC.MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+DSC.querySelector('#btn-anim-add').click();
+await wait(50);
+check('add enters step-edit mode', !!WSC.stepEdit && WSC.stepEdit.el === scBlks[0] &&
+  DSC.querySelector('#anim-rows details.astep.editing') !== null);
+// simulate a drag result, then drop-capture like onUp does
+scBlks[0].style.left = '70%';
+WSC.commitStepGeometry(scBlks[0]);
+const scEntry = JSON.parse(scBlks[0].getAttribute('data-anim'))[0];
+check('drop captures pose, restores rest', scEntry.to.left === 70 && scBlks[0].style.left === '8%');
+check('model keeps rest pose', WSC.App.model.slides.s2.html.includes('left:8%') && !WSC.App.model.slides.s2.html.includes('left:70%'));
+// sync guard: preview pose never persists
+scBlks[0].style.left = '70%';
+WSC.syncStageToModel();
+check('sync restores rest pose', scBlks[0].style.left === '8%' && WSC.App.model.slides.s2.html.includes('left:8%'));
+WSC.exitStepEdit();
+check('exit clears mode', WSC.stepEdit === null);
+// row click enters with preview + highlight (two-entry element)
+scBlks[1].setAttribute('data-anim', JSON.stringify([
+  { group: 1, trigger: 'click', dur: 600, delay: 200, mode: 'linear', maxSpeed: 1.5, accel: 2, minSpeed: 0, decel: 2, to: { left: 20 } },
+  { group: 2, trigger: 'click', dur: 600, delay: 200, mode: 'linear', maxSpeed: 1.5, accel: 2, minSpeed: 0, decel: 2, to: { left: 40 } }
+]));
+WSC.syncStageToModel();
+scBlks[1].dispatchEvent(new WSC.MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+await wait(50);
+DSC.querySelectorAll('#anim-rows details.astep')[0].dispatchEvent(new WSC.MouseEvent('click', { bubbles: true }));
+check('row click previews entry pose', WSC.stepEdit && WSC.stepEdit.el === scBlks[1] && WSC.stepEdit.idx === 0 &&
+  scBlks[1].style.left === '20%' && DSC.querySelector('#anim-rows details.astep.editing') !== null);
+DSC.querySelectorAll('#anim-rows details.astep')[0].querySelector('.adel').dispatchEvent(new WSC.MouseEvent('click', { bubbles: true }));
+const restList = JSON.parse(scBlks[1].getAttribute('data-anim'));
+check('deleted entry gone, element at rest', restList.length === 1 && restList[0].group === 2 &&
+  scBlks[1].style.left === '8%' && WSC.stepEdit === null);
+
 console.log(failures === 0 ? '\nALL TESTS PASSED' : `\n${failures} TEST(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);

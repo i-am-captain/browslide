@@ -134,6 +134,7 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 #anim-rows .astep{border:1px solid var(--border);border-radius:6px;margin:6px 0;padding:2px 8px 8px}
 #anim-rows .astep>summary{cursor:pointer;display:flex;align-items:center;gap:8px;color:var(--ink);padding:2px 0}
 #anim-rows .adel{margin-left:auto;flex:0 0 auto}
+#anim-rows .astep.editing{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
 #anim-rows .aline{display:flex;align-items:center;gap:8px;margin:3px 0}
 #anim-rows .aline>span:first-child{flex:1;color:var(--muted);font-size:12px}
 #anim-rows .aline input{width:64px}
@@ -774,6 +775,7 @@ function syncStageToModel(){
   var sec = $('#stage .slide');
   var s = activeSlide();
   if (sec && s) {
+    if (stepEdit) restoreStepState(stepEdit.el, stepEdit.rest); /* step previews never persist as rest pose */
     var saved = null;
     try {
       var sel0 = document.getSelection();
@@ -1084,6 +1086,7 @@ function transformChanged(){
     el.setAttribute('data-sy', String(t.sy));
     applyTransform(el);
   });
+  els.forEach(commitStepGeometry);
   persistSlide();
   refreshShapesUI();
 }
@@ -1867,6 +1870,7 @@ function toggleSelection(el){
   refreshShapesUI();
 }
 function clearSelection(){
+  exitStepEdit();
   resizer.el = null;
   resizer.extra = [];
   var ov = $('#media-resizer');
@@ -2015,6 +2019,7 @@ function onRotateDown(e){
     g.removeEventListener('pointerup', onUp);
     g.removeEventListener('pointercancel', onUp);
     if (!selectedItems().length) return;
+    selectedItems().forEach(commitStepGeometry);
     persistSlide();
   };
   g.addEventListener('pointermove', onMove);
@@ -2048,6 +2053,7 @@ function onHeightDown(e, dir){
     g.removeEventListener('pointerup', onUp);
     g.removeEventListener('pointercancel', onUp);
     if (!selectedItems().length) return;
+    selectedItems().forEach(commitStepGeometry);
     persistSlide();
   };
   g.addEventListener('pointermove', onMove);
@@ -2102,6 +2108,7 @@ function onGripDown(e){
     g.removeEventListener('pointerup', onUp);
     g.removeEventListener('pointercancel', onUp);
     if (!selectedItems().length) return;
+    selectedItems().forEach(commitStepGeometry);
     persistSlide();
   };
   g.addEventListener('pointermove', onMove);
@@ -2205,6 +2212,65 @@ function maxGroupOnSlide(){
   if (sec) kfEntries(sec).forEach(function(x){ if (x.entry.group > mx) mx = x.entry.group; });
   return mx;
 }
+/* ---- step scrub-editing: pick a step row to preview its keyframe on the
+   item, then drag/transform the item — edits land in that step, never in
+   the rest pose. Rest pose is snapshotted at entry and restored on every
+   model sync, so saved decks always keep the rest state. ---- */
+var stepEdit = null;
+function snapStepState(el){
+  return {
+    left: el.style.left, top: el.style.top, width: el.style.width,
+    opacity: el.style.opacity, transform: el.style.transform, vis: el.style.visibility,
+    rot: el.getAttribute('data-rot'), sx: el.getAttribute('data-sx'), sy: el.getAttribute('data-sy')
+  };
+}
+function restoreStepState(el, snap){
+  if (!el || !snap || !document.contains(el)) return;
+  el.style.left = snap.left;
+  el.style.top = snap.top;
+  el.style.width = snap.width;
+  el.style.opacity = snap.opacity;
+  el.style.transform = snap.transform;
+  el.style.visibility = snap.vis;
+  [['data-rot', snap.rot], ['data-sx', snap.sx], ['data-sy', snap.sy]].forEach(function(pair){
+    if (pair[1] === null || pair[1] === undefined) el.removeAttribute(pair[0]);
+    else el.setAttribute(pair[0], pair[1]);
+  });
+  try { delete el._kfSty; } catch (e) {}
+}
+function enterStepEdit(el, idx){
+  exitStepEdit();
+  var list = animListOf(el);
+  if (!list[idx]) return false;
+  stepEdit = { el: el, idx: idx, rest: snapStepState(el) };
+  el.style.visibility = 'visible';
+  applyKeyframeState(el, list[idx].to);
+  return true;
+}
+function exitStepEdit(){
+  if (!stepEdit) return;
+  var se = stepEdit;
+  stepEdit = null;
+  if (se.el && document.contains(se.el)) restoreStepState(se.el, se.rest);
+}
+function commitStepGeometry(el){
+  /* geometry drags (or transform inputs) while a step is being edited:
+     capture the live pose into that step, then restore the rest pose */
+  var se = stepEdit;
+  if (!se || se.el !== el) return false;
+  var list = animListOf(el);
+  var entry = list[se.idx];
+  if (!entry) { exitStepEdit(); return false; }
+  var cur = captureKeyframe(el);
+  ['left', 'top', 'width', 'rot', 'sx', 'sy'].forEach(function(k){
+    if (cur[k] !== undefined) entry.to[k] = cur[k];
+  });
+  writeAnimList(el, list);
+  restoreStepState(el, se.rest);
+  persistSlide();
+  refreshAnimUI();
+  return true;
+}
 function captureKeyframe(el){
   var sec = $('#stage .slide');
   var slideW = (sec && sec.clientWidth) || 0, slideH = (sec && sec.clientHeight) || 0;
@@ -2285,9 +2351,16 @@ function buildAnimRows(el){
   var host = $('#anim-rows');
   host.innerHTML = '';
   var list = animListOf(el);
-  list.forEach(function(entry){
+  list.forEach(function(entry, idx){
     var det = document.createElement('details');
     det.className = 'astep';
+    if (stepEdit && stepEdit.el === el && stepEdit.idx === idx) det.classList.add('editing');
+    det.addEventListener('click', function(){
+      if (enterStepEdit(el, idx)) {
+        Array.prototype.forEach.call(host.children, function(d){ d.classList.remove('editing'); });
+        det.classList.add('editing');
+      }
+    });
     var sum = document.createElement('summary');
     var lab = document.createElement('span');
     lab.className = 'asum';
@@ -2302,6 +2375,7 @@ function buildAnimRows(el){
       e.stopPropagation();
       var t = rowTarget(det);
       if (!t) { refreshAnimUI(); return; }
+      exitStepEdit();
       t.list.splice(t.idx, 1);
       writeAnimList(t.el, t.list);
       persistSlide();
@@ -2371,6 +2445,7 @@ function buildAnimRows(el){
       if (!Object.keys(to).length) {
         next.splice(idx, 1);
         writeAnimList(el, next);
+        if (stepEdit && stepEdit.el === el) exitStepEdit();
         persistSlide();
         refreshAnimUI();
         return;
@@ -2378,6 +2453,7 @@ function buildAnimRows(el){
       writeAnimList(el, next);
       persistSlide();
       lab.textContent = stepSummary(next[idx]);
+      if (stepEdit && stepEdit.el === el && stepEdit.idx === idx) applyKeyframeState(el, next[idx].to);
     }
     [fGroup, fTrig, fDur, fDelay, fMode, fMax, fAcc, fMin, fDec, fL, fT, fW, fO, fR, fX, fY].forEach(function(inp){
       inp.addEventListener('change', commit);
@@ -2424,6 +2500,7 @@ function onHandleDown(e){
 
 /* ================= PRESENT ================= */
 function openPresent(){
+  exitStepEdit();
   syncStageToModel();
   kfCancel();
   App.presentIdx = Math.max(0, activeIndex());
@@ -2771,6 +2848,7 @@ var PLAYER_JS = [
 function escAttr(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;'); }
 function escHtml(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
 function exportViewer(){
+  exitStepEdit();
   syncStageToModel();
   sanitizeAllSlides();
   renderFilmstrip();
@@ -2807,6 +2885,7 @@ function downloadBlob(blob, name){
   setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 4000);
 }
 function saveNow(){
+  exitStepEdit();
   syncStageToModel();
   sanitizeAllSlides();
   renderFilmstrip();
@@ -3011,7 +3090,11 @@ function bind(){
     persistSlide();
     refreshAnimUI();
     var dets = $('#anim-rows').querySelectorAll('details.astep');
-    if (dets.length) dets[dets.length - 1].open = true;
+    if (dets.length) {
+      dets[dets.length - 1].open = true;
+      enterStepEdit(el, list.length - 1);
+      dets[dets.length - 1].classList.add('editing');
+    }
   });
   var fbar = $('#formatbar');
   fbar.addEventListener('mousedown', function(e){ if (e.target.closest('button')) e.preventDefault(); });
