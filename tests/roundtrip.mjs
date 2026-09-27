@@ -595,5 +595,38 @@ check('save-opts removed', !DP.querySelector('#save-opts'));
 const repoA = DP.querySelector('#repo-link a');
 check('repo link with icon at inspector bottom', !!repoA && repoA.href === 'https://github.com/i-am-captain/browslide' && !!repoA.querySelector('svg') && DP.querySelector('#inspector').lastElementChild.id === 'repo-link');
 
+// ---------- 17. format bar (execCommand itself is browser-only; structure + units here) ----------
+const domQ = makeDom(html);
+await wait(400);
+const WQ = domQ.window, DQ = WQ.document;
+check('font select lists system fonts only', DQ.querySelectorAll('#font-select option').length === 9 &&
+  Array.prototype.every.call(DQ.querySelectorAll('#font-select option'), (o) => !/google|http/i.test(o.value) && !/google|http/i.test(o.textContent)));
+check('size select offers em steps', DQ.querySelectorAll('#size-select option').length === 11 &&
+  DQ.querySelector('#size-select').value === '1em');
+const cmds = Array.prototype.map.call(DQ.querySelectorAll('#formatbar button[data-cmd]'), (b) => b.dataset.cmd);
+check('format buttons cover style/align/lists/clear', ['bold', 'italic', 'underline', 'strikeThrough', 'justifyLeft', 'justifyCenter', 'justifyRight', 'justifyFull', 'insertUnorderedList', 'insertOrderedList', 'clear'].every((c) => cmds.includes(c)));
+const mdEv = new WQ.MouseEvent('mousedown', { bubbles: true, cancelable: true });
+DQ.querySelector('#formatbar button[data-cmd="bold"]').dispatchEvent(mdEv);
+check('format mousedown keeps selection', mdEv.defaultPrevented === true);
+DQ.querySelector('#formatbar button[data-cmd="bold"]').click();
+await wait(100);
+check('format click without editing API does not crash', WQ.__alerts.length === 0);
+const secQ = DQ.querySelector('#stage .slide');
+secQ.innerHTML = '<p>ab<font size="7">cd</font>ef</p>';
+WQ.pendingSpanStyle = { prop: 'fontSize', value: '2em' };
+WQ.convertFontTags();
+WQ.pendingSpanStyle = null;
+check('font markers convert to styled spans', secQ.querySelectorAll('font').length === 0 &&
+  secQ.querySelector('span').style.fontSize === '2em' && secQ.textContent === 'abcdef');
+check('restoreSelection false outside stage', WQ.restoreSelection() === false);
+WQ.updateFormatUI();
+check('no active states outside stage', DQ.querySelectorAll('#formatbar button.active').length === 0);
+const fmtM = { app: 'browslide', version: 2, title: 'T', theme: 'dark', slideOrder: ['s1'], nextId: 2,
+  slides: { s1: { title: 'T', layout: 'blank', transition: 'none', notes: '',
+    html: '<p><b>B</b><i>I</i><u>U</u><s>S</s><span style="font-size:2em">x</span><ul><li>y</li></ul></p>' } } };
+const fmtH = WQ.normalizeModel(JSON.parse(JSON.stringify(fmtM))).slides.s1.html;
+check('formatting tags survive sanitize', /<b>B<\/b>/.test(fmtH) && /<i>I<\/i>/.test(fmtH) && /<u>U<\/u>/.test(fmtH) &&
+  /<s>S<\/s>/.test(fmtH) && /font-size:2em/.test(fmtH) && /<ul>/.test(fmtH));
+
 console.log(failures === 0 ? '\nALL TESTS PASSED' : `\n${failures} TEST(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);

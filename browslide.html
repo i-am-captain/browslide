@@ -66,9 +66,9 @@ body[data-theme="dark"]{
 }
 *{box-sizing:border-box}
 html,body{margin:0;height:100%}
-body{background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+body{background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;display:flex;flex-direction:column;height:100vh;overflow:hidden}
 [hidden]{display:none !important}
-#toolbar{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--panel);border-bottom:1px solid var(--border);flex-wrap:wrap;position:sticky;top:0;z-index:10}
+#toolbar{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--panel);border-bottom:1px solid var(--border);flex-wrap:wrap;flex:0 0 auto}
 .brand{font-weight:700;margin-right:4px}
 #deck-title{min-width:160px;max-width:280px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--ink)}
 #dirty-flag{color:var(--muted);font-size:12px;min-width:120px}
@@ -78,7 +78,17 @@ button,select{padding:5px 10px;border:1px solid var(--border);border-radius:6px;
 button:hover,select:hover{border-color:var(--accent)}
 button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 #pos-flag{color:var(--muted);font-size:12px}
-#main{display:grid;grid-template-columns:190px 1fr 230px;gap:10px;padding:10px;height:calc(100vh - 53px)}
+#formatbar{display:flex;align-items:center;gap:6px;padding:6px 12px;background:var(--panel);border-bottom:1px solid var(--border);flex-wrap:wrap;flex:0 0 auto}
+#formatbar select{padding:4px 6px}
+#formatbar button{min-width:30px}
+#formatbar button.active{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+#formatbar .sep{width:1px;height:20px;background:var(--border)}
+#formatbar .ali{display:inline-block;width:16px;vertical-align:middle}
+#formatbar .ali i{display:block;height:2px;background:currentColor;margin:2.5px 0}
+#formatbar .ali.c i{margin-left:4px;margin-right:4px}
+#formatbar .ali.r i{margin-left:8px}
+#formatbar .ali.j i:nth-child(2){margin-right:4px}
+#main{display:grid;grid-template-columns:190px 1fr 230px;gap:10px;padding:10px;flex:1 1 auto;min-height:0}
 #filmstrip{background:var(--panel);border:1px solid var(--border);border-radius:8px;overflow:auto;padding:8px}
 #filmstrip-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
 #filmstrip-list li{display:flex;gap:4px}
@@ -161,6 +171,47 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
   <button id="btn-new" title="Start a new deck">New</button>
   <button id="btn-save" class="primary" title="Save (downloads an .html copy)">Save</button>
 </header>
+
+<div id="formatbar" title="Text formatting (applies to the selected text)">
+  <select id="font-select" title="Font — system fonts only, nothing downloaded">
+    <option value="-apple-system,'Segoe UI',Roboto,Arial,sans-serif">System</option>
+    <option value="Arial,Helvetica,sans-serif">Arial</option>
+    <option value="Georgia,'Times New Roman',serif">Georgia</option>
+    <option value="'Times New Roman',Times,serif">Times New Roman</option>
+    <option value="'Courier New',Courier,monospace">Courier New</option>
+    <option value="Verdana,Geneva,sans-serif">Verdana</option>
+    <option value="'Trebuchet MS',Verdana,sans-serif">Trebuchet</option>
+    <option value="Impact,fantasy">Impact</option>
+    <option value="'Comic Sans MS','Comic Sans',cursive">Comic Sans</option>
+  </select>
+  <select id="size-select" title="Text size">
+    <option value="0.75em">12</option>
+    <option value="0.875em">14</option>
+    <option value="1em" selected>16</option>
+    <option value="1.125em">18</option>
+    <option value="1.25em">20</option>
+    <option value="1.5em">24</option>
+    <option value="1.75em">28</option>
+    <option value="2em">32</option>
+    <option value="2.5em">40</option>
+    <option value="3em">48</option>
+    <option value="4em">64</option>
+  </select>
+  <span class="sep"></span>
+  <button data-cmd="bold" title="Bold"><b>B</b></button>
+  <button data-cmd="italic" title="Italic"><i>I</i></button>
+  <button data-cmd="underline" title="Underline"><u>U</u></button>
+  <button data-cmd="strikeThrough" title="Strikethrough"><s>S</s></button>
+  <span class="sep"></span>
+  <button data-cmd="justifyLeft" title="Align left"><span class="ali"><i></i><i></i><i></i></span></button>
+  <button data-cmd="justifyCenter" title="Center"><span class="ali c"><i></i><i></i><i></i></span></button>
+  <button data-cmd="justifyRight" title="Align right"><span class="ali r"><i></i><i></i><i></i></span></button>
+  <button data-cmd="justifyFull" title="Justify"><span class="ali j"><i></i><i></i><i></i></span></button>
+  <span class="sep"></span>
+  <button data-cmd="insertUnorderedList" title="Bullet list"><span>•≡</span></button>
+  <button data-cmd="insertOrderedList" title="Numbered list"><span>1≡</span></button>
+  <button data-cmd="clear" title="Clear formatting"><span>Tₓ</span></button>
+</div>
 
 <div id="main">
   <aside id="filmstrip"><ol id="filmstrip-list"></ol><button id="btn-add-end" title="Add slide at the end">+ Add slide</button></aside>
@@ -883,6 +934,76 @@ function appendMedia(el){
   sec.appendChild(el);
   syncStageToModel(); refreshDirty(); scheduleSize(); scheduleAutosave();
 }
+/* ---- text formatting (execCommand-based, works offline in every browser) ---- */
+var savedRange = null;
+var pendingSpanStyle = null;
+function trackSelection(){
+  try {
+    var sel = document.getSelection();
+    if (sel.rangeCount > 0 && $('#stage').contains(sel.anchorNode)) {
+      savedRange = sel.getRangeAt(0).cloneRange();
+    }
+  } catch (e) {}
+}
+function restoreSelection(){
+  var sec = $('#stage .slide');
+  if (!sec) return false;
+  try {
+    var sel = document.getSelection();
+    if (sel.rangeCount > 0 && sec.contains(sel.anchorNode)) return true;
+    if (savedRange) {
+      var n = savedRange.startContainer;
+      if (n === sec || sec.contains(n)) {
+        sel.removeAllRanges();
+        sel.addRange(savedRange);
+        return true;
+      }
+    }
+  } catch (e) {}
+  return false;
+}
+function afterFormat(){
+  syncStageToModel(); updateFilmstripLabel(); refreshDirty(); scheduleSize(); scheduleAutosave();
+}
+function applyCmd(cmd){
+  if (!restoreSelection()) return;
+  try { document.execCommand(cmd, false, null); } catch (e) { return; }
+  afterFormat();
+}
+function applySpanStyle(prop, value){
+  /* font/size via spans: wrap selection in a marker, then convert to a styled span.
+     em units keep text scaling with the fitted slide size. */
+  if (!restoreSelection()) return;
+  pendingSpanStyle = { prop: prop, value: value };
+  try { document.execCommand('fontSize', false, '7'); } catch (e) { pendingSpanStyle = null; return; }
+  convertFontTags();
+  pendingSpanStyle = null;
+  afterFormat();
+}
+function convertFontTags(){
+  var sec = $('#stage .slide');
+  if (!sec || !pendingSpanStyle) return;
+  Array.prototype.slice.call(sec.querySelectorAll('font[size="7"]')).forEach(function(f){
+    var sp = document.createElement('span');
+    sp.style[pendingSpanStyle.prop] = pendingSpanStyle.value;
+    while (f.firstChild) sp.appendChild(f.firstChild);
+    f.parentNode.replaceChild(sp, f);
+  });
+}
+function updateFormatUI(){
+  var on = {};
+  try {
+    var sel = document.getSelection();
+    var inside = sel.rangeCount > 0 && $('#stage').contains(sel.anchorNode);
+    ['bold', 'italic', 'underline', 'strikeThrough', 'justifyLeft', 'justifyCenter', 'justifyRight', 'justifyFull'].forEach(function(c){
+      on[c] = inside && document.queryCommandState(c);
+    });
+  } catch (e) {}
+  Array.prototype.forEach.call(document.querySelectorAll('#formatbar button[data-cmd]'), function(b){
+    if (b.dataset.cmd !== 'clear') b.classList.toggle('active', !!on[b.dataset.cmd]);
+  });
+}
+var scheduleFormatUI = debounce(function(){ trackSelection(); updateFormatUI(); }, 150);
 function insertFile(file, kind){
   var approx = formatBytes(Math.ceil(file.size * 4 / 3));
   if (kind === 'video' && file.size > 8 * 1024 * 1024 &&
@@ -1179,6 +1300,20 @@ function bind(){
   $('#btn-img').addEventListener('click', function(){ $('#insert-image').click(); });
   $('#btn-video').addEventListener('click', function(){ $('#insert-video').click(); });
   $('#btn-clean-media').addEventListener('click', removeUnusedMedia);
+  var fbar = $('#formatbar');
+  fbar.addEventListener('mousedown', function(e){ if (e.target.closest('button')) e.preventDefault(); });
+  fbar.addEventListener('click', function(e){
+    var b = e.target.closest('button');
+    if (!b) return;
+    if (b.dataset.cmd === 'clear') {
+      if (!restoreSelection()) return;
+      try { document.execCommand('removeFormat', false, null); } catch (err) {}
+      afterFormat();
+    } else applyCmd(b.dataset.cmd);
+  });
+  $('#font-select').addEventListener('change', function(e){ applySpanStyle('fontFamily', e.target.value); });
+  $('#size-select').addEventListener('change', function(e){ applySpanStyle('fontSize', e.target.value); });
+  document.addEventListener('selectionchange', scheduleFormatUI);
   $('#opt-compress').addEventListener('change', function(e){ App.model.settings.compress = !!e.target.checked; refreshDirty(); scheduleAutosave(); });
   $('#opt-downscale').addEventListener('change', function(e){ App.model.settings.downscale = !!e.target.checked; refreshDirty(); scheduleAutosave(); });
   $('#opt-maxdim').addEventListener('change', function(e){
