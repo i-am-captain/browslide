@@ -135,6 +135,10 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 #media-resizer .mbadge{position:absolute;top:-26px;right:-2px;background:var(--accent);color:#fff;font-size:11px;padding:1px 7px;border-radius:10px;white-space:nowrap}
 #media-resizer .mmove{position:absolute;left:-10px;top:-10px;width:20px;height:20px;line-height:16px;text-align:center;background:var(--accent);color:#fff;border:2px solid #fff;border-radius:50%;cursor:move;pointer-events:auto;touch-action:none;display:none;font-size:11px}
 #media-resizer.formove .mmove{display:block}
+#media-resizer .mrot{position:absolute;left:50%;top:-36px;width:20px;height:20px;margin-left:-10px;line-height:15px;text-align:center;background:var(--accent);color:#fff;border:2px solid #fff;border-radius:50%;cursor:grab;pointer-events:auto;touch-action:none;font-size:12px}
+#media-resizer .mh-n,#media-resizer .mh-s{position:absolute;left:50%;width:20px;height:12px;margin-left:-10px;background:var(--accent);border:2px solid #fff;border-radius:3px;pointer-events:auto;touch-action:none}
+#media-resizer .mh-n{top:-8px;cursor:ns-resize}
+#media-resizer .mh-s{bottom:-8px;cursor:ns-resize}
 .slide .blk{position:absolute;box-sizing:border-box;min-width:8%;min-height:1.2em}
 #inspector label.row{display:flex;flex-direction:row;align-items:center}
 #present-settings{display:flex;flex-direction:column;gap:6px}
@@ -346,7 +350,9 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
         <option value="arrow-both">Double arrow ↔</option>
         <option value="line">Line ─</option>
         <option value="circle">Circle ○</option>
+        <option value="ellipse">Ellipse ⬯</option>
         <option value="square">Square □</option>
+        <option value="rectangle">Rectangle ▭</option>
         <option value="triangle">Triangle △</option>
         <option value="star">Star ★</option>
         <option value="check">Check ✓</option>
@@ -354,6 +360,7 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
       </select></div>
       <div class="srow"><span>Line width</span><input id="shape-width" type="number" min="1" max="32" title="Stroke width: preset for new shapes, live for the selected shape"></div>
       <div class="srow"><span>Line color</span><input id="shape-color" type="color" value="#2563eb" title="Stroke color: preset for new shapes, live for the selected shape"></div>
+      <div id="shape-params"></div>
       <div class="srow"><span>Rotate °</span><input id="shape-rot" type="number" min="-180" max="180" step="1" title="Rotate the selected item (degrees)"></div>
       <div class="srow"><span>Scale X</span><input id="shape-sx" type="number" min="0.1" max="5" step="0.1" title="Horizontal scale of the selected item"></div>
       <div class="srow"><span>Scale Y</span><input id="shape-sy" type="number" min="0.1" max="5" step="0.1" title="Vertical scale of the selected item"></div>
@@ -1009,6 +1016,44 @@ function refreshShapesUI(){
   rInput.disabled = !hasSel;
   xInput.disabled = !hasSel;
   yInput.disabled = !hasSel;
+  renderShapeParams();
+}
+function renderShapeParams(){
+  /* geometry fields for the selected shape kind (rebuilt on selection change) */
+  var host = $('#shape-params');
+  if (!host) return;
+  if (host.firstChild && host.contains(document.activeElement)) return; /* don't rebuild mid-edit */
+  host.innerHTML = '';
+  var svg = selectedShapeSvg();
+  if (!svg) return;
+  var sp = shapeParams(svg);
+  if (!sp || !sp.def.params.length) return;
+  sp.def.params.forEach(function(pd){
+    var row = document.createElement('div');
+    row.className = 'srow';
+    var lab = document.createElement('span');
+    lab.textContent = pd.label;
+    var inp = document.createElement('input');
+    inp.type = 'number';
+    inp.min = pd.min;
+    inp.max = pd.max;
+    inp.step = 1;
+    inp.value = sp.vals[pd.key];
+    inp.title = pd.label + ' of this ' + (svg.getAttribute('data-kind') || 'shape');
+    (function(key, min, max){
+      inp.addEventListener('change', function(e){
+        var v = parseFloat(e.target.value);
+        if (!isFinite(v)) return;
+        svg.setAttribute('data-' + key, String(Math.max(min, Math.min(max, v))));
+        renderShape(svg);
+        persistSlide();
+        refreshShapesUI();
+      });
+    })(pd.key, pd.min, pd.max);
+    row.appendChild(lab);
+    row.appendChild(inp);
+    host.appendChild(row);
+  });
 }
 function readTransformInputs(){
   var r = parseFloat($('#shape-rot').value), x = parseFloat($('#shape-sx').value), y = parseFloat($('#shape-sy').value);
@@ -1019,13 +1064,15 @@ function readTransformInputs(){
   };
 }
 function transformChanged(){
-  var el = resizer.el && document.contains(resizer.el) ? resizer.el : null;
-  if (!el) return;
+  var els = selectedItems();
+  if (!els.length) return;
   var t = readTransformInputs();
-  el.setAttribute('data-rot', String(t.rot));
-  el.setAttribute('data-sx', String(t.sx));
-  el.setAttribute('data-sy', String(t.sy));
-  applyTransform(el);
+  els.forEach(function(el){
+    el.setAttribute('data-rot', String(t.rot));
+    el.setAttribute('data-sx', String(t.sx));
+    el.setAttribute('data-sy', String(t.sy));
+    applyTransform(el);
+  });
   persistSlide();
   refreshShapesUI();
 }
@@ -1554,20 +1601,81 @@ function appendDataMedia(url, file, kind){
   syncStageToModel(); refreshDirty(); scheduleSize(); scheduleAutosave();
 }
 /* ---- insertable vector shapes (inline SVG, currentColor, no assets) ---- */
-var SHAPES = {
-  'arrow-right': '<line x1="10" y1="50" x2="76" y2="50"/><polyline points="58,30 78,50 58,70"/>',
-  'arrow-left': '<line x1="90" y1="50" x2="24" y2="50"/><polyline points="42,30 22,50 42,70"/>',
-  'arrow-up': '<line x1="50" y1="90" x2="50" y2="24"/><polyline points="30,42 50,22 70,42"/>',
-  'arrow-down': '<line x1="50" y1="10" x2="50" y2="76"/><polyline points="30,58 50,78 70,58"/>',
-  'arrow-both': '<line x1="14" y1="50" x2="86" y2="50"/><polyline points="28,36 14,50 28,64"/><polyline points="72,36 86,50 72,64"/>',
-  'line': '<line x1="10" y1="50" x2="90" y2="50"/>',
-  'circle': '<circle cx="50" cy="50" r="40"/>',
-  'square': '<rect x="14" y="14" width="72" height="72" rx="6"/>',
-  'triangle': '<polygon points="50,14 86,86 14,86"/>',
-  'star': '<polygon points="50,6 61,39 96,39 68,60 79,94 50,73 21,94 32,60 4,39 39,39"/>',
-  'check': '<polyline points="22,54 43,74 78,30"/>',
-  'cross': '<line x1="26" y1="26" x2="74" y2="74"/><line x1="74" y1="26" x2="26" y2="74"/>'
+/* ---- parametric vector shapes (fixed heads/corners, sized by fields) ---- */
+function r1(n){ return Math.round(n * 10) / 10; }
+function arrowGeo(dir, L){
+  /* total length L from x=10; head is always 22 long, 36 wide */
+  var hx = 10 + L - 22;
+  function map(p){
+    var x = p[0], y = p[1];
+    if (dir === 'left') return [100 - x, 100 - y];
+    if (dir === 'up') return [y, 100 - x];
+    if (dir === 'down') return [100 - y, x];
+    return [x, y];
+  }
+  function pt(p){ var q = map(p); return r1(q[0]) + ',' + r1(q[1]); }
+  function ln(a, b){ var u = map(a), v = map(b); return '<line x1="' + r1(u[0]) + '" y1="' + r1(u[1]) + '" x2="' + r1(v[0]) + '" y2="' + r1(v[1]) + '"/>'; }
+  return ln([10, 50], [hx, 50]) + '<polyline points="' + pt([hx, 32]) + ' ' + pt([10 + L, 50]) + ' ' + pt([hx, 68]) + '"/>';
+}
+function bothGeo(L){
+  var hx0 = 32, hx1 = 10 + L - 22;
+  return '<line x1="' + hx0 + '" y1="50" x2="' + hx1 + '" y2="50"/>' +
+    '<polyline points="' + hx0 + ',36 ' + (hx0 - 14) + ',50 ' + hx0 + ',64"/>' +
+    '<polyline points="' + hx1 + ',36 ' + (hx1 + 14) + ',50 ' + hx1 + ',64"/>';
+}
+function lineGeo(L){ return '<line x1="10" y1="50" x2="' + r1(10 + L) + '" y2="50"/>'; }
+function circleGeo(r){ return '<circle cx="50" cy="50" r="' + r + '"/>'; }
+function squareGeo(s){ var x = r1((100 - s) / 2); return '<rect x="' + x + '" y="' + x + '" width="' + s + '" height="' + s + '" rx="6"/>'; }
+function rectGeo(w, h){ return '<rect x="' + r1((100 - w) / 2) + '" y="' + r1((100 - h) / 2) + '" width="' + w + '" height="' + h + '" rx="6"/>'; }
+function ellipseGeo(w, h){ return '<ellipse cx="50" cy="50" rx="' + r1(w / 2) + '" ry="' + r1(h / 2) + '"/>'; }
+function triangleGeo(h){ var y0 = r1(50 - h / 2), y1 = r1(50 + h / 2); return '<polygon points="50,' + y0 + ' 90,' + y1 + ' 10,' + y1 + '"/>'; }
+function numParam(p, key, def, min, max){
+  var v = parseFloat(p && p[key]);
+  if (!isFinite(v)) return def;
+  return Math.max(min, Math.min(max, v));
+}
+var SHAPE_DEFS = {
+  'arrow-right': { params: [{ key: 'len', label: 'Length', min: 30, max: 84, def: 68 }], geo: function(p){ return arrowGeo('right', numParam(p, 'len', 68, 30, 84)); } },
+  'arrow-left': { params: [{ key: 'len', label: 'Length', min: 30, max: 84, def: 68 }], geo: function(p){ return arrowGeo('left', numParam(p, 'len', 68, 30, 84)); } },
+  'arrow-up': { params: [{ key: 'len', label: 'Length', min: 30, max: 84, def: 68 }], geo: function(p){ return arrowGeo('up', numParam(p, 'len', 68, 30, 84)); } },
+  'arrow-down': { params: [{ key: 'len', label: 'Length', min: 30, max: 84, def: 68 }], geo: function(p){ return arrowGeo('down', numParam(p, 'len', 68, 30, 84)); } },
+  'arrow-both': { params: [{ key: 'len', label: 'Length', min: 40, max: 84, def: 68 }], geo: function(p){ return bothGeo(numParam(p, 'len', 68, 40, 84)); } },
+  'line': { params: [{ key: 'len', label: 'Length', min: 10, max: 84, def: 80 }], geo: function(p){ return lineGeo(numParam(p, 'len', 80, 10, 84)); } },
+  'circle': { params: [{ key: 'radius', label: 'Radius', min: 5, max: 44, def: 40 }], geo: function(p){ return circleGeo(numParam(p, 'radius', 40, 5, 44)); } },
+  'square': { params: [{ key: 'height', label: 'Height (side)', min: 10, max: 84, def: 72 }], geo: function(p){ return squareGeo(numParam(p, 'height', 72, 10, 84)); } },
+  'triangle': { params: [{ key: 'height', label: 'Height', min: 10, max: 84, def: 72 }], geo: function(p){ return triangleGeo(numParam(p, 'height', 72, 10, 84)); } },
+  'rectangle': { params: [{ key: 'width', label: 'Width', min: 10, max: 88, def: 72 }, { key: 'height', label: 'Height', min: 10, max: 88, def: 48 }], geo: function(p){ return rectGeo(numParam(p, 'width', 72, 10, 88), numParam(p, 'height', 48, 10, 88)); } },
+  'ellipse': { params: [{ key: 'width', label: 'Width', min: 10, max: 88, def: 72 }, { key: 'height', label: 'Height', min: 10, max: 88, def: 48 }], geo: function(p){ return ellipseGeo(numParam(p, 'width', 72, 10, 88), numParam(p, 'height', 48, 10, 88)); } },
+  'star': { params: [], geo: function(){ return '<polygon points="50,6 61,39 96,39 68,60 79,94 50,73 21,94 32,60 4,39 39,39"/>'; } },
+  'check': { params: [], geo: function(){ return '<polyline points="22,54 43,74 78,30"/>'; } },
+  'cross': { params: [], geo: function(){ return '<line x1="26" y1="26" x2="74" y2="74"/><line x1="74" y1="26" x2="26" y2="74"/>'; } }
 };
+var SHAPES = {};
+Object.keys(SHAPE_DEFS).forEach(function(k){
+  var def = SHAPE_DEFS[k], p = {};
+  def.params.forEach(function(pd){ p[pd.key] = pd.def; });
+  SHAPES[k] = def.geo(p);
+});
+function shapeParams(svg){
+  var kind = svg.getAttribute('data-kind');
+  var def = SHAPE_DEFS[kind];
+  if (!def) return null;
+  var p = {};
+  def.params.forEach(function(pd){
+    var raw = parseFloat(svg.getAttribute('data-' + pd.key));
+    p[pd.key] = isFinite(raw) ? Math.max(pd.min, Math.min(pd.max, raw)) : pd.def;
+  });
+  return { def: def, vals: p };
+}
+function renderShape(svg){
+  var sp = shapeParams(svg);
+  if (!sp) return false;
+  sp.def.params.forEach(function(pd){
+    svg.setAttribute('data-' + pd.key, String(sp.vals[pd.key]));
+  });
+  svg.innerHTML = sp.def.geo(sp.vals);
+  return true;
+}
 function addTextBlock(){
   var sec = $('#stage .slide');
   if (!sec || !App.model) return false;
@@ -1583,16 +1691,19 @@ function addTextBlock(){
   selectMedia(wrap);
   return true;
 }
-function insertShape(name){  var inner = SHAPES[name];
+function insertShape(name){  var def = SHAPE_DEFS[name];
   var sec = $('#stage .slide');
-  if (!inner || !sec) return false;
+  if (!def || !sec) return false;
   var wrap = document.createElement('div');
   wrap.className = 'blk';
   wrap.style.left = '30%';
   wrap.style.top = '30%';
   wrap.style.width = '20%';
+  var p = {};
+  def.params.forEach(function(pd){ p[pd.key] = pd.def; });
+  var attrs = 'data-kind="' + name + '"' + def.params.map(function(pd){ return ' data-' + pd.key + '="' + p[pd.key] + '"'; }).join('');
   wrap.innerHTML = '<svg viewBox="0 0 100 100" fill="none" stroke="' + App.model.settings.lineColor +
-    '" stroke-width="' + App.model.settings.lineWidth + '" stroke-linecap="round" stroke-linejoin="round">' + inner + '</svg>';
+    '" stroke-width="' + App.model.settings.lineWidth + '" stroke-linecap="round" stroke-linejoin="round"' + attrs + '>' + def.geo(p) + '</svg>';
   sec.appendChild(wrap);
   syncStageToModel(); refreshDirty(); scheduleSize(); scheduleAutosave();
   return true;
@@ -1670,6 +1781,25 @@ function pasteClipboard(){
   refreshShapesUI();
   return true;
 }
+function caretInStageText(){
+  /* true when the caret sits in editable text (then Delete/Backspace edit text) */
+  try {
+    var sel = document.getSelection();
+    if (!sel.rangeCount) return false;
+    var a = sel.anchorNode;
+    return !!(a && a.nodeType === 3 && $('#stage').contains(a));
+  } catch (e) { return false; }
+}
+function deleteSelectedItems(){
+  var items = selectedItems();
+  if (!items.length) return 0;
+  if (!confirm('Delete ' + items.length + ' selected item(s)?')) return 0;
+  items.forEach(function(el){ if (el.parentNode) el.parentNode.removeChild(el); });
+  clearSelection();
+  persistSlide();
+  renderFilmstrip(); /* titles may have changed */
+  return items.length;
+}
 /* ---- per-item transforms (rotate + per-axis scale, data attrs + inline) ---- */
 function rotateDelta(dx, dy, deg){
   var a = -deg * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
@@ -1717,16 +1847,87 @@ function ensurePositioned(el){
   try { pos = window.getComputedStyle(el).position; } catch (e) {}
   if (pos !== 'absolute') el.style.position = 'absolute';
 }
-function selectedShapeSvg(){
-  var el = resizer.el;
+function selectedShapeSvg(el){
+  el = el || resizer.el;
   if (!el || !document.contains(el)) return null;
   if (el.tagName && el.tagName.toLowerCase() === 'svg') return el;
   return el.querySelector ? el.querySelector('svg') : null;
 }
-function shiftPct(startPx, dxPx, slidePx){
+function shiftPct(startPx, dxPx, slidePx, max){
   if (!(slidePx > 0) || !(startPx >= 0)) return null;
   var pct = (startPx + dxPx) / slidePx * 100;
-  return Math.max(5, Math.min(100, Math.round(pct * 10) / 10));
+  return Math.max(5, Math.min(max || 100, Math.round(pct * 10) / 10));
+}
+function angleDeg(cx, cy, px, py){ return Math.atan2(py - cy, px - cx) * 180 / Math.PI; }
+function normDeg(d){
+  d = d % 360;
+  if (d > 180) d -= 360;
+  if (d < -180) d += 360;
+  return Math.round(d * 10) / 10;
+}
+function onRotateDown(e){
+  var items = selectedItems();
+  if (!items.length) return;
+  e.preventDefault();
+  e.stopPropagation();
+  var g = e.currentTarget;
+  try { g.setPointerCapture(e.pointerId); } catch (err) {}
+  var snaps = items.map(function(el){
+    var r = el.getBoundingClientRect();
+    var cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    return { el: el, cx: cx, cy: cy, grab: angleDeg(cx, cy, e.clientX, e.clientY), start: transformOf(el).rot };
+  });
+  var onMove = function(ev){
+    snaps.forEach(function(s){
+      if (!document.contains(s.el)) return;
+      s.el.setAttribute('data-rot', String(normDeg(s.start + (angleDeg(s.cx, s.cy, ev.clientX, ev.clientY) - s.grab))));
+      applyTransform(s.el);
+    });
+    positionResizer();
+  };
+  var onUp = function(){
+    g.removeEventListener('pointermove', onMove);
+    g.removeEventListener('pointerup', onUp);
+    g.removeEventListener('pointercancel', onUp);
+    if (!selectedItems().length) return;
+    persistSlide();
+  };
+  g.addEventListener('pointermove', onMove);
+  g.addEventListener('pointerup', onUp);
+  g.addEventListener('pointercancel', onUp);
+}
+function onHeightDown(e, dir){
+  var items = selectedItems();
+  if (!items.length) return;
+  e.preventDefault();
+  e.stopPropagation();
+  var sec = $('#stage .slide');
+  var slideH = (sec && sec.clientHeight) || 0;
+  if (!(slideH > 0)) return;
+  var g = e.currentTarget;
+  try { g.setPointerCapture(e.pointerId); } catch (err) {}
+  var startY = e.clientY;
+  var starts = items.map(function(el){ return { el: el, hh: el.offsetHeight || 0 }; });
+  var onMove = function(ev){
+    var dy = (ev.clientY - startY) * dir;
+    starts.forEach(function(s){
+      if (!document.contains(s.el)) return;
+      var pct = shiftPct(s.hh, dy, slideH, 300);
+      if (pct === null) return;
+      s.el.style.height = pct + '%';
+    });
+    positionResizer();
+  };
+  var onUp = function(){
+    g.removeEventListener('pointermove', onMove);
+    g.removeEventListener('pointerup', onUp);
+    g.removeEventListener('pointercancel', onUp);
+    if (!selectedItems().length) return;
+    persistSlide();
+  };
+  g.addEventListener('pointermove', onMove);
+  g.addEventListener('pointerup', onUp);
+  g.addEventListener('pointercancel', onUp);
 }
 function shiftPos(startPct, dPx, slidePx){
   if (!(slidePx > 0) || !isFinite(startPct)) return null;
@@ -1788,10 +1989,13 @@ function resizerOverlay(){
   ov = document.createElement('div');
   ov.id = 'media-resizer';
   ov.hidden = true;
-  ov.innerHTML = '<span class="mbadge"></span><span class="mmove" title="Drag to move">⋮⋮</span><span class="mhandle" title="Drag to resize"></span>';
+  ov.innerHTML = '<span class="mbadge"></span><span class="mmove" title="Drag to move">⋮⋮</span><span class="mrot" title="Drag to rotate">↻</span><span class="mh-n" title="Drag to scale height"></span><span class="mh-s" title="Drag to scale height"></span><span class="mhandle" title="Drag to resize"></span>';
   $('#stage-wrap').appendChild(ov);
   ov.querySelector('.mhandle').addEventListener('pointerdown', onHandleDown);
   ov.querySelector('.mmove').addEventListener('pointerdown', onGripDown);
+  ov.querySelector('.mrot').addEventListener('pointerdown', onRotateDown);
+  ov.querySelector('.mh-n').addEventListener('pointerdown', function(e){ onHeightDown(e, -1); });
+  ov.querySelector('.mh-s').addEventListener('pointerdown', function(e){ onHeightDown(e, 1); });
   return ov;
 }
 function posInWrap(el){
@@ -2265,9 +2469,9 @@ function bind(){
     var v = parseInt(e.target.value, 10);
     App.model.settings.lineWidth = (v >= 1 && v <= 32) ? v : 8;
     e.target.value = App.model.settings.lineWidth;
-    var svg = selectedShapeSvg();
-    if (svg) {
-      svg.setAttribute('stroke-width', String(App.model.settings.lineWidth));
+    var svgs = selectedItems().map(selectedShapeSvg).filter(function(s){ return !!s; });
+    if (svgs.length) {
+      svgs.forEach(function(svg){ svg.setAttribute('stroke-width', String(App.model.settings.lineWidth)); });
       persistSlide();
     } else { refreshDirty(); scheduleAutosave(); }
   });
@@ -2275,9 +2479,9 @@ function bind(){
     var v = String(e.target.value || '');
     App.model.settings.lineColor = (/^#[0-9a-f]{6}$/i.test(v) ? v : '#2563eb');
     e.target.value = App.model.settings.lineColor;
-    var svg = selectedShapeSvg();
-    if (svg) {
-      svg.setAttribute('stroke', App.model.settings.lineColor);
+    var svgs = selectedItems().map(selectedShapeSvg).filter(function(s){ return !!s; });
+    if (svgs.length) {
+      svgs.forEach(function(svg){ svg.setAttribute('stroke', App.model.settings.lineColor); });
       persistSlide();
     } else { refreshDirty(); scheduleAutosave(); }
   });
@@ -2428,6 +2632,10 @@ function bind(){
       var foc = document.activeElement;
       if (foc && foc.closest && foc.closest('input,textarea,select')) { /* native paste in fields */ }
       else if (pasteClipboard()) e.preventDefault();
+    }
+    else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedItems().length && !caretInStageText()) {
+      e.preventDefault();
+      deleteSelectedItems();
     }
     else if ((e.key === 'PageDown' || e.key === 'PageUp' || e.key === 'Home' || e.key === 'End') && !isEditingFocus()) {
       e.preventDefault();

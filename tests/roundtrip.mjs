@@ -989,9 +989,9 @@ const domS2 = makeDom(html);
 await wait(400);
 const WS2 = domS2.window, DS2 = WS2.document;
 const shapeNames = Object.keys(WS2.SHAPES);
-check('shape library has arrows + symbols', shapeNames.length >= 10 &&
-  ['arrow-right', 'arrow-left', 'arrow-up', 'arrow-down', 'circle', 'star'].every((n) => shapeNames.includes(n)));
-check('shape markup is inert SVG', shapeNames.every((n) => /<(line|polyline|polygon|circle|rect)/.test(WS2.SHAPES[n]) &&
+check('shape library has arrows + symbols', shapeNames.length >= 14 &&
+  ['arrow-right', 'arrow-left', 'arrow-up', 'arrow-down', 'circle', 'ellipse', 'rectangle', 'star'].every((n) => shapeNames.includes(n)));
+check('shape markup is inert SVG', shapeNames.every((n) => /<(line|polyline|polygon|circle|rect|ellipse)/.test(WS2.SHAPES[n]) &&
   !/script|on\w+=|javascript:/i.test(WS2.SHAPES[n])));
 check('insertShape rejects unknown', WS2.insertShape('nope') === false);
 check('insertShape adds positioned svg block', WS2.insertShape('arrow-right') === true &&
@@ -1002,6 +1002,20 @@ check('shape svg scales + serializes', /\.slide svg/.test(headCss) &&
 DS2.querySelector('#btn-shape').click();
 await wait(100);
 check('shape button inserts selected shape', DS2.querySelectorAll('#stage .blk svg').length === 2);
+const geoSvg = DS2.querySelector('#stage .blk svg');
+check('insert sets kind + params', geoSvg.getAttribute('data-kind') === 'arrow-right' && !!geoSvg.getAttribute('data-len'));
+const headDims = (len) => WS2.SHAPE_DEFS['arrow-right'].geo({ len: len }).match(/<polyline points="([^"]+)"/)[1]
+  .split(' ').map((p) => p.split(',').map(Number));
+const headSize = (pts) => [Math.max(...pts.map((p) => p[0])) - Math.min(...pts.map((p) => p[0])),
+  Math.max(...pts.map((p) => p[1])) - Math.min(...pts.map((p) => p[1]))].join('x');
+check('arrow head constant across lengths', headSize(headDims(40)) === '22x36' && headSize(headDims(70)) === '22x36');
+check('circle radius honored', WS2.SHAPE_DEFS.circle.geo({ radius: 10 }).includes('r="10"'));
+check('rect/ellipse dims honored', WS2.SHAPE_DEFS.rectangle.geo({ width: 60, height: 20 }).includes('width="60"') &&
+  WS2.SHAPE_DEFS.ellipse.geo({ width: 60, height: 20 }).includes('rx="30"'));
+geoSvg.setAttribute('data-len', '40');
+WS2.renderShape(geoSvg);
+check('param edit rebuilds geometry', geoSvg.getAttribute('data-len') === '40' && geoSvg.innerHTML.includes('x2="28"'));
+check('unknown kind renders nothing', WS2.renderShape(DS2.createElementNS('http://www.w3.org/2000/svg', 'svg')) === false);
 check('text block button appends positioned block', (function(){
   var before = DS2.querySelectorAll('#stage .blk').length;
   DS2.querySelector('#btn-block').click();
