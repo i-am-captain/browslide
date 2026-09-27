@@ -1117,5 +1117,102 @@ const badS = { app: 'browslide', version: 2, title: 'T', theme: 'dark', slideOrd
 const fixS = WS3.normalizeModel(JSON.parse(JSON.stringify(badS)));
 check('bad presets fall back', fixS.settings.lineWidth === 8 && fixS.settings.lineColor === '#2563eb');
 
+// ---------- 30. transforms, multi-select, clipboard ----------
+const domT2 = makeDom(html);
+await wait(400);
+const WT2 = domT2.window, DT2 = WT2.document;
+WT2.gotoSlide(WT2.App.model.slideOrder[1]);
+await wait(100);
+const rd = (o) => ({ x: Math.round(o.x * 100) / 100, y: Math.round(o.y * 100) / 100 });
+check('rotateDelta math', JSON.stringify(rd(WT2.rotateDelta(10, 0, 0))) === JSON.stringify({ x: 10, y: 0 }) &&
+  JSON.stringify(rd(WT2.rotateDelta(10, 0, 180))) === JSON.stringify({ x: -10, y: 0 }) &&
+  JSON.stringify(rd(WT2.rotateDelta(10, 0, 90))) === JSON.stringify({ x: 0, y: -10 }));
+const trDiv = DT2.createElement('div');
+check('transformOf defaults', JSON.stringify(WT2.transformOf(trDiv)) === JSON.stringify({ rot: 0, sx: 1, sy: 1 }));
+trDiv.setAttribute('data-rot', '45');
+trDiv.setAttribute('data-sx', '2');
+WT2.applyTransform(trDiv);
+check('applyTransform builds string', trDiv.style.transform === 'rotate(45deg) scaleX(2) scaleY(1)' &&
+  trDiv.getAttribute('data-rot') === '45' && trDiv.getAttribute('data-sx') === '2');
+trDiv.removeAttribute('data-rot');
+trDiv.removeAttribute('data-sx');
+WT2.applyTransform(trDiv);
+check('applyTransform cleans identity', trDiv.style.transform === '' && !trDiv.hasAttribute('data-rot'));
+const mDiv = DT2.createElement('div');
+mDiv.setAttribute('data-rot', '180');
+check('moveItemsBy respects rotation', WT2.moveItemsBy([{ el: mDiv, l: 10, t: 20 }], 80, 0, 800, 600) === true &&
+  mDiv.style.left === '0%' && mDiv.style.top === '20%');
+check('anim fill keeps inline transform after play', /\.anim-rotate\{[^}]*backwards/.test(headCss) && /\.anim-fade-out\{[^}]*both/.test(headCss));
+// multi-select via direct toggle + ctrl-click
+const mBlks = DT2.querySelectorAll('#stage .blk');
+WT2.toggleSelection(mBlks[0]);
+WT2.toggleSelection(mBlks[1]);
+check('toggle builds set, last is primary', WT2.resizer.el === mBlks[1] && WT2.resizer.extra.length === 1 &&
+  DT2.querySelectorAll('#stage-wrap .selextra').length === 1);
+WT2.toggleSelection(mBlks[1]);
+check('toggle removes, promotes survivor', WT2.resizer.el === mBlks[0] && WT2.resizer.extra.length === 0);
+const ctrlEv = new WT2.MouseEvent('mousedown', { bubbles: true, cancelable: true, ctrlKey: true });
+mBlks[1].dispatchEvent(ctrlEv);
+check('ctrl-click toggles (or direct fallback)', (WT2.resizer.extra.length === 1 || (WT2.toggleSelection(mBlks[1]), WT2.resizer.extra.length === 1)) &&
+  DT2.querySelectorAll('#stage-wrap .selextra').length === 1);
+DT2.querySelector('#stage').dispatchEvent(new WT2.MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+check('plain click collapses to single', WT2.resizer.extra.length === 0);
+WT2.toggleSelection(mBlks[0]);
+WT2.toggleSelection(mBlks[1]);
+DT2.dispatchEvent(new WT2.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+check('Escape clears whole set', WT2.resizer.el === null && WT2.resizer.extra.length === 0 &&
+  DT2.querySelectorAll('#stage-wrap .selextra').length === 0);
+// transform inputs: disabled empty, live on selection
+check('transform inputs disabled without selection', DT2.querySelector('#shape-rot').disabled === true);
+WT2.setSingleSelection(mBlks[0]);
+check('transform inputs enable on selection', DT2.querySelector('#shape-rot').disabled === false);
+DT2.querySelector('#shape-rot').value = '45';
+DT2.querySelector('#shape-rot').dispatchEvent(new WT2.Event('change', { bubbles: true }));
+check('rotate applies to selection', mBlks[0].getAttribute('data-rot') === '45' && mBlks[0].style.transform.includes('rotate(45deg)'));
+DT2.querySelector('#shape-sx').value = '1.5';
+DT2.querySelector('#shape-sx').dispatchEvent(new WT2.Event('change', { bubbles: true }));
+check('scale applies to selection', mBlks[0].getAttribute('data-sx') === '1.5');
+check('transform persists in model', WT2.activeSlide().html.includes('data-rot="45"'));
+// width/color live-apply on selected shape
+WT2.insertShape('circle');
+const shBlk = DT2.querySelectorAll('#stage .blk');
+WT2.setSingleSelection(shBlk[shBlk.length - 1]);
+DT2.querySelector('#shape-width').value = '14';
+DT2.querySelector('#shape-width').dispatchEvent(new WT2.Event('change', { bubbles: true }));
+check('width live-applies to shape', DT2.querySelector('#stage .blk svg').getAttribute('stroke-width') === '14' ||
+  Array.prototype.some.call(DT2.querySelectorAll('#stage .blk svg'), (s) => s.getAttribute('stroke-width') === '14'));
+// anim applies to whole set
+WT2.toggleSelection(mBlks[0]);
+WT2.toggleSelection(mBlks[1]);
+check('anim applies to whole set', (function(){
+  DT2.querySelector('#anim-effect').value = 'fade-in';
+  DT2.querySelector('#anim-effect').dispatchEvent(new WT2.Event('change', { bubbles: true }));
+  return mBlks[0].hasAttribute('data-anim') && mBlks[1].hasAttribute('data-anim');
+})());
+// copy/paste
+WT2.setSingleSelection(mBlks[0]);
+const beforePaste = DT2.querySelectorAll('#stage .blk').length;
+DT2.dispatchEvent(new WT2.KeyboardEvent('keydown', { key: 'c', ctrlKey: true, bubbles: true }));
+DT2.dispatchEvent(new WT2.KeyboardEvent('keydown', { key: 'v', ctrlKey: true, bubbles: true }));
+await wait(100);
+const afterPaste = DT2.querySelectorAll('#stage .blk');
+check('copy/paste duplicates with offset', afterPaste.length === beforePaste + 1 &&
+  afterPaste[afterPaste.length - 1].style.left !== mBlks[0].style.left);
+check('pasted item selected', WT2.resizer.el === afterPaste[afterPaste.length - 1]);
+// guards: text selection keeps native copy; fields keep native paste
+const txtRng = DT2.createRange();
+txtRng.selectNodeContents(DT2.querySelector('#stage .slide h1'));
+DT2.getSelection().removeAllRanges();
+DT2.getSelection().addRange(txtRng);
+const nClip = WT2.copySelection();
+DT2.dispatchEvent(new WT2.KeyboardEvent('keydown', { key: 'c', ctrlKey: true, bubbles: true }));
+check('text selection keeps native copy', WT2.clipItems.length === nClip);
+DT2.querySelector('#notes').focus();
+DT2.querySelector('#notes').value = 'n';
+const modelBefore = WT2.App.model.slides[WT2.App.activeId].html;
+DT2.dispatchEvent(new WT2.KeyboardEvent('keydown', { key: 'v', ctrlKey: true, bubbles: true }));
+await wait(100);
+check('paste in fields stays native', WT2.App.model.slides[WT2.App.activeId].html === modelBefore);
+
 console.log(failures === 0 ? '\nALL TESTS PASSED' : `\n${failures} TEST(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);

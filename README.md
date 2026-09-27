@@ -21,8 +21,8 @@ Repo file vs. saved copies: `browslide.html` in this repo is the maintained **te
 | Present | Fullscreen show (`Space`/`→` next, `←` prev, `Home`/`End`, `Esc` exit, click advances). Presentation settings (inspector): toolbar on/off, aesthetic border vs maximum fullscreen. |
 | Export viewer | Downloads a small standalone copy (`<title>-viewer.html`) for sharing: slides + player only, no editor code, no notes. Works from `file://` everywhere. |
 | Format bar | Paragraph style (H1–H3), font (system fonts only) and size, bold/italic/underline/strikethrough, alignment, bullet/numbered lists, clear formatting. Applies to selected text — or set it first, then type. |
-| Blocks | Slide content lives in freely positionable blocks: click once to select, drag the ⋮⋮ grip to move, click again to edit text. Images land in blocks too; add more with + Text block under Insert. |
-| Shapes | 12 insertable vector symbols (arrows, line, circle, square, triangle, star, check, cross) as movable blocks, with line width and color presets for new shapes. |
+| Blocks | Slide content lives in freely positionable blocks: click once to select, drag the ⋮⋮ grip to move, click again to edit text. Ctrl/Cmd/shift-click multi-selects (move/resize/animate together). Images land in blocks too; add more with + Text block under Insert. Copy/paste blocks with Ctrl+C / Ctrl+V. |
+| Shapes | 12 insertable vector symbols (arrows, line, circle, square, triangle, star, check, cross) as movable blocks, with line width and color presets for new shapes. With a shape selected, width/color apply live; rotate and per-axis scale apply to any selected item. |
 | Animations | Per-element fade in/out, move-in (4 directions), rotate-in with click-advance steps — set in the Animation panel on any selected block or image, plays in Present and viewer exports. |
 | Open | Load another saved copy (picker or drag-drop) |
 | New | Fresh starter deck (asks first if you have unsaved changes) |
@@ -72,5 +72,3 @@ Editable app and saved decks: Chrome, Edge, Firefox, Safari (current versions), 
 ## Roadmap
 
 Done: viewer-only export, native compression + photo downscale, responsive layout with aspect control, free-position blocks, shapes, per-element step animations (see above).
-Planned:
-- Shape/block rotation and per-axis scaling.
