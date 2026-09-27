@@ -11,7 +11,7 @@ decide, document below, continue.
 - [x] 5. Size handles edit geometry values instead of literal scaling; rectangle/ellipse get 3 handles (corner = both, right = width, bottom = height). Done.
 - [x] 6. Tight selection boxes: per-shape tight viewBoxes so the overlay hugs the icon. Done.
 - [x] 7. Shape sizes participate in keyframes (capture/apply/play/scrub/present/viewer), so handle drags record into steps. Done.
-- [ ] 8. Docs (README) + full suite green + commits.
+- [x] 8. Docs (README) + full suite green + commits. Done: 402 checks pass.
 
 # Decisions (round 3)
 
