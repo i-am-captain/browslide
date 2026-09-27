@@ -101,7 +101,7 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 #filmstrip-list .num{color:var(--muted);font-size:11px;margin-right:6px}
 #filmstrip-list li[draggable="true"]{cursor:grab}
 #filmstrip-list li.drop-before{box-shadow:0 -3px 0 var(--accent)}
-#stage-wrap{overflow:auto;padding:18px;background:var(--panel);border:1px solid var(--border);border-radius:8px}
+#stage-wrap{overflow:auto;padding:18px;background:var(--panel);border:1px solid var(--border);border-radius:8px;position:relative}
 #stage{width:100%;height:100%}
 #inspector{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:10px;overflow:auto;display:flex;flex-direction:column;gap:10px}
 #inspector label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
@@ -122,6 +122,9 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 #repo-link{margin-top:auto;padding-top:10px;text-align:center;font-size:12px}
 #repo-link a{color:var(--muted);text-decoration:none;display:inline-flex;align-items:center;gap:6px;border:none;background:none;padding:2px 6px}
 #repo-link a:hover{color:var(--accent)}
+#media-resizer{position:absolute;border:2px solid var(--accent);border-radius:4px;pointer-events:none;z-index:5}
+#media-resizer .mhandle{position:absolute;right:-10px;bottom:-10px;width:20px;height:20px;background:var(--accent);border:2px solid #fff;border-radius:50%;cursor:nwse-resize;pointer-events:auto;touch-action:none}
+#media-resizer .mbadge{position:absolute;top:-26px;right:-2px;background:var(--accent);color:#fff;font-size:11px;padding:1px 7px;border-radius:10px;white-space:nowrap}
 #inspector label.row{display:flex;flex-direction:row;align-items:center}
 #present-settings{display:flex;flex-direction:column;gap:6px}
 #present-settings summary{cursor:pointer;color:var(--muted);font-size:12px}
@@ -848,6 +851,7 @@ function fitStage(){
   var wrap = $('#stage-wrap'), sec = $('#stage .slide');
   if (!wrap || !sec || !App.model) return;
   fitSlideBox(sec, Math.max(200, wrap.clientWidth - 36), Math.max(200, wrap.clientHeight - 36));
+  positionResizer();
 }
 function fitPresent(){
   var ov = $('#present-overlay'), sec = $('#present-slide .slide');
@@ -1444,6 +1448,98 @@ function appendDataMedia(url, file, kind){
     appendMedia(img);
   }
 }
+/* ---- media select + resize (drag handle, width stored as % of slide) ---- */
+var resizer = { el: null, startPx: 0, startX: 0, slidePx: 0 };
+function shiftPct(startPx, dxPx, slidePx){
+  if (!(slidePx > 0) || !(startPx >= 0)) return null;
+  var pct = (startPx + dxPx) / slidePx * 100;
+  return Math.max(5, Math.min(100, Math.round(pct * 10) / 10));
+}
+function resizerOverlay(){
+  var ov = $('#media-resizer');
+  if (ov) return ov;
+  ov = document.createElement('div');
+  ov.id = 'media-resizer';
+  ov.hidden = true;
+  ov.innerHTML = '<span class="mbadge"></span><span class="mhandle" title="Drag to resize"></span>';
+  $('#stage-wrap').appendChild(ov);
+  ov.querySelector('.mhandle').addEventListener('pointerdown', onHandleDown);
+  return ov;
+}
+function posInWrap(el){
+  var wrap = $('#stage-wrap');
+  var x = 0, y = 0, n = el;
+  while (n && n !== wrap) { x += n.offsetLeft || 0; y += n.offsetTop || 0; n = n.offsetParent; }
+  return { x: x, y: y, w: el.offsetWidth || 0, h: el.offsetHeight || 0 };
+}
+function currentMediaPct(){
+  var el = resizer.el;
+  if (!el) return '';
+  var m = /^\s*([\d.]+)\s*%\s*$/.exec(el.style.width || '');
+  if (m) return Math.round(parseFloat(m[1])) + '%';
+  var sec = $('#stage .slide');
+  if (sec && sec.clientWidth > 0 && el.offsetWidth > 0) return Math.round(el.offsetWidth / sec.clientWidth * 100) + '%';
+  return 'auto';
+}
+function positionResizer(){
+  var ov = $('#media-resizer');
+  if (!resizer.el || !document.contains(resizer.el)) {
+    resizer.el = null;
+    if (ov) ov.hidden = true;
+    return;
+  }
+  if (!ov) return;
+  var p = posInWrap(resizer.el);
+  ov.hidden = false;
+  ov.style.left = p.x + 'px';
+  ov.style.top = p.y + 'px';
+  ov.style.width = p.w + 'px';
+  ov.style.height = p.h + 'px';
+  var badge = ov.querySelector('.mbadge');
+  if (badge) badge.textContent = currentMediaPct();
+}
+function selectMedia(el){
+  var sec = $('#stage .slide');
+  if (!el || !sec || !sec.contains(el)) return false;
+  resizer.el = el;
+  resizerOverlay();
+  positionResizer();
+  return true;
+}
+function deselectMedia(){
+  resizer.el = null;
+  var ov = $('#media-resizer');
+  if (ov) ov.hidden = true;
+}
+function onHandleDown(e){
+  if (!resizer.el) return;
+  e.preventDefault();
+  e.stopPropagation();
+  var h = e.currentTarget;
+  try { h.setPointerCapture(e.pointerId); } catch (err) {}
+  var sec = $('#stage .slide');
+  resizer.startX = e.clientX;
+  resizer.startPx = resizer.el.offsetWidth || 0;
+  resizer.slidePx = (sec && sec.clientWidth) || 0;
+  var onMove = function(ev){
+    var pct = shiftPct(resizer.startPx, ev.clientX - resizer.startX, resizer.slidePx);
+    if (pct === null || !resizer.el) return;
+    resizer.el.style.width = pct + '%';
+    resizer.el.style.height = 'auto';
+    positionResizer();
+  };
+  var onUp = function(){
+    h.removeEventListener('pointermove', onMove);
+    h.removeEventListener('pointerup', onUp);
+    h.removeEventListener('pointercancel', onUp);
+    if (!resizer.el) return;
+    try { h.releasePointerCapture(e.pointerId); } catch (err) {}
+    syncStageToModel(); refreshDirty(); scheduleSize(); scheduleAutosave();
+  };
+  h.addEventListener('pointermove', onMove);
+  h.addEventListener('pointerup', onUp);
+  h.addEventListener('pointercancel', onUp);
+}
 
 /* ================= PRESENT ================= */
 function openPresent(){
@@ -1577,6 +1673,8 @@ function saveNow(){
     var clone = document.documentElement.cloneNode(true);
     clone.querySelector('#slider-data').textContent = built.json;
     clone.querySelector('#present-overlay').setAttribute('hidden', '');
+    var rz = clone.querySelector('#media-resizer');
+    if (rz) rz.setAttribute('hidden', '');
     // The live stage/presenter hold EXPANDED data: URIs for editing. The file must
     // not serialize them (each file already lives once in the data block); boot
     // rebuilds both from the model, so empty them in the clone.
@@ -1771,6 +1869,12 @@ function bind(){
     refreshDirty(); scheduleAutosave();
   });
   $('#notes').addEventListener('input', debounce(function(e){ activeSlide().notes = e.target.value; refreshDirty(); scheduleAutosave(); }, 300));
+  $('#stage').addEventListener('mousedown', function(e){
+    var m = e.target && e.target.closest ? e.target.closest('img,video') : null;
+    if (m && $('#stage').contains(m)) selectMedia(m);
+    else deselectMedia();
+  });
+  $('#stage-wrap').addEventListener('scroll', function(){ positionResizer(); });
   $('#aspect-select').addEventListener('change', function(e){
     if (e.target.value === '16:9') setAspect(16, 9);
     else if (e.target.value === '4:3') setAspect(4, 3);
@@ -1809,7 +1913,8 @@ function bind(){
       else if (e.key === 'End') { e.preventDefault(); showPresent(App.model.slideOrder.length - 1); }
       return;
     }
-    if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) { e.preventDefault(); saveNow(); }
+    if (e.key === 'Escape' && resizer.el) { deselectMedia(); e.preventDefault(); }
+    else if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) { e.preventDefault(); saveNow(); }
     else if ((e.ctrlKey || e.metaKey) && (e.key === 'o' || e.key === 'O')) { e.preventDefault(); $('#open-file').click(); }
     else if ((e.key === 'PageDown' || e.key === 'PageUp' || e.key === 'Home' || e.key === 'End') && !isEditingFocus()) {
       e.preventDefault();

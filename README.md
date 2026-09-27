@@ -33,7 +33,7 @@ Unsaved work additionally autosaves to the browser (IndexedDB) — if you close 
 
 ## Media & file size
 
-Insert → Image/Video embeds the file as base64 inside the deck (fully portable, but ~33% larger than the original). Identical files are stored **once** automatically (content-hash dedup — inserting the same picture twice costs nothing extra). Slides reference shared files, so the deck stays small.
+Insert → Image/Video embeds the file as base64 inside the deck (fully portable, but ~33% larger than the original). Click an image or video to select it and drag the corner handle to resize (width stored as % of the slide, so it scales). Identical files are stored **once** automatically (content-hash dedup — inserting the same picture twice costs nothing extra). Slides reference shared files, so the deck stays small.
 
 The inspector's **Media & sizes** panel shows every embedded file (name, type, size, how many slides use it, ⚠ flags above ~8 MB) plus a per-slide breakdown, and offers **Remove unused media** cleanup. The size meter warns above ~5 MB and strongly above ~20 MB. Big videos trigger an explicit confirm explaining the cost — trim/compress them before inserting.
 

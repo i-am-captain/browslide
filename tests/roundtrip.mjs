@@ -921,5 +921,32 @@ pickSize(1, 4);
 const nestedNew = Array.prototype.find.call(xSec.querySelectorAll('#stage .slide span'), (s) => s.style.fontSize === '2em' && s.textContent === 'ell');
 check('pre-nested pick lifts out clean', !!nestedNew && cleanAbove(nestedNew, xSec.querySelector('p')) && xSec.textContent.includes('hello'));
 
+// ---------- 26. media resize handle ----------
+const domY = makeDom(html);
+await wait(400);
+const WY = domY.window, DY = WY.document;
+check('resize math + clamps', WY.shiftPct(200, 100, 800) === 37.5 && WY.shiftPct(1000, 0, 800) === 100 &&
+  WY.shiftPct(10, -100, 800) === 5 && WY.shiftPct(100, 50, 0) === null && WY.shiftPct(-5, 0, 800) === null);
+const yImg = DY.createElement('img');
+yImg.src = 'data:image/png;base64,AAA=';
+yImg.alt = 't';
+DY.querySelector('#stage .slide').appendChild(yImg);
+check('selectMedia shows overlay', WY.selectMedia(yImg) === true && !!DY.querySelector('#media-resizer') &&
+  DY.querySelector('#media-resizer').hidden === false && !!DY.querySelector('#media-resizer .mhandle') &&
+  !!DY.querySelector('#media-resizer .mbadge'));
+check('selectMedia rejects outside nodes', WY.selectMedia(DY.querySelector('.brand')) === false);
+yImg.dispatchEvent(new WY.MouseEvent('mousedown', { bubbles: true }));
+check('mousedown on media selects', WY.resizer.el === yImg);
+DY.querySelector('#stage .slide').dispatchEvent(new WY.MouseEvent('mousedown', { bubbles: true }));
+check('mousedown on text deselects', WY.resizer.el === null && DY.querySelector('#media-resizer').hidden === true);
+WY.selectMedia(yImg);
+DY.dispatchEvent(new WY.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+check('Escape deselects', WY.resizer.el === null);
+WY.selectMedia(yImg);
+DY.querySelector('#btn-save').click();
+await wait(300);
+const tY = await blobToText(WY.__savedBlob, WY);
+check('saved clone hides resizer overlay', new JSDOM(tY).window.document.querySelector('#media-resizer').hasAttribute('hidden'));
+
 console.log(failures === 0 ? '\nALL TESTS PASSED' : `\n${failures} TEST(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);
