@@ -613,11 +613,9 @@ await wait(100);
 check('format click without editing API does not crash', WQ.__alerts.length === 0);
 const secQ = DQ.querySelector('#stage .slide');
 secQ.innerHTML = '<p>ab<font size="7">cd</font>ef</p>';
-WQ.pendingSpanStyle = { prop: 'fontSize', value: '2em' };
 WQ.convertFontTags();
-WQ.pendingSpanStyle = null;
 check('font markers convert to styled spans', secQ.querySelectorAll('font').length === 0 &&
-  secQ.querySelector('span').style.fontSize === '2em' && secQ.textContent === 'abcdef');
+  secQ.querySelector('span').style.fontSize === '3em' && secQ.textContent === 'abcdef');
 check('restoreSelection false outside stage', WQ.restoreSelection() === false);
 WQ.updateFormatUI();
 check('no active states outside stage', DQ.querySelectorAll('#formatbar button.active').length === 0);
@@ -653,7 +651,6 @@ DR.getSelection().addRange(rng2);
 WR.updateFormatUI();
 check('plain text resets selects to slide default', DR.querySelector('#font-select').selectedIndex === 0 && DR.querySelector('#size-select').value === '1em');
 // ---------- 19. font leftovers impossible + selection robustness ----------
-WQ.pendingSpanStyle = null;
 secQ.innerHTML = '<p>a<font size="3">b</font>c<font>d</font>e<font face="Georgia">f</font></p>';
 WQ.convertFontTags();
 check('any font tag converts without pending style', secQ.querySelectorAll('font').length === 0 &&
@@ -768,12 +765,15 @@ DU.getSelection().removeAllRanges();
 DU.getSelection().addRange(urng);
 WU.applySpanStyle('fontSize', '2em');
 check('selection path never touches execCommand', execCalls.length === 0 && uSec.querySelectorAll('font').length === 0);
-check('selection wrapped in sized span', !!uSec.querySelector('span') && uSec.querySelector('span').style.fontSize === '2em');
+check('selection wrapped in sized span', Array.prototype.some.call(uSec.querySelectorAll('span'), (s) => s.style.fontSize === '2em'));
 const srng = DU.createRange();
 srng.setStart(uSec.querySelector('p').firstChild, 0);
 srng.setEnd(DU.querySelector('.brand').firstChild, 1);
 DU.getSelection().removeAllRanges();
 DU.getSelection().addRange(srng);
+WU.applySpanStyle('fontSize', '2em');
+check('backward range collapses safely', execCalls.length === 0 && uSec.querySelectorAll('font').length === 0);
+DU.getSelection().setBaseAndExtent(uSec.querySelector('p').firstChild, 0, DU.querySelector('.brand').firstChild, 1);
 WU.applySpanStyle('fontSize', '2em');
 check('spanning selection does nothing harmful', execCalls.length === 0 && uSec.querySelectorAll('font').length === 0 && WU.pendingFormat === null);
 execCalls.length = 0;
@@ -784,8 +784,10 @@ DU.getSelection().removeAllRanges();
 DU.getSelection().addRange(crngU);
 DU.dispatchEvent(new WU.Event('selectionchange'));
 WU.applySpanStyle('fontSize', '2em');
-check('collapsed path uses typing style only', execCalls.length === 2 && execCalls.every((c) => c[0] === 'fontSize') && uSec.querySelectorAll('font').length === 0,
-  execCalls.length + ' exec call(s)');
+const pendSpans = uSec.querySelectorAll('span[data-bsw="pending"]');
+check('collapsed path inserts span, never execs', execCalls.length === 0 && pendSpans.length === 1 &&
+  pendSpans[0].style.fontSize === '2em' && DU.getSelection().anchorNode === pendSpans[0] &&
+  WU.pendingFormat.fontSize === '2em', execCalls.length + ' exec call(s)');
 uSec.innerHTML = '<p>past<font size="7">ed</font></p>';
 uSec.dispatchEvent(new WU.Event('paste', { bubbles: true }));
 await wait(150);
@@ -806,6 +808,70 @@ WV.loadModel({ app: 'browslide', version: 2, title: 'Raw', theme: 'dark', slideO
   settings: { compress: true, downscale: false, maxDim: 1920, showBar: true, tight: false }, aspect: { w: 16, h: 9 },
   resources: {}, slides: { s1: { title: 'Raw', layout: 'blank', transition: 'none', notes: '', html: '<p>raw<font size="4">junk</font></p>' } } });
 check('loadModel backstop sanitizes', !WV.activeSlide().html.includes('<font') && DV.querySelectorAll('#stage font').length === 0);
+
+// ---------- 24. explicit spans: normalize, insert-on-place, prune-on-move ----------
+const domW = makeDom(html);
+await wait(400);
+const WW = domW.window, DW = WW.document;
+const wSec2 = DW.querySelector('#stage .slide');
+check('render normalizes bare blocks', (function(){
+  const h = wSec2.querySelector('h1');
+  return !!h && h.firstChild && h.firstChild.tagName === 'SPAN' && !!h.firstChild.style.fontSize;
+})());
+WW.ensureBlockSpan(DW.createElement('div')); // detached smoke (no crash)
+const tDiv = DW.createElement('div');
+tDiv.innerHTML = 'bare text';
+WW.ensureBlockSpan(tDiv);
+check('bare block gets default span', tDiv.firstChild.tagName === 'SPAN' && tDiv.firstChild.getAttribute('data-bsw') === 'block' &&
+  !!tDiv.firstChild.style.fontSize && tDiv.textContent === 'bare text');
+WW.ensureBlockSpan(tDiv);
+check('normalization is idempotent', tDiv.querySelectorAll('span').length === 1);
+const uDiv = DW.createElement('div');
+uDiv.innerHTML = '<span style="font-size:2em">styled</span> tail';
+WW.ensureBlockSpan(uDiv);
+check('styled first child not rewrapped', uDiv.querySelectorAll('span').length === 1 && uDiv.firstChild.style.fontSize === '2em');
+const lUl = DW.createElement('ul');
+lUl.innerHTML = '<li>one</li><li>two</li>';
+WW.ensureStyledSpans({ children: [lUl] });
+check('list items normalized', lUl.querySelectorAll('li span[data-bsw="block"]').length === 2);
+// insert-on-place at a collapsed caret
+wSec2.innerHTML = '<h1>Head</h1><p>type here: </p>';
+const caretTx = wSec2.querySelector('p').firstChild;
+const crngW = DW.createRange();
+crngW.setStart(caretTx, 11);
+crngW.collapse(true);
+DW.getSelection().removeAllRanges();
+DW.getSelection().addRange(crngW);
+DW.dispatchEvent(new WW.Event('selectionchange'));
+const made = WW.insertPendingSpan('fontSize', '2em');
+check('insert creates empty styled span at caret', !!made && made.getAttribute('data-bsw') === 'pending' &&
+  made.style.fontSize === '2em' && DW.getSelection().anchorNode === made);
+const made2 = WW.insertPendingSpan('fontFamily', 'Georgia,serif');
+check('second pick restyles same span', made2 === made && made.style.fontFamily.indexOf('Georgia') === 0 &&
+  wSec2.querySelectorAll('span[data-bsw="pending"]').length === 1);
+// type into it, move away: kept; abandon empty one: pruned
+made.textContent = 'big';
+WW.updateFormatUI();
+DW.getSelection().removeAllRanges();
+const elsewhere = DW.createRange();
+elsewhere.selectNodeContents(wSec2.querySelector('h1'));
+DW.getSelection().addRange(elsewhere);
+WW.updateFormatUI();
+check('used span survives caret move', wSec2.textContent.includes('big'));
+DW.getSelection().removeAllRanges();
+const crngW2 = DW.createRange();
+crngW2.setStart(caretTx, 0);
+crngW2.collapse(true);
+DW.getSelection().addRange(crngW2);
+DW.dispatchEvent(new WW.Event('click', { bubbles: true }));
+WW.pendingFormat = { fontFamily: null, fontSize: '2em', block: null, cmds: {}, node: made };
+const fresh = WW.insertPendingSpan('fontSize', '3em');
+check('fresh empty span inserted after move', !!fresh && fresh !== made);
+WW.pendingFormat.node = fresh;
+DW.getSelection().removeAllRanges();
+DW.getSelection().addRange(elsewhere);
+WW.updateFormatUI();
+check('abandoned empty span pruned', !DW.contains(fresh) && WW.pendingFormat === null);
 
 console.log(failures === 0 ? '\nALL TESTS PASSED' : `\n${failures} TEST(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);

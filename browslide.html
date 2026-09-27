@@ -331,6 +331,40 @@ function parseDataUrl(dataURL){
 }
 
 var LAYOUTS = ['title', 'title-body', 'two-col', 'image-full', 'blank'];
+/* every text run carries explicit styling: default span values = slide base */
+var DEFAULT_FONT = '-apple-system,\'Segoe UI\',Roboto,Arial,sans-serif';
+var BLOCK_TAGS = { P: 1, H1: 1, H2: 1, H3: 1, LI: 1, DIV: 1, BLOCKQUOTE: 1 };
+var INLINE_TAGS = { SPAN: 1, B: 1, I: 1, U: 1, S: 1, A: 1, EM: 1, STRONG: 1, CODE: 1, IMG: 1, VIDEO: 1, BR: 1 };
+function defaultSpan(doc){
+  var sp = doc.createElement('span');
+  sp.setAttribute('data-bsw', 'block');
+  sp.style.fontFamily = DEFAULT_FONT;
+  sp.style.fontSize = '1em';
+  sp.style.fontWeight = 'normal';
+  sp.style.fontStyle = 'normal';
+  return sp;
+}
+function ensureBlockSpan(block){
+  /* each text block starts with a fully-styled span; recurse past block children */
+  var i, hasBlocks = false, kids = block.childNodes;
+  for (i = 0; i < kids.length; i++) {
+    if (kids[i].nodeType === 1 && !INLINE_TAGS[kids[i].tagName]) { hasBlocks = true; break; }
+  }
+  if (hasBlocks) { ensureStyledSpans(block); return; }
+  var first = block.firstChild;
+  if (first && first.nodeType === 1 && first.tagName === 'SPAN' && first.style && first.style.fontSize) return;
+  var sp = defaultSpan(block.ownerDocument);
+  while (block.firstChild) sp.appendChild(block.firstChild);
+  block.appendChild(sp);
+}
+function ensureStyledSpans(root){
+  if (!root) return;
+  Array.prototype.slice.call(root.children).forEach(function(el){
+    if (el.tagName === 'UL' || el.tagName === 'OL') {
+      Array.prototype.slice.call(el.children).forEach(function(li){ if (li.tagName === 'LI') ensureBlockSpan(li); });
+    } else if (BLOCK_TAGS[el.tagName]) ensureBlockSpan(el);
+  });
+}
 var TRANSITIONS = ['none', 'fade', 'slide'];
 var THEMES = ['default', 'dark'];
 
@@ -350,7 +384,7 @@ function sanitizeSlideHTML(html){
   var tpl = document.createElement('template');
   tpl.innerHTML = String(html || '');
   /* safety net: legacy font tags can never reach saved HTML (see convertFontTags) */
-  Array.prototype.slice.call(tpl.content.querySelectorAll('font')).forEach(function(el){ replaceFontTag(el, false); });
+  Array.prototype.slice.call(tpl.content.querySelectorAll('font')).forEach(function(el){ replaceFontTag(el); });
   $all('script,iframe,object,embed,link,style', tpl.content).forEach(function(n){ n.remove(); });
   $all('*', tpl.content).forEach(function(el){
     Array.prototype.slice.call(el.attributes).forEach(function(a){
@@ -672,6 +706,7 @@ function syncStageToModel(){
   var sec = $('#stage .slide');
   var s = activeSlide();
   if (sec && s) {
+    ensureStyledSpans(sec);
     s.html = sanitizeSlideHTML(collapseHtml(sec.innerHTML, App.model));
     s.title = deriveTitle(s.html);
   }
@@ -782,6 +817,7 @@ function renderStage(){
   sec.className = 'slide layout-' + s.layout;
   sec.contentEditable = 'true';
   sec.innerHTML = expandHtml(s.html, App.model.resources);
+  ensureStyledSpans(sec);
   sec.addEventListener('input', onStageInput);
   sec.addEventListener('paste', function(){
     /* pasted content (e.g. from older decks) may carry legacy <font> tags;
@@ -789,7 +825,7 @@ function renderStage(){
     setTimeout(function(){
       var s2 = $('#stage .slide');
       if (!s2 || !s2.querySelectorAll('font').length) return;
-      Array.prototype.slice.call(s2.querySelectorAll('font')).forEach(function(f){ replaceFontTag(f, false); });
+      Array.prototype.slice.call(s2.querySelectorAll('font')).forEach(function(f){ replaceFontTag(f); });
       syncStageToModel(); updateFilmstripLabel(); refreshDirty(); scheduleSize(); scheduleAutosave(); updateFormatUI();
     }, 0);
   });
@@ -962,7 +998,6 @@ function appendMedia(el){
 }
 /* ---- text formatting (execCommand-based, works offline in every browser) ---- */
 var savedRange = null;
-var pendingSpanStyle = null;
 function trackSelection(){
   try {
     var sel = document.getSelection();
@@ -1142,6 +1177,59 @@ function capturePendingBase(){
     });
   } catch (e) {}
 }
+function caretHost(){
+  /* element holding a collapsed caret (null unless placed inside the slide) */
+  try {
+    var sel = document.getSelection();
+    if (!sel.rangeCount || !sel.isCollapsed) return null;
+    var a = sel.anchorNode;
+    var sec = $('#stage .slide');
+    if (!sec || !(a === sec || sec.contains(a))) return null;
+    return (a.nodeType === 3) ? a.parentNode : a;
+  } catch (e) { return null; }
+}
+function pendingSpanAtCaret(){
+  var h = caretHost();
+  return (h && h.tagName === 'SPAN' && h.getAttribute('data-bsw') === 'pending') ? h : null;
+}
+function insertPendingSpan(prop, value){
+  /* collapsed caret: materialize the picked style as an empty span and put
+     the caret inside it. No execCommand involved — legacy tags impossible. */
+  var existing = pendingSpanAtCaret();
+  if (existing) { existing.style[prop] = value; return existing; }
+  var sec = $('#stage .slide');
+  var sel = document.getSelection();
+  if (!sec || !sel.rangeCount) return null;
+  try {
+    var range = sel.getRangeAt(0);
+    if (!range.collapsed || !sec.contains(range.commonAncestorContainer)) return null;
+    var sp = document.createElement('span');
+    sp.setAttribute('data-bsw', 'pending');
+    sp.style[prop] = value;
+    range.insertNode(sp);
+    var r2 = document.createRange();
+    r2.setStart(sp, 0);
+    r2.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(r2);
+    savedRange = r2.cloneRange();
+    return sp;
+  } catch (e) { return null; }
+}
+function pruneEmptyPendingSpan(){
+  /* caret moved on: drop abandoned empty typing spans (content spans stay) */
+  try {
+    var sec = $('#stage .slide');
+    if (!sec) return;
+    var sel = document.getSelection();
+    var caret = (sel.rangeCount > 0) ? sel.anchorNode : null;
+    Array.prototype.slice.call(sec.querySelectorAll('span[data-bsw="pending"]')).forEach(function(sp){
+      if (sp.textContent || sp.querySelector('*')) return;
+      if (caret && (caret === sp || sp.contains(caret))) return;
+      if (sp.parentNode) sp.parentNode.removeChild(sp);
+    });
+  } catch (e) {}
+}
 function selectionCollapsed(){
   try { var sel = document.getSelection(); return sel.rangeCount > 0 && !!sel.isCollapsed; }
   catch (e) { return false; }
@@ -1161,19 +1249,16 @@ function applyCmd(cmd){
 function applySpanStyle(prop, value){
   if (!restoreSelection()) return;
   if (selectionCollapsed()) {
-    /* typing style only — collapsed selections cannot create elements */
-    pendingSpanStyle = { prop: prop, value: value };
-    try { document.execCommand('fontSize', false, '7'); } catch (e) {}
-    convertFontTags();
-    pendingSpanStyle = null;
     capturePendingBase();
     pendingFormat[prop] = value;
-  } else if (wrapSelectionInSpan(prop, value)) {
+    var added = insertPendingSpan(prop, value);
+    if (added) { if (!pendingFormat.node) pendingFormat.node = added; }
+    else pendingFormat = null;
+  } else {
+    /* selection: wrap it, or no-op if the range spans outside the slide */
+    wrapSelectionInSpan(prop, value);
     pendingFormat = null;
   }
-  /* wrap failed (e.g. selection spanning outside the slide): do nothing.
-     The old execCommand fallback is deliberately gone — it could emit
-     legacy <font> tags, which is worse than skipping exotic ranges. */
   afterFormat();
 }
 function applyBlock(tag){
@@ -1184,16 +1269,13 @@ function applyBlock(tag){
   else pendingFormat = null;
   afterFormat();
 }
-function replaceFontTag(f, usePending){
-  /* <font> (execCommand/paste leftover) -> styled span, or unwrap if valueless */
+function replaceFontTag(f){
+  /* <font> (paste/legacy leftover) -> styled span, or unwrap if valueless */
   var doc = f.ownerDocument;
   var sz = f.getAttribute && f.getAttribute('size');
   var mapped = sz ? FONT_SIZE_MAP[parseInt(sz, 10)] : null;
   var sp = null;
-  if (usePending && pendingSpanStyle && (!sz || sz === '7')) {
-    sp = doc.createElement('span');
-    sp.style[pendingSpanStyle.prop] = pendingSpanStyle.value;
-  } else if (mapped) {
+  if (mapped) {
     sp = doc.createElement('span');
     sp.style.fontSize = mapped;
   } else if (f.getAttribute && f.getAttribute('face')) {
@@ -1208,7 +1290,7 @@ function replaceFontTag(f, usePending){
 function convertFontTags(){
   var sec = $('#stage .slide');
   if (!sec) return;
-  Array.prototype.slice.call(sec.querySelectorAll('font')).forEach(function(f){ replaceFontTag(f, true); });
+  Array.prototype.slice.call(sec.querySelectorAll('font')).forEach(function(f){ replaceFontTag(f); });
 }
 /* Pending format: typing attributes configured at a bare caret (no selection).
    The toolbar keeps showing them (threshold: one cursor placement) while you
@@ -1246,21 +1328,10 @@ function paintPending(){
   } catch (e) {}
 }
 function reapplyPending(){
-  /* re-establish typing attributes after a focus round-trip (selects steal focus) */
+  /* re-establish toggle typing attributes after a focus round-trip.
+     Font/size travel inside pending spans now — no fontSize exec remains. */
   if (!pendingFormat || !selectionCollapsed()) return;
   try {
-    if (pendingFormat.fontFamily) {
-      pendingSpanStyle = { prop: 'fontFamily', value: pendingFormat.fontFamily };
-      try { document.execCommand('fontSize', false, '7'); } catch (e) {}
-      convertFontTags();
-      pendingSpanStyle = null;
-    }
-    if (pendingFormat.fontSize) {
-      pendingSpanStyle = { prop: 'fontSize', value: pendingFormat.fontSize };
-      try { document.execCommand('fontSize', false, '7'); } catch (e) {}
-      convertFontTags();
-      pendingSpanStyle = null;
-    }
     Object.keys(pendingFormat.cmds || {}).forEach(function(cmd){
       try { if (!!document.queryCommandState(cmd) !== !!pendingFormat.cmds[cmd]) document.execCommand(cmd, false, null); }
       catch (e) {}
@@ -1268,6 +1339,8 @@ function reapplyPending(){
   } catch (e) {}
 }
 function updateFormatUI(){
+  pruneEmptyPendingSpan();
+  if (pendingFormat && pendingFormat.node && !document.contains(pendingFormat.node)) pendingFormat = null;
   if (pendingFormat) { paintPending(); return; }
   var on = {};
   try {
