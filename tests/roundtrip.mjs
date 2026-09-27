@@ -494,5 +494,18 @@ const domG = makeDom(exT);
 await wait(400);
 check('exported viewer fits slide', !!domG.window.document.querySelector('#deck .slide').style.width);
 
+// custom preset reveals inputs without snapping back (regression)
+const domH = makeDom(html);
+await wait(400);
+const WH = domH.window, DH = WH.document;
+DH.querySelector('#aspect-select').value = 'custom';
+DH.querySelector('#aspect-select').dispatchEvent(new WH.Event('change', { bubbles: true }));
+check('custom reveals inputs, keeps preset model', DH.querySelector('#aspect-select').value === 'custom' && DH.querySelector('#aspect-custom').hidden === false && WH.App.model.aspect.w === 16 && WH.App.model.aspect.h === 9);
+DH.querySelector('#aspect-w').value = '7';
+DH.querySelector('#aspect-w').dispatchEvent(new WH.Event('change', { bubbles: true }));
+DH.querySelector('#aspect-h').value = '5';
+DH.querySelector('#aspect-h').dispatchEvent(new WH.Event('change', { bubbles: true }));
+check('custom inputs apply', WH.App.model.aspect.w === 7 && WH.App.model.aspect.h === 5 && DH.querySelector('#aspect-select').value === 'custom');
+
 console.log(failures === 0 ? '\nALL TESTS PASSED' : `\n${failures} TEST(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);

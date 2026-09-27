@@ -1173,7 +1173,15 @@ function bind(){
   $('#aspect-select').addEventListener('change', function(e){
     if (e.target.value === '16:9') setAspect(16, 9);
     else if (e.target.value === '4:3') setAspect(4, 3);
-    else syncAspectUI(); /* custom: reveal W/H inputs, keep current values */
+    else {
+      /* custom picked: reveal W/H prefilled with current values, apply on edit.
+         (Do NOT syncAspectUI() here — it would snap the select back to the
+         still-unchanged model preset.) */
+      var a = deckAR();
+      $('#aspect-custom').removeAttribute('hidden');
+      if (document.activeElement !== $('#aspect-w')) $('#aspect-w').value = a.w;
+      if (document.activeElement !== $('#aspect-h')) $('#aspect-h').value = a.h;
+    }
   });
   $('#aspect-w').addEventListener('change', function(e){ setAspect(e.target.value, App.model.aspect.h); });
   $('#aspect-h').addEventListener('change', function(e){ setAspect(App.model.aspect.w, e.target.value); });
