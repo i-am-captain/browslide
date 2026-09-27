@@ -1009,6 +1009,9 @@ const headDims = (len) => WS2.SHAPE_DEFS['arrow-right'].geo({ len: len }).match(
 const headSize = (pts) => [Math.max(...pts.map((p) => p[0])) - Math.min(...pts.map((p) => p[0])),
   Math.max(...pts.map((p) => p[1])) - Math.min(...pts.map((p) => p[1]))].join('x');
 check('arrow head constant across lengths', headSize(headDims(40)) === '22x36' && headSize(headDims(70)) === '22x36');
+check('geometry sizes uncapped', WS2.SHAPE_DEFS['arrow-right'].geo({ len: 200 }).includes('x2="188"') &&
+  WS2.SHAPE_DEFS.circle.geo({ radius: 100 }).includes('r="100"') &&
+  WS2.SHAPE_DEFS.rectangle.geo({ width: 200, height: 150 }).includes('width="200"'));
 check('circle radius honored', WS2.SHAPE_DEFS.circle.geo({ radius: 10 }).includes('r="10"'));
 check('rect/ellipse dims honored', WS2.SHAPE_DEFS.rectangle.geo({ width: 60, height: 20 }).includes('width="60"') &&
   WS2.SHAPE_DEFS.ellipse.geo({ width: 60, height: 20 }).includes('rx="30"'));
@@ -1060,6 +1063,14 @@ await wait(50);
 check('add step captures row', DA.querySelectorAll('#anim-rows .arow').length === 1 &&
   JSON.parse(aBlk.getAttribute('data-anim')).length === 1 &&
   JSON.parse(aBlk.getAttribute('data-anim'))[0].group === 1);
+const capEntry = JSON.parse(aBlk.getAttribute('data-anim'))[0];
+check('capture reads explicit coords', capEntry.to.left === 10 && capEntry.to.top === 30 && capEntry.to.width === 80);
+check('unpositioned elements get coords at play', (function(){
+  const u = DA.createElement('div');
+  u.style.width = '50%';
+  WA.ensurePositioned(u);
+  return u.style.left === '10%' && u.style.top === '10%' && u.style.position === 'absolute';
+})());
 const gInput = DA.querySelector('#anim-rows .arow input');
 gInput.value = '2';
 gInput.dispatchEvent(new WA.Event('change', { bubbles: true }));
@@ -1181,10 +1192,10 @@ await wait(400);
 const WT2 = domT2.window, DT2 = WT2.document;
 WT2.gotoSlide(WT2.App.model.slideOrder[1]);
 await wait(100);
-const rd = (o) => ({ x: Math.round(o.x * 100) / 100, y: Math.round(o.y * 100) / 100 });
-check('rotateDelta math', JSON.stringify(rd(WT2.rotateDelta(10, 0, 0))) === JSON.stringify({ x: 10, y: 0 }) &&
-  JSON.stringify(rd(WT2.rotateDelta(10, 0, 180))) === JSON.stringify({ x: -10, y: 0 }) &&
-  JSON.stringify(rd(WT2.rotateDelta(10, 0, 90))) === JSON.stringify({ x: 0, y: -10 }));
+const mDiv = DT2.createElement('div');
+mDiv.setAttribute('data-rot', '180');
+check('moveItemsBy ignores rotation (screen-space moves)', WT2.moveItemsBy([{ el: mDiv, l: 10, t: 20 }], 80, 0, 800, 600) === true &&
+  mDiv.style.left === '20%' && mDiv.style.top === '20%');
 const trDiv = DT2.createElement('div');
 check('transformOf defaults', JSON.stringify(WT2.transformOf(trDiv)) === JSON.stringify({ rot: 0, sx: 1, sy: 1 }));
 trDiv.setAttribute('data-rot', '45');
@@ -1196,10 +1207,6 @@ trDiv.removeAttribute('data-rot');
 trDiv.removeAttribute('data-sx');
 WT2.applyTransform(trDiv);
 check('applyTransform cleans identity', trDiv.style.transform === '' && !trDiv.hasAttribute('data-rot'));
-const mDiv = DT2.createElement('div');
-mDiv.setAttribute('data-rot', '180');
-check('moveItemsBy respects rotation', WT2.moveItemsBy([{ el: mDiv, l: 10, t: 20 }], 80, 0, 800, 600) === true &&
-  mDiv.style.left === '0%' && mDiv.style.top === '20%');
 check('rotation keyframe plays to transform', await (async function(){
   const rBlk = DT2.querySelector('#stage .blk');
   rBlk.setAttribute('data-anim', JSON.stringify([{ group: 1, trigger: 'click', dur: 100, delay: 0, mode: 'linear', maxSpeed: 1.5, accel: 2, minSpeed: 0, decel: 2, to: { rot: 45 } }]));

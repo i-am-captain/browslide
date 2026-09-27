@@ -5,7 +5,7 @@
 - [x] 8. Delete key removes selected shapes/textboxes.
 - [x] 9. Multi-select: property changes (width/color/rotate/scale) apply to all selected items.
 - [x] 10. Rotate handle + N/S edge scale handles on the selection box.
-- [x] 11. Parametric shape geometry: arrows/line length (fixed head), square/triangle height, rectangle w+h, circle radius, ellipse w+h.
+- [x] 11. Parametric shape geometry: arrows/line length (fixed head), square/triangle height, rectangle w+h, circle radius, ellipse w+h. Done, uncapped.
 - [x] 12. Keyframe animation system: per-step positions, parallel groups, click/auto chaining with delay, easing modes (linear/accelerate/accel-decel), per-row step list UI, keyframes cover size/scale/rotation. (Replaces flat data-anim model; prerelease, no migration.) Done: rAF engine shared by presenter + export, data-anim JSON lists, start-hidden flag.
 - [x] 13. Rotation always applied last in transforms (verified: already scale,scale,rotate effect order).
 - [x] 14. Text alignment buttons broken: stay all selected, text doesn't always move. Done: alignment via direct DOM text-align (no execCommand); reflection reads DOM. Plus caret-safe sync (static selection snapshots; jsdom Range objects track live DOM).
@@ -23,3 +23,6 @@ Conventions: commit per task, full suite (`cd tests && npm test`) green before e
 - Paste cleanup handles `<font>` tags; other pasted junk (scripts, handlers) is stripped at model sync, not live.
 - jsdom Range objects track live DOM mutations (spec deviation found during testing) — app stores static node+offset snapshots instead. If jsdom ever fixes this, the snapshots keep working unchanged.
 - Nothing currently open: the earlier cut-off message ("the tex alignment buttons do …") turned out to be the alignment topic, now resolved as item 14.
+- Move drags follow the mouse in screen space even on rotated items (counter-rotated dragging felt wrong).
+- Keyframe `to` targets with no parseable position fall back to derived/current values; empty-`to` entries are dropped at play time, not at save.
+- A missing regex group in keyframe capture silently produced NaN targets (caught by tests before shipping) — position animation would have been a silent no-op. Lesson: numeric parsing helpers need direct unit tests, which they now have.

@@ -158,7 +158,7 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 .slide h2{font-size:1.4em;margin:.8em 0 .3em}
 .slide p,.slide li{font-size:1.05em}
 .slide img,.slide video{max-width:100%;height:auto;border-radius:6px}
-.slide svg{width:100%;height:auto;display:block}
+.slide svg{width:100%;height:auto;display:block;overflow:visible}
 .slide video{max-height:50vh}
 .layout-title{display:flex;flex-direction:column;justify-content:center;text-align:center}
 .layout-title-body h1{border-bottom:2px solid var(--accent);padding-bottom:.2em}
@@ -1041,7 +1041,7 @@ function renderShapeParams(){
     var inp = document.createElement('input');
     inp.type = 'number';
     inp.min = pd.min;
-    inp.max = pd.max;
+    if (pd.max !== undefined && pd.max !== null) inp.max = pd.max;
     inp.step = 1;
     inp.value = sp.vals[pd.key];
     inp.title = pd.label + ' of this ' + (svg.getAttribute('data-kind') || 'shape');
@@ -1049,7 +1049,9 @@ function renderShapeParams(){
       inp.addEventListener('change', function(e){
         var v = parseFloat(e.target.value);
         if (!isFinite(v)) return;
-        svg.setAttribute('data-' + key, String(Math.max(min, Math.min(max, v))));
+        v = Math.max(min, v);
+        if (max !== undefined && max !== null) v = Math.min(max, v);
+        svg.setAttribute('data-' + key, String(v));
         renderShape(svg);
         persistSlide();
         refreshShapesUI();
@@ -1748,20 +1750,21 @@ function triangleGeo(h){ var y0 = r1(50 - h / 2), y1 = r1(50 + h / 2); return '<
 function numParam(p, key, def, min, max){
   var v = parseFloat(p && p[key]);
   if (!isFinite(v)) return def;
-  return Math.max(min, Math.min(max, v));
+  v = Math.max(min, v);
+  return (max === undefined || max === null) ? v : Math.min(max, v);
 }
 var SHAPE_DEFS = {
-  'arrow-right': { params: [{ key: 'len', label: 'Length', min: 30, max: 84, def: 68 }], geo: function(p){ return arrowGeo('right', numParam(p, 'len', 68, 30, 84)); } },
-  'arrow-left': { params: [{ key: 'len', label: 'Length', min: 30, max: 84, def: 68 }], geo: function(p){ return arrowGeo('left', numParam(p, 'len', 68, 30, 84)); } },
-  'arrow-up': { params: [{ key: 'len', label: 'Length', min: 30, max: 84, def: 68 }], geo: function(p){ return arrowGeo('up', numParam(p, 'len', 68, 30, 84)); } },
-  'arrow-down': { params: [{ key: 'len', label: 'Length', min: 30, max: 84, def: 68 }], geo: function(p){ return arrowGeo('down', numParam(p, 'len', 68, 30, 84)); } },
-  'arrow-both': { params: [{ key: 'len', label: 'Length', min: 40, max: 84, def: 68 }], geo: function(p){ return bothGeo(numParam(p, 'len', 68, 40, 84)); } },
-  'line': { params: [{ key: 'len', label: 'Length', min: 10, max: 84, def: 80 }], geo: function(p){ return lineGeo(numParam(p, 'len', 80, 10, 84)); } },
-  'circle': { params: [{ key: 'radius', label: 'Radius', min: 5, max: 44, def: 40 }], geo: function(p){ return circleGeo(numParam(p, 'radius', 40, 5, 44)); } },
-  'square': { params: [{ key: 'height', label: 'Height (side)', min: 10, max: 84, def: 72 }], geo: function(p){ return squareGeo(numParam(p, 'height', 72, 10, 84)); } },
-  'triangle': { params: [{ key: 'height', label: 'Height', min: 10, max: 84, def: 72 }], geo: function(p){ return triangleGeo(numParam(p, 'height', 72, 10, 84)); } },
-  'rectangle': { params: [{ key: 'width', label: 'Width', min: 10, max: 88, def: 72 }, { key: 'height', label: 'Height', min: 10, max: 88, def: 48 }], geo: function(p){ return rectGeo(numParam(p, 'width', 72, 10, 88), numParam(p, 'height', 48, 10, 88)); } },
-  'ellipse': { params: [{ key: 'width', label: 'Width', min: 10, max: 88, def: 72 }, { key: 'height', label: 'Height', min: 10, max: 88, def: 48 }], geo: function(p){ return ellipseGeo(numParam(p, 'width', 72, 10, 88), numParam(p, 'height', 48, 10, 88)); } },
+  'arrow-right': { params: [{ key: 'len', label: 'Length', min: 30, def: 68 }], geo: function(p){ return arrowGeo('right', numParam(p, 'len', 68, 30)); } },
+  'arrow-left': { params: [{ key: 'len', label: 'Length', min: 30, def: 68 }], geo: function(p){ return arrowGeo('left', numParam(p, 'len', 68, 30)); } },
+  'arrow-up': { params: [{ key: 'len', label: 'Length', min: 30, def: 68 }], geo: function(p){ return arrowGeo('up', numParam(p, 'len', 68, 30)); } },
+  'arrow-down': { params: [{ key: 'len', label: 'Length', min: 30, def: 68 }], geo: function(p){ return arrowGeo('down', numParam(p, 'len', 68, 30)); } },
+  'arrow-both': { params: [{ key: 'len', label: 'Length', min: 40, def: 68 }], geo: function(p){ return bothGeo(numParam(p, 'len', 68, 40)); } },
+  'line': { params: [{ key: 'len', label: 'Length', min: 10, def: 80 }], geo: function(p){ return lineGeo(numParam(p, 'len', 80, 10)); } },
+  'circle': { params: [{ key: 'radius', label: 'Radius', min: 5, def: 40 }], geo: function(p){ return circleGeo(numParam(p, 'radius', 40, 5)); } },
+  'square': { params: [{ key: 'height', label: 'Height (side)', min: 10, def: 72 }], geo: function(p){ return squareGeo(numParam(p, 'height', 72, 10)); } },
+  'triangle': { params: [{ key: 'height', label: 'Height', min: 10, def: 72 }], geo: function(p){ return triangleGeo(numParam(p, 'height', 72, 10)); } },
+  'rectangle': { params: [{ key: 'width', label: 'Width', min: 10, def: 72 }, { key: 'height', label: 'Height', min: 10, def: 48 }], geo: function(p){ return rectGeo(numParam(p, 'width', 72, 10), numParam(p, 'height', 48, 10)); } },
+  'ellipse': { params: [{ key: 'width', label: 'Width', min: 10, def: 72 }, { key: 'height', label: 'Height', min: 10, def: 48 }], geo: function(p){ return ellipseGeo(numParam(p, 'width', 72, 10), numParam(p, 'height', 48, 10)); } },
   'star': { params: [], geo: function(){ return '<polygon points="50,6 61,39 96,39 68,60 79,94 50,73 21,94 32,60 4,39 39,39"/>'; } },
   'check': { params: [], geo: function(){ return '<polyline points="22,54 43,74 78,30"/>'; } },
   'cross': { params: [], geo: function(){ return '<line x1="26" y1="26" x2="74" y2="74"/><line x1="74" y1="26" x2="26" y2="74"/>'; } }
@@ -1779,7 +1782,9 @@ function shapeParams(svg){
   var p = {};
   def.params.forEach(function(pd){
     var raw = parseFloat(svg.getAttribute('data-' + pd.key));
-    p[pd.key] = isFinite(raw) ? Math.max(pd.min, Math.min(pd.max, raw)) : pd.def;
+    var v = isFinite(raw) ? Math.max(pd.min, raw) : pd.def;
+    if (pd.max !== undefined && pd.max !== null) v = Math.min(pd.max, v);
+    p[pd.key] = v;
   });
   return { def: def, vals: p };
 }
@@ -1917,10 +1922,6 @@ function deleteSelectedItems(){
   return items.length;
 }
 /* ---- per-item transforms (rotate + per-axis scale, data attrs + inline) ---- */
-function rotateDelta(dx, dy, deg){
-  var a = -deg * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
-  return { x: dx * c - dy * s, y: dx * s + dy * c };
-}
 function transformOf(el){
   var r = parseFloat(el.getAttribute('data-rot')) || 0;
   var x = parseFloat(el.getAttribute('data-sx')) || 1;
@@ -1945,11 +1946,11 @@ function applyTransform(el){
   }
 }
 function moveItemsBy(items, dxPx, dyPx, slideW, slideH){
+  /* screen-space moves: the item keeps its rotation, the drag follows the mouse */
   var moved = false;
   items.forEach(function(it){
-    var d = rotateDelta(dxPx, dyPx, transformOf(it.el).rot);
-    var l = shiftPos(it.l, d.x, slideW);
-    var t = shiftPos(it.t, d.y, slideH);
+    var l = shiftPos(it.l, dxPx, slideW);
+    var t = shiftPos(it.t, dyPx, slideH);
     if (l === null || t === null) return;
     it.el.style.left = l + '%';
     it.el.style.top = t + '%';
@@ -2197,12 +2198,20 @@ function maxGroupOnSlide(){
   return mx;
 }
 function captureKeyframe(el){
+  var sec = $('#stage .slide');
+  var slideW = (sec && sec.clientWidth) || 0, slideH = (sec && sec.clientHeight) || 0;
   var to = {};
   function pct(v){
-    var m = /^\s*-?[\d.]+\s*%\s*$/.exec(v || '');
+    var m = /^\s*(-?[\d.]+)\s*%\s*$/.exec(v || '');
     return m ? Math.round(parseFloat(m[1]) * 10) / 10 : null;
   }
   var l = pct(el.style.left), t = pct(el.style.top), w = pct(el.style.width);
+  if ((l === null || t === null) && slideW > 0) {
+    var p = posInWrap(el);
+    if (l === null) l = Math.round(p.x / slideW * 1000) / 10;
+    if (t === null && slideH > 0) t = Math.round(p.y / slideH * 1000) / 10;
+  }
+  if (w === null && slideW > 0 && el.offsetWidth > 0) w = Math.round(el.offsetWidth / slideW * 1000) / 10;
   if (l !== null) to.left = l;
   if (t !== null) to.top = t;
   if (w !== null) to.width = w;
@@ -2412,6 +2421,7 @@ function kfPlayGroup(gi){
   if (!pending) { updatePresentCount(); chainAutos(); return; }
   g.items.forEach(function(x){
     var e = x.entry, el = x.el;
+    ensurePositioned(el); /* % coords only move positioned elements */
     el.style.visibility = 'visible';
     var ef = easeFor(e.mode, e);
     animateProps(el, e.to, Math.max(50, Math.round(e.dur * ef.durScale)), ef.fn, function(){
@@ -2644,7 +2654,8 @@ var PLAYER_JS = [
   "function kfWrite(el,from,to,p){function mix(a,b){return a+(b-a)*p;}['left','top','width'].forEach(function(k){if(to[k]!==undefined)el.style[k]=mix(from[k]!==undefined?from[k]:to[k],to[k])+'%';});if(to.opacity!==undefined)el.style.opacity=mix(from.opacity!==undefined?from.opacity:to.opacity,to.opacity);if(from._t){var r=mix(from._t.rot,to.rot!==undefined?to.rot:from._t.rot);var x=mix(from._t.sx,to.sx!==undefined?to.sx:from._t.sx);var y=mix(from._t.sy,to.sy!==undefined?to.sy:from._t.sy);el.style.transform='rotate('+r+'deg) scaleX('+x+') scaleY('+y+')';el._kfSty={rot:r,sx:x,sy:y};}}",
   "function animateProps(el,to,durMs,easeFn,done){try{if(el._kfRaf)cancelAnimationFrame(el._kfRaf);}catch(e){}if(kfLive.indexOf(el)<0)kfLive.push(el);var from=kfCurrent(el,to);if(durMs<=50){kfWrite(el,to,to,1);el._kfRaf=0;done&&done();return;}var t0=null;function frame(ts){if(t0===null)t0=ts;var t=Math.min(1,(ts-t0)/Math.max(1,durMs));kfWrite(el,from,to,easeFn(t));if(t<1){try{el._kfRaf=requestAnimationFrame(frame);}catch(e){kfWrite(el,to,to,1);el._kfRaf=0;done&&done();}}else{el._kfRaf=0;done&&done();}}try{el._kfRaf=requestAnimationFrame(frame);}catch(e){kfWrite(el,to,to,1);el._kfRaf=0;done&&done();}}",
   "function chainAutos(){var nxt=kfGroups[kfGroupIdx+1];if(!nxt||!nxt.items.length)return;var auto=nxt.items.every(function(x){return x.entry.trigger==='auto';});if(!auto)return;var delay=Math.max.apply(null,nxt.items.map(function(x){return x.entry.delay||0;}));kfTimer=setTimeout(function(){kfTimer=0;kfPlayGroup(kfGroupIdx+1);},delay);}",
-  "function kfPlayGroup(gi){var g=kfGroups[gi];if(!g)return;kfGroupIdx=gi;var pending=g.items.length;if(!pending){updateCount();chainAutos();return;}g.items.forEach(function(x){var e=x.entry,el=x.el;el.style.visibility='visible';var ef=easeFor(e.mode,e);animateProps(el,e.to,Math.max(50,Math.round(e.dur*ef.durScale)),ef.fn,function(){if(e.to.opacity===0)el.style.visibility='hidden';if(--pending<=0&&gi===kfGroupIdx){updateCount();chainAutos();}});});updateCount();}",
+  "function ensureKfPos(el,sec){function ok(v){return /^\\s*-?[\\d.]+\\s*%\\s*$/.test(v||'');}if(ok(el.style.left)&&ok(el.style.top))return;var r=el.getBoundingClientRect(),s=sec.getBoundingClientRect();if(s.width>0){if(!ok(el.style.left))el.style.left=(Math.round((r.left-s.left)/s.width*1000)/10)+'%';if(!ok(el.style.top)&&s.height>0)el.style.top=(Math.round((r.top-s.top)/s.height*1000)/10)+'%';}var pos='';try{pos=getComputedStyle(el).position;}catch(e){}if(pos!=='absolute')el.style.position='absolute';}",
+  "function kfPlayGroup(gi){var g=kfGroups[gi];if(!g)return;kfGroupIdx=gi;var pending=g.items.length;if(!pending){updateCount();chainAutos();return;}g.items.forEach(function(x){var e=x.entry,el=x.el;ensureKfPos(el,slides[idx]);el.style.visibility='visible';var ef=easeFor(e.mode,e);animateProps(el,e.to,Math.max(50,Math.round(e.dur*ef.durScale)),ef.fn,function(){if(e.to.opacity===0)el.style.visibility='hidden';if(--pending<=0&&gi===kfGroupIdx){updateCount();chainAutos();}});});updateCount();}",
   "function advance(){if(kfTimer){clearTimeout(kfTimer);kfTimer=0;}var nxt=kfGroupIdx+1;if(nxt<kfGroups.length)kfPlayGroup(nxt);else show(idx+1);}",
   "function updateCount(){if(count){count.textContent=(idx+1)+' / '+slides.length+(kfGroups.length?' · '+(kfGroupIdx+1)+'/'+kfGroups.length:'');}}",
   "function fs(){try{if(document.fullscreenElement){document.exitFullscreen();}else if(document.documentElement.requestFullscreen){document.documentElement.requestFullscreen();}}catch(e){}}",
