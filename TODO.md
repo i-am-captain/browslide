@@ -9,7 +9,7 @@ decide, document below, continue.
 - [ ] 3. Step delete refresh: deleting a step rebuilds the rows even when the ✕ button has focus.
 - [x] 4. Bottom stage scrub slider: global per-slide animation-stage preview with click/auto indication. Done.
 - [ ] 5. Size handles edit geometry values instead of literal scaling; rectangle/ellipse get 3 handles (corner = both, right = width, bottom = height).
-- [ ] 6. Tight selection boxes: per-shape tight viewBoxes so the overlay hugs the icon.
+- [x] 6. Tight selection boxes: per-shape tight viewBoxes so the overlay hugs the icon. Done.
 - [ ] 7. Shape sizes participate in keyframes (capture/apply/play/scrub/present/viewer), so handle drags record into steps.
 - [ ] 8. Docs (README) + full suite green + commits.
 

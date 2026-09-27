@@ -1002,7 +1002,7 @@ check('shape markup is inert SVG', shapeNames.every((n) => /<(line|polyline|poly
 check('insertShape rejects unknown', WS2.insertShape('nope') === false);
 check('insertShape adds positioned svg block', WS2.insertShape('arrow-right') === true &&
   !!DS2.querySelector('#stage .blk svg') &&
-  DS2.querySelector('#stage .blk svg').getAttribute('viewBox') === '0 0 100 100');
+  DS2.querySelector('#stage .blk svg').getAttribute('viewBox') === '7 29 74 42');
 check('shape svg scales + serializes', /\.slide svg/.test(headCss) &&
   WS2.activeSlide().html.includes('<svg') && WS2.activeSlide().html.includes('polyline'));
 DS2.querySelector('#btn-shape').click();
@@ -1021,6 +1021,14 @@ check('geometry sizes uncapped', WS2.SHAPE_DEFS['arrow-right'].geo({ len: 200 })
 check('circle radius honored', WS2.SHAPE_DEFS.circle.geo({ radius: 10 }).includes('r="10"'));
 check('rect/ellipse dims honored', WS2.SHAPE_DEFS.rectangle.geo({ width: 60, height: 20 }).includes('width="60"') &&
   WS2.SHAPE_DEFS.ellipse.geo({ width: 60, height: 20 }).includes('rx="30"'));
+check('shape boxes hug content', WS2.SHAPE_DEFS.circle.box({ radius: 40 }).join(',') === '10,10,80,80' &&
+  WS2.SHAPE_DEFS.rectangle.box({ width: 72, height: 48 }).join(',') === '14,26,72,48' &&
+  WS2.SHAPE_DEFS.triangle.box({ height: 72 }).join(',') === '10,14,80,72' &&
+  WS2.SHAPE_DEFS['arrow-up'].box({ len: 68 }).join(',') === '32,22,36,68' &&
+  WS2.SHAPE_DEFS.check.box({}).join(',') === '22,30,56,44');
+geoSvg.setAttribute('stroke-width', '10');
+WS2.renderShape(geoSvg);
+check('viewBox pad follows stroke', geoSvg.getAttribute('viewBox') === '3.5 25.5 81 49');
 geoSvg.setAttribute('data-len', '40');
 WS2.renderShape(geoSvg);
 check('param edit rebuilds geometry', geoSvg.getAttribute('data-len') === '40' && geoSvg.innerHTML.includes('x2="28"'));

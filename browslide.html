@@ -925,6 +925,7 @@ function renderStage(){
   sec.contentEditable = 'true';
   sec.innerHTML = expandHtml(s.html, App.model.resources);
   ensureStyledSpans(sec);
+  Array.prototype.forEach.call(sec.querySelectorAll('svg[data-kind]'), function(svg){ renderShape(svg); }); /* normalize older decks to tight boxes */
   sec.addEventListener('input', onStageInput);
   sec.addEventListener('paste', function(){
     /* pasted content (e.g. from older decks) may carry legacy <font> tags;
@@ -1783,20 +1784,20 @@ function numParam(p, key, def, min, max){
   return (max === undefined || max === null) ? v : Math.min(max, v);
 }
 var SHAPE_DEFS = {
-  'arrow-right': { params: [{ key: 'len', label: 'Length', min: 30, def: 68 }], geo: function(p){ return arrowGeo('right', numParam(p, 'len', 68, 30)); } },
-  'arrow-left': { params: [{ key: 'len', label: 'Length', min: 30, def: 68 }], geo: function(p){ return arrowGeo('left', numParam(p, 'len', 68, 30)); } },
-  'arrow-up': { params: [{ key: 'len', label: 'Length', min: 30, def: 68 }], geo: function(p){ return arrowGeo('up', numParam(p, 'len', 68, 30)); } },
-  'arrow-down': { params: [{ key: 'len', label: 'Length', min: 30, def: 68 }], geo: function(p){ return arrowGeo('down', numParam(p, 'len', 68, 30)); } },
-  'arrow-both': { params: [{ key: 'len', label: 'Length', min: 40, def: 68 }], geo: function(p){ return bothGeo(numParam(p, 'len', 68, 40)); } },
-  'line': { params: [{ key: 'len', label: 'Length', min: 10, def: 80 }], geo: function(p){ return lineGeo(numParam(p, 'len', 80, 10)); } },
-  'circle': { params: [{ key: 'radius', label: 'Radius', min: 5, def: 40 }], geo: function(p){ return circleGeo(numParam(p, 'radius', 40, 5)); } },
-  'square': { params: [{ key: 'height', label: 'Height (side)', min: 10, def: 72 }], geo: function(p){ return squareGeo(numParam(p, 'height', 72, 10)); } },
-  'triangle': { params: [{ key: 'height', label: 'Height', min: 10, def: 72 }], geo: function(p){ return triangleGeo(numParam(p, 'height', 72, 10)); } },
-  'rectangle': { params: [{ key: 'width', label: 'Width', min: 10, def: 72 }, { key: 'height', label: 'Height', min: 10, def: 48 }], geo: function(p){ return rectGeo(numParam(p, 'width', 72, 10), numParam(p, 'height', 48, 10)); } },
-  'ellipse': { params: [{ key: 'width', label: 'Width', min: 10, def: 72 }, { key: 'height', label: 'Height', min: 10, def: 48 }], geo: function(p){ return ellipseGeo(numParam(p, 'width', 72, 10), numParam(p, 'height', 48, 10)); } },
-  'star': { params: [], geo: function(){ return '<polygon points="50,6 61,39 96,39 68,60 79,94 50,73 21,94 32,60 4,39 39,39"/>'; } },
-  'check': { params: [], geo: function(){ return '<polyline points="22,54 43,74 78,30"/>'; } },
-  'cross': { params: [], geo: function(){ return '<line x1="26" y1="26" x2="74" y2="74"/><line x1="74" y1="26" x2="26" y2="74"/>'; } }
+  'arrow-right': { params: [{ key: 'len', label: 'Length', min: 30, def: 68 }], geo: function(p){ return arrowGeo('right', numParam(p, 'len', 68, 30)); }, box: function(p){ var L = numParam(p, 'len', 68, 30); return [10, 32, L, 36]; } },
+  'arrow-left': { params: [{ key: 'len', label: 'Length', min: 30, def: 68 }], geo: function(p){ return arrowGeo('left', numParam(p, 'len', 68, 30)); }, box: function(p){ var L = numParam(p, 'len', 68, 30); return [10, 32, L, 36]; } },
+  'arrow-up': { params: [{ key: 'len', label: 'Length', min: 30, def: 68 }], geo: function(p){ return arrowGeo('up', numParam(p, 'len', 68, 30)); }, box: function(p){ var L = numParam(p, 'len', 68, 30); return [32, 90 - L, 36, L]; } },
+  'arrow-down': { params: [{ key: 'len', label: 'Length', min: 30, def: 68 }], geo: function(p){ return arrowGeo('down', numParam(p, 'len', 68, 30)); }, box: function(p){ var L = numParam(p, 'len', 68, 30); return [32, 10, 36, L]; } },
+  'arrow-both': { params: [{ key: 'len', label: 'Length', min: 40, def: 68 }], geo: function(p){ return bothGeo(numParam(p, 'len', 68, 40)); }, box: function(p){ var L = numParam(p, 'len', 68, 40); return [18, 36, L - 16, 28]; } },
+  'line': { params: [{ key: 'len', label: 'Length', min: 10, def: 80 }], geo: function(p){ return lineGeo(numParam(p, 'len', 80, 10)); }, box: function(p){ return [10, 44, numParam(p, 'len', 80, 10), 12]; } },
+  'circle': { params: [{ key: 'radius', label: 'Radius', min: 5, def: 40 }], geo: function(p){ return circleGeo(numParam(p, 'radius', 40, 5)); }, box: function(p){ var r = numParam(p, 'radius', 40, 5); return [50 - r, 50 - r, 2 * r, 2 * r]; } },
+  'square': { params: [{ key: 'height', label: 'Height (side)', min: 10, def: 72 }], geo: function(p){ return squareGeo(numParam(p, 'height', 72, 10)); }, box: function(p){ var s = numParam(p, 'height', 72, 10), x = (100 - s) / 2; return [x, x, s, s]; } },
+  'triangle': { params: [{ key: 'height', label: 'Height', min: 10, def: 72 }], geo: function(p){ return triangleGeo(numParam(p, 'height', 72, 10)); }, box: function(p){ var h = numParam(p, 'height', 72, 10); return [10, 50 - h / 2, 80, h]; } },
+  'rectangle': { params: [{ key: 'width', label: 'Width', min: 10, def: 72 }, { key: 'height', label: 'Height', min: 10, def: 48 }], geo: function(p){ return rectGeo(numParam(p, 'width', 72, 10), numParam(p, 'height', 48, 10)); }, box: function(p){ var w = numParam(p, 'width', 72, 10), h = numParam(p, 'height', 48, 10); return [(100 - w) / 2, (100 - h) / 2, w, h]; } },
+  'ellipse': { params: [{ key: 'width', label: 'Width', min: 10, def: 72 }, { key: 'height', label: 'Height', min: 10, def: 48 }], geo: function(p){ return ellipseGeo(numParam(p, 'width', 72, 10), numParam(p, 'height', 48, 10)); }, box: function(p){ var w = numParam(p, 'width', 72, 10), h = numParam(p, 'height', 48, 10); return [(100 - w) / 2, (100 - h) / 2, w, h]; } },
+  'star': { params: [], geo: function(){ return '<polygon points="50,6 61,39 96,39 68,60 79,94 50,73 21,94 32,60 4,39 39,39"/>'; }, box: function(){ return [4, 6, 92, 88]; } },
+  'check': { params: [], geo: function(){ return '<polyline points="22,54 43,74 78,30"/>'; }, box: function(){ return [22, 30, 56, 44]; } },
+  'cross': { params: [], geo: function(){ return '<line x1="26" y1="26" x2="74" y2="74"/><line x1="74" y1="26" x2="26" y2="74"/>'; }, box: function(){ return [26, 26, 48, 48]; } }
 };
 var SHAPES = {};
 Object.keys(SHAPE_DEFS).forEach(function(k){
@@ -1824,6 +1825,13 @@ function renderShape(svg){
     svg.setAttribute('data-' + pd.key, String(sp.vals[pd.key]));
   });
   svg.innerHTML = sp.def.geo(sp.vals);
+  if (sp.def.box) {
+    /* tight viewBox (stroke-aware pad) so the selection overlay hugs the icon */
+    var sw = parseFloat(svg.getAttribute('stroke-width'));
+    var pad = (isFinite(sw) && sw > 0 ? sw / 2 : 1.5) + 1.5;
+    var b = sp.def.box(sp.vals);
+    svg.setAttribute('viewBox', r1(b[0] - pad) + ' ' + r1(b[1] - pad) + ' ' + r1(b[2] + 2 * pad) + ' ' + r1(b[3] + 2 * pad));
+  }
   return true;
 }
 function addTextBlock(){
@@ -1854,6 +1862,7 @@ function insertShape(name){  var def = SHAPE_DEFS[name];
   var attrs = 'data-kind="' + name + '"' + def.params.map(function(pd){ return ' data-' + pd.key + '="' + p[pd.key] + '"'; }).join('');
   wrap.innerHTML = '<svg viewBox="0 0 100 100" fill="none" stroke="' + App.model.settings.lineColor +
     '" stroke-width="' + App.model.settings.lineWidth + '" stroke-linecap="round" stroke-linejoin="round"' + attrs + '>' + def.geo(p) + '</svg>';
+  renderShape(wrap.querySelector('svg'));
   sec.appendChild(wrap);
   syncStageToModel(); refreshDirty(); scheduleSize(); scheduleAutosave();
   return true;
