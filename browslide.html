@@ -372,7 +372,7 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 <input type="file" id="insert-video" accept="video/*" hidden>
 
 <script type="application/json" id="slider-data">
-{"app":"browslide","version":2,"title":"My Talk","theme":"dark","slideOrder":["s1","s2","s3"],"nextId":4,"slides":{"s1":{"title":"My Talk","layout":"title","transition":"fade","html":"<div class=\"blk\" style=\"left:10%;top:30%;width:80%;text-align:center\"><h1>My Talk</h1><p>A presentation made with Browslide — one file, no server.</p></div>","notes":""},"s2":{"title":"How to use","layout":"title-body","transition":"fade","html":"<div class=\"blk\" style=\"left:8%;top:5%;width:84%\"><h1>How to use</h1></div><div class=\"blk\" style=\"left:8%;top:26%;width:84%\"><ul><li>Click the slide and type — everything saves into this one file.</li><li><b>Save</b> downloads an updated copy (also Ctrl+S). <b>Open</b> loads another copy. <b>Present</b> starts the show.</li><li>Drag slides in the left list to reorder. Right panel: layout, transition, theme, notes.</li><li>Click a text block to select it, drag its grip to move it. Click images to resize them.</li><li>Media is deduplicated and compressed on save; Media & sizes shows per-slide usage.</li><li>Keys: PageUp/PageDown to move between slides, Space/→ while presenting.</li></ul></div>","notes":""},"s3":{"title":"Thanks","layout":"title","transition":"fade","html":"<div class=\"blk\" style=\"left:10%;top:34%;width:80%;text-align:center\"><h1>Thanks</h1><p>Questions?</p></div>","notes":""}},"resources":{},"nextResId":1,"settings":{"compress":true,"downscale":false,"maxDim":1920,"showBar":true,"tight":false,"lineWidth":8,"lineColor":"#2563eb"},"aspect":{"w":16,"h":9}}
+{"app":"browslide","version":2,"title":"My Talk","theme":"dark","slideOrder":["s1","s2","s3"],"nextId":4,"slides":{"s1":{"title":"My Talk","layout":"title","transition":"fade","html":"<div class=\"blk\" style=\"left:10%;top:30%;width:80%;text-align:center\"><h1>My Talk</h1><p>A presentation made with Browslide — one file, no server.</p></div>","notes":""},"s2":{"title":"How to use","layout":"title-body","transition":"fade","html":"<div class=\"blk\" style=\"left:8%;top:5%;width:84%\"><h1>How to use</h1></div><div class=\"blk\" style=\"left:8%;top:26%;width:84%\"><ul><li>Click the slide and type — everything saves into this one file.</li><li><b>Save</b> downloads an updated copy (also Ctrl+S). <b>Open</b> loads another copy. <b>Present</b> starts the show.</li><li>Drag slides in the left list to reorder. Right panel: layout, transition, theme, notes.</li><li>Click a text block to select it, drag its grip to move it. Click images to resize them.</li><li>Media is deduplicated and compressed on save; Media & sizes shows per-slide usage.</li><li>Keys: PageUp/PageDown to move between slides, Space/→ while presenting.</li></ul></div>","notes":""},"s3":{"title":"Thanks","layout":"title","transition":"fade","html":"<div class=\"blk\" style=\"left:10%;top:34%;width:80%;text-align:center\"><h1>Thanks</h1><p>Questions?</p></div>","notes":""}},"resources":{},"nextResId":1,"settings":{"compress":true,"downscale":false,"maxDim":1920,"showBar":true,"tight":false,"lineWidth":3,"lineColor":"#2563eb"},"aspect":{"w":16,"h":9}}
 </script>
 
 <script>
@@ -501,7 +501,7 @@ function normalizeModel(raw){
   m.settings = { compress: st.compress !== false, downscale: !!st.downscale,
     maxDim: (st.maxDim === 1280 || st.maxDim === 2560) ? st.maxDim : 1920,
     showBar: st.showBar !== false, tight: !!st.tight,
-    lineWidth: (parseInt(st.lineWidth, 10) >= 1 && parseInt(st.lineWidth, 10) <= 32) ? parseInt(st.lineWidth, 10) : 8,
+    lineWidth: (parseInt(st.lineWidth, 10) >= 1 && parseInt(st.lineWidth, 10) <= 32) ? parseInt(st.lineWidth, 10) : 3,
     lineColor: (/^#[0-9a-f]{6}$/i.test(String(st.lineColor || '')) ? String(st.lineColor) : '#2563eb') };
   var ax = (raw.aspect && typeof raw.aspect === 'object') ? raw.aspect : null;
   var awd = ax ? parseInt(ax.w, 10) : NaN, aht = ax ? parseInt(ax.h, 10) : NaN;
@@ -3119,7 +3119,7 @@ function bind(){
   $('#btn-block').addEventListener('click', addTextBlock);
   $('#shape-width').addEventListener('change', function(e){
     var v = parseInt(e.target.value, 10);
-    App.model.settings.lineWidth = (v >= 1 && v <= 32) ? v : 8;
+    App.model.settings.lineWidth = (v >= 1 && v <= 32) ? v : 3;
     e.target.value = App.model.settings.lineWidth;
     var svgs = selectedItems().map(selectedShapeSvg).filter(function(s){ return !!s; });
     if (svgs.length) {

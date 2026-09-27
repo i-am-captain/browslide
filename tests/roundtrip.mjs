@@ -1172,7 +1172,7 @@ check('viewer auto-chains group 2', vAnims[0].style.left === '55%');
 const domS3 = makeDom(html);
 await wait(400);
 const WS3 = domS3.window, DS3 = WS3.document;
-check('shape defaults', WS3.App.model.settings.lineWidth === 8 && WS3.App.model.settings.lineColor === '#2563eb');
+check('shape defaults', WS3.App.model.settings.lineWidth === 3 && WS3.App.model.settings.lineColor === '#2563eb');
 check('shape controls live in shapes menu', !!DS3.querySelector('#shapes-wrap #shape-select') && !!DS3.querySelector('#shapes-wrap #btn-shape') &&
   !!DS3.querySelector('#shapes-wrap #shape-width') && !!DS3.querySelector('#shapes-wrap #shape-color'));
 DS3.querySelector('#shape-width').value = '12';
@@ -1192,7 +1192,7 @@ const badS = { app: 'browslide', version: 2, title: 'T', theme: 'dark', slideOrd
   settings: { lineWidth: 99, lineColor: 'bogus' }, aspect: { w: 16, h: 9 },
   resources: {}, slides: { s1: { title: 'T', layout: 'blank', transition: 'none', notes: '', html: '<p>x</p>' } } };
 const fixS = WS3.normalizeModel(JSON.parse(JSON.stringify(badS)));
-check('bad presets fall back', fixS.settings.lineWidth === 8 && fixS.settings.lineColor === '#2563eb');
+check('bad presets fall back', fixS.settings.lineWidth === 3 && fixS.settings.lineColor === '#2563eb');
 
 // ---------- 30. transforms, multi-select, clipboard ----------
 const domT2 = makeDom(html);
