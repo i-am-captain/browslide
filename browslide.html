@@ -358,6 +358,13 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
   </aside>
 </div>
 
+<footer id="scrubbar" title="Preview any animation stage of this slide (view-only, never saved)">
+  <span id="scrub-label">No animation stages</span>
+  <input id="scrub-range" type="range" min="0" max="0" value="0" step="1" list="scrub-ticks" disabled>
+  <datalist id="scrub-ticks"></datalist>
+  <span id="scrub-kind"></span>
+</footer>
+
 <div id="present-overlay" hidden>
   <div id="present-slide"></div>
   <div id="present-bar">
@@ -781,6 +788,7 @@ function syncStageToModel(){
   var s = activeSlide();
   if (sec && s) {
     if (stepEdit) restoreStepState(stepEdit.el, stepEdit.rest); /* step previews never persist as rest pose */
+    scrubRestore(); /* scrub poses never persist either */
     var saved = null;
     try {
       var sel0 = document.getSelection();
@@ -930,6 +938,8 @@ function renderStage(){
   });
   wrap.appendChild(sec);
   fitStage();
+  scrubGroup = 0; scrubSnaps = []; /* fresh slide starts at rest */
+  rebuildScrub();
 }
 /* Fit the slide into its container at the deck aspect ratio, scaling type
    with it (16px at the 880px reference width). Only touches element style,
@@ -1005,6 +1015,7 @@ function renderAll(){
 }
 function persistSlide(){
   syncStageToModel(); refreshDirty(); scheduleSize(); scheduleAutosave();
+  rebuildScrub();
 }
 function refreshShapesUI(){
   /* presets, or the selected shape's live values when one is selected */
@@ -1084,6 +1095,7 @@ function readTransformInputs(){
 function transformChanged(){
   var els = selectedItems();
   if (!els.length) return;
+  maybeAutoStepEdit(els);
   var t = readTransformInputs();
   els.forEach(function(el){
     el.setAttribute('data-rot', String(t.rot));
@@ -1101,6 +1113,7 @@ var onStageInput = debounce(function(){
   refreshDirty();
   scheduleSize();
   scheduleAutosave();
+  scrubApply(); /* typing edits rest; keep showing the scrubbed pose */
 }, 400);
 
 /* ================= EDIT ================= */
@@ -2034,6 +2047,7 @@ function startItemDrag(e){
   var sec = $('#stage .slide');
   if (!items.length || !sec) return;
   items.forEach(ensurePositioned);
+  maybeAutoStepEdit(items);
   var slideW = sec.clientWidth || 0, slideH = sec.clientHeight || 0;
   var starts = items.map(function(el){
     return { el: el, l: parseFloat(el.style.left) || 0, t: parseFloat(el.style.top) || 0 };
@@ -2053,6 +2067,7 @@ function startItemDrag(e){
       return; /* plain click: selection already set, model untouched */
     }
     if (!selectedItems().length) return;
+    selectedItems().forEach(commitStepGeometry);
     persistSlide();
   }
   window.addEventListener('pointermove', onMove);
@@ -2078,6 +2093,7 @@ function onRotateDown(e){
   e.stopPropagation();
   var g = e.currentTarget;
   try { g.setPointerCapture(e.pointerId); } catch (err) {}
+  maybeAutoStepEdit(items);
   var snaps = items.map(function(el){
     var r = el.getBoundingClientRect();
     var cx = r.left + r.width / 2, cy = r.top + r.height / 2;
@@ -2113,6 +2129,7 @@ function onHeightDown(e, dir){
   if (!(slideH > 0)) return;
   var g = e.currentTarget;
   try { g.setPointerCapture(e.pointerId); } catch (err) {}
+  maybeAutoStepEdit(items);
   var startY = e.clientY;
   var starts = items.map(function(el){ return { el: el, hh: el.offsetHeight || 0 }; });
   var onMove = function(ev){
@@ -2170,6 +2187,7 @@ function onGripDown(e){
   var sec = $('#stage .slide');
   if (!sec) return;
   items.forEach(ensurePositioned);
+  maybeAutoStepEdit(items);
   var g = e.currentTarget;
   try { g.setPointerCapture(e.pointerId); } catch (err) {}
   var slideW = sec.clientWidth || 0, slideH = sec.clientHeight || 0;
@@ -2319,9 +2337,13 @@ function enterStepEdit(el, idx){
   exitStepEdit();
   var list = animListOf(el);
   if (!list[idx]) return false;
+  scrubForget(el); /* snapshot true rest, never a scrub pose */
   stepEdit = { el: el, idx: idx, rest: snapStepState(el) };
   el.style.visibility = 'visible';
   applyKeyframeState(el, list[idx].to);
+  if (list[idx].group !== scrubGroup) scrubGroup = list[idx].group; /* step select drives the slider */
+  refreshScrubUI();
+  scrubApply();
   return true;
 }
 function exitStepEdit(){
@@ -2329,6 +2351,7 @@ function exitStepEdit(){
   var se = stepEdit;
   stepEdit = null;
   if (se.el && document.contains(se.el)) restoreStepState(se.el, se.rest);
+  scrubApply();
 }
 function commitStepGeometry(el){
   /* geometry drags (or transform inputs) while a step is being edited:
@@ -2346,6 +2369,7 @@ function commitStepGeometry(el){
   restoreStepState(el, se.rest);
   persistSlide();
   refreshAnimUI();
+  scrubApply();
   return true;
 }
 function captureKeyframe(el){
@@ -2373,6 +2397,104 @@ function captureKeyframe(el){
   to.sx = tr.sx;
   to.sy = tr.sy;
   return to;
+}
+/* ---- global stage scrubber: a bottom slider previews any animation group
+   of the current slide. 0 = rest pose. Items without the selected group show
+   their last group before it, else rest. View-only: never dirties the deck;
+   poses are restored before every model sync (like step previews). ---- */
+var scrubGroup = 0, scrubSnaps = [];
+function slideGroups(){
+  var sec = $('#stage .slide'), out = [];
+  if (sec) kfEntries(sec).forEach(function(x){ if (out.indexOf(x.entry.group) < 0) out.push(x.entry.group); });
+  return out.sort(function(a, b){ return a - b; });
+}
+function groupTrigger(g){
+  /* a stage is a click stage if ANY entry in it wants click (presenter chains
+     only all-auto groups) */
+  var sec = $('#stage .slide'), trig = 'auto', found = false;
+  if (sec) kfEntries(sec).forEach(function(x){
+    if (x.entry.group === g) { found = true; if (x.entry.trigger !== 'auto') trig = 'click'; }
+  });
+  return found ? trig : null;
+}
+function scrubTarget(el, g){
+  /* last entry (list order) at the highest group at or before g */
+  var best = null;
+  animListOf(el).forEach(function(e, i){
+    if (e.group <= g && (!best || e.group >= best.entry.group)) best = { entry: e, idx: i };
+  });
+  return best;
+}
+function scrubForget(el){
+  for (var i = scrubSnaps.length - 1; i >= 0; i--) {
+    if (scrubSnaps[i].el === el) {
+      var s = scrubSnaps.splice(i, 1)[0];
+      if (s.el && document.contains(s.el)) restoreStepState(s.el, s.snap);
+    }
+  }
+}
+function scrubRestore(){
+  scrubSnaps.forEach(function(s){ if (s.el && document.contains(s.el)) restoreStepState(s.el, s.snap); });
+  scrubSnaps = [];
+}
+function scrubApply(){
+  scrubRestore();
+  refreshScrubUI();
+  if (!(scrubGroup >= 1)) return;
+  var sec = $('#stage .slide');
+  if (!sec) return;
+  Array.prototype.forEach.call(sec.querySelectorAll('[data-anim]'), function(el){
+    if (stepEdit && stepEdit.el === el) return; /* step preview wins on its own item */
+    var t = scrubTarget(el, scrubGroup);
+    if (!t) return;
+    scrubSnaps.push({ el: el, snap: snapStepState(el) });
+    applyKeyframeState(el, t.entry.to);
+  });
+}
+function refreshScrubUI(){
+  var range = $('#scrub-range'), lab = $('#scrub-label'), kind = $('#scrub-kind'), ticks = $('#scrub-ticks');
+  if (!range || !lab || !kind) return;
+  var groups = slideGroups();
+  var max = groups.length ? groups[groups.length - 1] : 0;
+  if (scrubGroup > max) scrubGroup = max;
+  if (!(scrubGroup >= 0)) scrubGroup = 0;
+  if (range.max !== String(max)) range.max = String(max);
+  if (String(range.value) !== String(scrubGroup)) range.value = String(scrubGroup);
+  range.disabled = !groups.length;
+  if (ticks) {
+    ticks.innerHTML = '';
+    groups.forEach(function(g){
+      var o = document.createElement('option');
+      o.value = String(g);
+      o.label = groupTrigger(g) === 'click' ? 'click' : 'auto';
+      ticks.appendChild(o);
+    });
+  }
+  kind.className = '';
+  if (!groups.length) {
+    lab.textContent = 'No animation stages on this slide';
+    kind.textContent = '';
+  } else if (!(scrubGroup >= 1)) {
+    lab.textContent = 'Rest pose · ' + groups.length + (groups.length === 1 ? ' stage' : ' stages') + ' (1–' + max + ')';
+    kind.textContent = '';
+  } else {
+    var tr = groupTrigger(scrubGroup) || 'auto';
+    lab.textContent = 'Stage ' + scrubGroup + ' / ' + max;
+    kind.textContent = tr === 'click' ? '● click stage' : '● auto stage';
+    kind.className = tr;
+  }
+}
+function rebuildScrub(){ scrubApply(); }
+function maybeAutoStepEdit(items){
+  /* geometry drags started while scrubbed land in the displayed step:
+     what you see is what you edit */
+  if (!(scrubGroup >= 1)) return;
+  items.forEach(function(el){
+    if (!el || !document.contains(el)) return;
+    if (stepEdit && stepEdit.el === el) return;
+    var t = scrubTarget(el, scrubGroup);
+    if (t) enterStepEdit(el, t.idx);
+  });
 }
 var animRowsFor = null;
 function refreshAnimUI(force){
@@ -2511,8 +2633,9 @@ function buildAnimRows(el){
       if (R !== undefined) to.rot = Math.max(-720, Math.min(720, R));
       if (X !== undefined && X > 0) to.sx = Math.max(0.05, Math.min(10, X));
       if (Y !== undefined && Y > 0) to.sy = Math.max(0.05, Math.min(10, Y));
+      var ng = Math.max(1, Math.min(99, parseInt(fGroup.value, 10) || next[idx].group));
       next[idx] = {
-        group: Math.max(1, Math.min(99, parseInt(fGroup.value, 10) || next[idx].group)),
+        group: ng,
         trigger: fTrig.value === 'auto' ? 'auto' : 'click',
         dur: rv(fDur, 50, 10000, 600),
         delay: rv(fDelay, 0, 10000, 200),
@@ -2539,6 +2662,7 @@ function buildAnimRows(el){
       persistSlide();
       lab.textContent = stepSummary(next[idx]);
       if (stepEdit && stepEdit.el === el && stepEdit.idx === idx) applyKeyframeState(el, next[idx].to);
+      if (ng !== scrubGroup) { scrubGroup = ng; rebuildScrub(); } /* group edit drives the slider */
     }
     [fGroup, fTrig, fDur, fDelay, fMode, fMax, fAcc, fMin, fDec, fL, fT, fW, fO, fR, fX, fY].forEach(function(inp){
       inp.addEventListener('change', commit);
@@ -2553,6 +2677,7 @@ function onHandleDown(e){
   e.stopPropagation();
   var h = e.currentTarget;
   try { h.setPointerCapture(e.pointerId); } catch (err) {}
+  maybeAutoStepEdit(items);
   var sec = $('#stage .slide');
   var slideW = (sec && sec.clientWidth) || 0;
   var startX = e.clientX;
@@ -2576,6 +2701,7 @@ function onHandleDown(e){
     h.removeEventListener('pointercancel', onUp);
     if (!selectedItems().length) return;
     try { h.releasePointerCapture(e.pointerId); } catch (err) {}
+    selectedItems().forEach(commitStepGeometry);
     persistSlide();
   };
   h.addEventListener('pointermove', onMove);
@@ -3154,6 +3280,10 @@ function bind(){
     if (e.target.checked) el.setAttribute('data-hidden', '1');
     else el.removeAttribute('data-hidden');
     persistSlide();
+  });
+  $('#scrub-range').addEventListener('input', function(e){
+    scrubGroup = Math.max(0, parseInt(e.target.value, 10) || 0);
+    scrubApply();
   });
   $('#btn-anim-add').addEventListener('click', function(){
     var el = selectedAnimTarget();

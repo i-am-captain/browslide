@@ -1495,5 +1495,65 @@ DZB.defaultView.dispatchEvent(new WZB.MouseEvent('pointerup', { bubbles: true, c
 await wait(100);
 check('group drag moves all', zbBlks[0].style.left !== m0l && zbBlks[1].style.left !== m1l);
 
+// ---------- 35. global stage scrub slider ----------
+const domSB = makeDom(html);
+await wait(400);
+const WSB = domSB.window, DSB = WSB.document;
+WSB.gotoSlide(WSB.App.model.slideOrder[1]);
+await wait(100);
+check('scrub footer idle without stages', !!DSB.querySelector('#scrub-range') &&
+  DSB.querySelector('#scrub-range').disabled === true &&
+  DSB.querySelector('#scrub-label').textContent.includes('No animation'));
+const sbBlks = DSB.querySelectorAll('#stage .blk');
+const step = (group, trigger, left) => ({ group, trigger, dur: 600, delay: 200, mode: 'linear', maxSpeed: 1.5, accel: 2, minSpeed: 0, decel: 2, to: { left } });
+sbBlks[0].setAttribute('data-anim', JSON.stringify([step(1, 'click', 20), step(3, 'auto', 60)]));
+sbBlks[1].setAttribute('data-anim', JSON.stringify([step(2, 'auto', 40)]));
+WSB.syncStageToModel();
+WSB.rebuildScrub();
+const sRange = DSB.querySelector('#scrub-range');
+check('slider spans slide groups', sRange.disabled === false && sRange.max === '3' && sRange.value === '0' &&
+  WSB.slideGroups().join(',') === '1,3,2'.split(',').sort().join(','));
+check('any-click makes a click stage', WSB.groupTrigger(1) === 'click' && WSB.groupTrigger(2) === 'auto' && WSB.groupTrigger(3) === 'auto');
+check('scrub never dirties the deck', (function(){
+  const before = JSON.stringify(WSB.App.model);
+  sRange.value = '2';
+  sRange.dispatchEvent(new WSB.Event('input', { bubbles: true }));
+  return JSON.stringify(WSB.App.model) === before;
+})());
+check('scrub poses every item (fallback to earlier stage)', sbBlks[0].style.left === '20%' && sbBlks[1].style.left === '40%');
+check('stage label shows kind', DSB.querySelector('#scrub-label').textContent === 'Stage 2 / 3' &&
+  DSB.querySelector('#scrub-kind').textContent.includes('auto') && DSB.querySelector('#scrub-kind').className === 'auto');
+WSB.syncStageToModel();
+check('sync restores rest pose', sbBlks[0].style.left === '8%' && sbBlks[1].style.left === '8%' &&
+  /left:\s*8%/.test(WSB.App.model.slides[WSB.App.activeId].html));
+sRange.dispatchEvent(new WSB.Event('input', { bubbles: true }));
+check('re-scrub reapplies poses', sbBlks[0].style.left === '20%' && sbBlks[1].style.left === '40%');
+// selecting a step drives slider + global state to that stage
+sbBlks[0].dispatchEvent(new WSB.MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+DSB.defaultView.dispatchEvent(new WSB.MouseEvent('pointerup', { bubbles: true }));
+await wait(50);
+DSB.querySelectorAll('#anim-rows details.astep')[0].dispatchEvent(new WSB.MouseEvent('click', { bubbles: true }));
+check('step select drives slider', WSB.scrubGroup === 1 && sRange.value === '1' && sbBlks[1].style.left === '8%');
+check('click stage indicated', DSB.querySelector('#scrub-kind').textContent.includes('click') &&
+  DSB.querySelector('#scrub-kind').className === 'click');
+// editing the group number drives global state to the new stage
+const grpInput = DSB.querySelector('#anim-rows details.astep input');
+grpInput.value = '3';
+grpInput.dispatchEvent(new WSB.Event('change', { bubbles: true }));
+check('group edit moves global stage', WSB.scrubGroup === 3 && sRange.value === '3' && sbBlks[1].style.left === '40%');
+WSB.exitStepEdit();
+// presenter: mixed click+auto group never auto-chains
+const pSec2 = DSB.createElement('div');
+pSec2.innerHTML = '<div data-anim=\'[{"group":1,"trigger":"click","dur":600,"delay":200,"mode":"linear","maxSpeed":1.5,"accel":2,"minSpeed":0,"decel":2,"to":{"left":10}}]\'></div>' +
+  '<div data-anim=\'[{"group":2,"trigger":"click","dur":600,"delay":200,"mode":"linear","maxSpeed":1.5,"accel":2,"minSpeed":0,"decel":2,"to":{"left":20}},{"group":2,"trigger":"auto","dur":600,"delay":200,"mode":"linear","maxSpeed":1.5,"accel":2,"minSpeed":0,"decel":2,"to":{"left":30}}]\'></div>';
+WSB.kfCollect(pSec2);
+WSB.kfGroupIdx = 0;
+WSB.chainAutos();
+check('mixed group is a click stage (no auto-chain)', WSB.kfTimer === 0);
+WSB.kfGroups = []; WSB.kfGroupIdx = -1;
+WSB.gotoSlide(WSB.App.model.slideOrder[0]);
+await wait(100);
+check('slide change resets scrub', WSB.scrubGroup === 0 && DSB.querySelector('#scrub-range').disabled === true);
+
 console.log(failures === 0 ? '\nALL TESTS PASSED' : `\n${failures} TEST(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);

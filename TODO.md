@@ -7,7 +7,7 @@ decide, document below, continue.
 - [ ] 1. Animation settings layout: every label sits left of its field on one row; widen sidebar as needed.
 - [ ] 2. Default line width 3 for all items (template default, code fallbacks, presets).
 - [ ] 3. Step delete refresh: deleting a step rebuilds the rows even when the ✕ button has focus.
-- [ ] 4. Bottom stage scrub slider: global per-slide animation-stage preview with click/auto indication.
+- [x] 4. Bottom stage scrub slider: global per-slide animation-stage preview with click/auto indication. Done.
 - [ ] 5. Size handles edit geometry values instead of literal scaling; rectangle/ellipse get 3 handles (corner = both, right = width, bottom = height).
 - [ ] 6. Tight selection boxes: per-shape tight viewBoxes so the overlay hugs the icon.
 - [ ] 7. Shape sizes participate in keyframes (capture/apply/play/scrub/present/viewer), so handle drags record into steps.
