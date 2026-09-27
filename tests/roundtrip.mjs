@@ -36,6 +36,12 @@ const stageWrap = (headCss.match(/#stage-wrap\{[^}]*\}/) || [''])[0];
 check('stage centers without flex overflow cut',
   stageWrap.includes('overflow:auto') && !stageWrap.includes('justify-content') &&
   /(?:^|\n)\.slide\{width:100%[^}]*margin:auto/.test(headCss) && /#stage\{[^}]*height:100%/.test(headCss));
+// ---------- 0c. anim settings: labels share a row with fields, wide sidebar ----------
+const aline = (headCss.match(/#anim-rows \.aline\{[^}]*\}/) || [''])[0];
+check('anim rows are label-left/field-right flex rows',
+  aline.includes('display:flex') && aline.includes('flex-direction:row'));
+const mainGrid = (headCss.match(/#main\{[^}]*\}/) || [''])[0];
+check('sidebar fits label+field rows', /300px/.test(mainGrid));
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function makeDom(source, runScripts = true) {
