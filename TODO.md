@@ -1,11 +1,24 @@
-# Browslide task list (user order, work through one by one)
+# Browslide task list
 
-- [x] 1. Agent-map anchors human-readable (full banner per line). Done in `e610244`.
-- [x] 2. Media resizing/scaling: drag handle preferred, else percentage field. Done: corner drag handle storing width as % of slide width.
-- [x] 3. Free positioning for text and media blocks (drag & drop); default slides and layouts use these blocks. Done: `.blk` divs with % coords, grip to move, layouts/skeletons emit blocks (old flow content still renders).
-- [x] 4. Insertable arrow and symbol graphics for slides. Done: 12 inline SVGs (currentColor) in movable blocks.
-- [x] 5. Animations: fade in, fade out, move, rotate for text, graphics and media files. Done: data-anim/step/dir attrs, Animation panel on selection, click-advance steps in presenter + viewer export.
-- [x] 6. Help slide: fix arrow-key text (PageUp/PageDown is what works). Done.
-- [x] 7. Full code review: remove obsolete/dead code, unused methods/variables, legacy comments, old-format support (prerelease, no backwards compat needed); shorten where sensible without behavior change; review and clean up tests. Done: removed dead `appendMedia`/`convertFontTags`/unused var/`(Phase 5)` tags/`.cols` rule, factored `selectOption`, fixed docs (README roadmap/panel lists, AGENTS line count), fixed stale test headers. No dead functions/variables remain; all CSS selectors and element ids resolve.
+# Round 2 (all requested together, work in listed order)
 
-Conventions: commit per task, full suite (`cd tests && npm test`) green before each commit.
+- [x] 8. Delete key removes selected shapes/textboxes.
+- [x] 9. Multi-select: property changes (width/color/rotate/scale) apply to all selected items.
+- [x] 10. Rotate handle + N/S edge scale handles on the selection box.
+- [x] 11. Parametric shape geometry: arrows/line length (fixed head), square/triangle height, rectangle w+h, circle radius, ellipse w+h.
+- [x] 12. Keyframe animation system: per-step positions, parallel groups, click/auto chaining with delay, easing modes (linear/accelerate/accel-decel), per-row step list UI, keyframes cover size/scale/rotation. (Replaces flat data-anim model; prerelease, no migration.) Done: rAF engine shared by presenter + export, data-anim JSON lists, start-hidden flag.
+- [x] 13. Rotation always applied last in transforms (verified: already scale,scale,rotate effect order).
+- [ ] 14. Text alignment buttons broken: stay all selected, text doesn't always move. FIX.
+- [ ] 15. Text color selection in text settings (format bar).
+- [ ] 16. Right toolbar cleanup/reorder:
+  - layout + transition → new "Slide" menu
+  - aspect ratio + theme → Presentation settings menu, renamed to "Presentation"
+  - speaker notes at bottom, above GitHub button
+  - +Textblock button into Slide menu
+  - Media & sizes as last menu below Shapes; "sizes" → "Sizes"
+
+Conventions: commit per task, full suite (`cd tests && npm test`) green before each commit. No question tool while user is AFK — decide, document below, continue.
+
+# Decisions & open points (for later review)
+
+- (empty — filled as work progresses)

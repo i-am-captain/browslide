@@ -130,6 +130,11 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 #repo-link{margin-top:auto;padding-top:10px;text-align:center;font-size:12px}
 #repo-link a{color:var(--muted);text-decoration:none;display:inline-flex;align-items:center;gap:6px;border:none;background:none;padding:2px 6px}
 #repo-link a:hover{color:var(--accent)}
+#anim-rows .arow{display:flex;flex-wrap:wrap;gap:4px;margin:6px 0;padding:6px;border:1px solid var(--border);border-radius:6px}
+#anim-rows input{width:52px;padding:2px 4px}
+#anim-rows select{width:auto;padding:2px 4px}
+#anim-legend{font-size:11px;color:var(--muted)}
+#anim-rows .adel{margin-left:auto}
 #media-resizer{position:absolute;border:2px solid var(--accent);border-radius:4px;pointer-events:none;z-index:5}
 #media-resizer .mhandle{position:absolute;right:-10px;bottom:-10px;width:20px;height:20px;background:var(--accent);border:2px solid #fff;border-radius:50%;cursor:nwse-resize;pointer-events:auto;touch-action:none}
 #media-resizer .mbadge{position:absolute;top:-26px;right:-2px;background:var(--accent);color:#fff;font-size:11px;padding:1px 7px;border-radius:10px;white-space:nowrap}
@@ -167,21 +172,6 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 .trans-slide{animation:slideIn .35s ease}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 @keyframes slideIn{from{opacity:0;transform:translateX(48px)}to{opacity:1;transform:none}}
-/* per-element step animations (present mode + viewer export) */
-@keyframes animFadeIn{from{opacity:0}to{opacity:1}}
-@keyframes animFadeOut{to{opacity:0}}
-@keyframes animMoveL{from{opacity:0;transform:translateX(-60px)}to{opacity:1;transform:none}}
-@keyframes animMoveR{from{opacity:0;transform:translateX(60px)}to{opacity:1;transform:none}}
-@keyframes animMoveU{from{opacity:0;transform:translateY(-60px)}to{opacity:1;transform:none}}
-@keyframes animMoveD{from{opacity:0;transform:translateY(60px)}to{opacity:1;transform:none}}
-@keyframes animRotate{from{opacity:0;transform:rotate(-30deg) scale(.8)}to{opacity:1;transform:none}}
-.anim-fade-in{animation:animFadeIn .5s ease backwards}
-.anim-fade-out{animation:animFadeOut .5s ease both}
-.anim-move-left{animation:animMoveL .5s ease backwards}
-.anim-move-right{animation:animMoveR .5s ease backwards}
-.anim-move-up{animation:animMoveU .5s ease backwards}
-.anim-move-down{animation:animMoveD .5s ease backwards}
-.anim-rotate{animation:animRotate .6s ease backwards}
 @media (max-width:900px){#main{grid-template-columns:1fr}#filmstrip,#inspector{display:none}}
 </style>
 </head>
@@ -302,25 +292,11 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
     <details id="anim-wrap">
       <summary>Animation</summary>
       <div id="anim-hint">Select a block or image first.</div>
-      <div id="anim-controls">
-        <label>Effect
-          <select id="anim-effect">
-            <option value="">None</option>
-            <option value="fade-in">Fade in</option>
-            <option value="fade-out">Fade out</option>
-            <option value="move">Move in</option>
-            <option value="rotate">Rotate in</option>
-          </select>
-        </label>
-        <label>Direction
-          <select id="anim-dir">
-            <option value="left">From left</option>
-            <option value="right">From right</option>
-            <option value="up">From top</option>
-            <option value="down">From bottom</option>
-          </select>
-        </label>
-        <label>Step <input id="anim-step" type="number" min="1" max="99"></label>
+      <div id="anim-controls" hidden>
+        <label class="row"><input type="checkbox" id="anim-hidden"> Start hidden</label>
+        <div id="anim-legend">group · on click/auto · dur ms · delay ms · mode · maxSp · acc · minSp · dec · left% · top% · width% · opac · rot° · scX · scY</div>
+        <div id="anim-rows"></div>
+        <p><button id="btn-anim-add" title="Add a step ending at the current position/size">+ Add step (capture current)</button></p>
       </div>
     </details>
     <label>Speaker notes
@@ -2068,13 +2044,35 @@ function selectedAnimTarget(){
   var el = resizer.el;
   return (el && document.contains(el)) ? el : null;
 }
-function maxStepOnSlide(){
+function animListOf(el){
+  return parseAnimList(el.getAttribute('data-anim'));
+}
+function writeAnimList(el, list){
+  if (list.length) el.setAttribute('data-anim', JSON.stringify(list));
+  else el.removeAttribute('data-anim');
+}
+function maxGroupOnSlide(){
   var sec = $('#stage .slide'), mx = 0;
-  if (sec) Array.prototype.forEach.call(sec.querySelectorAll('[data-step]'), function(n){
-    var v = parseInt(n.getAttribute('data-step'), 10);
-    if (!isNaN(v) && v > mx) mx = v;
-  });
+  if (sec) kfEntries(sec).forEach(function(x){ if (x.entry.group > mx) mx = x.entry.group; });
   return mx;
+}
+function captureKeyframe(el){
+  var to = {};
+  function pct(v){
+    var m = /^\s*-?[\d.]+\s*%\s*$/.exec(v || '');
+    return m ? Math.round(parseFloat(m[1]) * 10) / 10 : null;
+  }
+  var l = pct(el.style.left), t = pct(el.style.top), w = pct(el.style.width);
+  if (l !== null) to.left = l;
+  if (t !== null) to.top = t;
+  if (w !== null) to.width = w;
+  var o = parseFloat(el.style.opacity);
+  to.opacity = isFinite(o) ? o : 1;
+  var tr = transformOf(el);
+  to.rot = tr.rot;
+  to.sx = tr.sx;
+  to.sy = tr.sy;
+  return to;
 }
 function refreshAnimUI(){
   var el = selectedAnimTarget();
@@ -2083,14 +2081,116 @@ function refreshAnimUI(){
   if (!el) { hint.hidden = false; ctl.hidden = true; return; }
   hint.hidden = true;
   ctl.hidden = false;
-  var fx = el.getAttribute('data-anim') || '';
-  $('#anim-effect').value = ANIM_FX.indexOf(fx) >= 0 ? fx : '';
-  $('#anim-dir').value = el.getAttribute('data-dir') || 'left';
-  var st = el.getAttribute('data-step') || '';
-  if (document.activeElement !== $('#anim-step')) $('#anim-step').value = st;
+  $('#anim-hidden').checked = el.hasAttribute('data-hidden');
+  if (document.activeElement && $('#anim-rows').contains(document.activeElement)) return; /* don't rebuild mid-edit */
+  buildAnimRows(el);
 }
-function writeAnimAttrs(){
-  syncStageToModel(); refreshDirty(); scheduleSize(); scheduleAutosave(); refreshAnimUI();
+function animNum(parent, val, min, max, step, title){
+  var inp = document.createElement('input');
+  inp.type = 'number';
+  inp.min = min;
+  inp.max = max;
+  inp.step = step;
+  inp.title = title;
+  if (val !== undefined && val !== null && val !== '') inp.value = val;
+  parent.appendChild(inp);
+  return inp;
+}
+function animSel(parent, val, opts, title){
+  var s = document.createElement('select');
+  s.title = title;
+  opts.forEach(function(o){
+    var op = document.createElement('option');
+    op.value = o[0];
+    op.textContent = o[1];
+    s.appendChild(op);
+  });
+  s.value = val;
+  parent.appendChild(s);
+  return s;
+}
+function buildAnimRows(el){
+  var host = $('#anim-rows');
+  host.innerHTML = '';
+  var list = animListOf(el);
+  list.forEach(function(entry, idx){
+    var row = document.createElement('div');
+    row.className = 'arow';
+    var fGroup = animNum(row, entry.group, 1, 99, 1, 'Step group (same group plays together)');
+    var fTrig = animSel(row, entry.trigger, [['click', 'click'], ['auto', 'auto']], 'Run on click or automatically');
+    var fDur = animNum(row, entry.dur, 50, 10000, 50, 'Duration ms');
+    var fDelay = animNum(row, entry.delay, 0, 10000, 50, 'Delay ms before auto steps');
+    var fMode = animSel(row, entry.mode, [['linear', 'lin'], ['accelerate', 'acc'], ['accelDecel', 'a-d']], 'Easing mode');
+    var fMax = animNum(row, entry.maxSpeed, 0.1, 5, 0.1, 'Max speed (accelerate)');
+    var fAcc = animNum(row, entry.accel, 0, 10, 0.5, 'Acceleration');
+    var fMin = animNum(row, entry.minSpeed, 0, 2, 0.1, 'Min end speed (accel-decel)');
+    var fDec = animNum(row, entry.decel, 0, 10, 0.5, 'Deceleration');
+    var fL = animNum(row, entry.to.left, -100, 300, 1, 'Left %');
+    var fT = animNum(row, entry.to.top, -100, 300, 1, 'Top %');
+    var fW = animNum(row, entry.to.width, 1, 300, 1, 'Width %');
+    var fO = animNum(row, entry.to.opacity, 0, 1, 0.05, 'Opacity');
+    var fR = animNum(row, entry.to.rot, -720, 720, 1, 'Rotation °');
+    var fX = animNum(row, entry.to.sx, 0.05, 10, 0.1, 'Scale X');
+    var fY = animNum(row, entry.to.sy, 0.05, 10, 0.1, 'Scale Y');
+    var del = document.createElement('button');
+    del.className = 'adel';
+    del.textContent = '✕';
+    del.title = 'Delete step';
+    del.addEventListener('click', function(){
+      var cur = animListOf(el);
+      cur.splice(idx, 1);
+      writeAnimList(el, cur);
+      persistSlide();
+      refreshAnimUI();
+    });
+    function rv(inp, min, max, fb){
+      var v = parseFloat(inp.value);
+      return isFinite(v) ? Math.max(min, Math.min(max, v)) : fb;
+    }
+    function opt(inp){
+      var v = parseFloat(inp.value);
+      return isFinite(v) ? v : undefined;
+    }
+    function commit(){
+      var next = animListOf(el);
+      if (!next[idx]) return;
+      var to = {};
+      var L = opt(fL), T = opt(fT), Wd = opt(fW), O = opt(fO), R = opt(fR), X = opt(fX), Y = opt(fY);
+      if (L !== undefined) to.left = Math.max(-100, Math.min(300, L));
+      if (T !== undefined) to.top = Math.max(-100, Math.min(300, T));
+      if (Wd !== undefined && Wd >= 1) to.width = Math.max(1, Math.min(300, Wd));
+      if (O !== undefined) to.opacity = Math.max(0, Math.min(1, O));
+      if (R !== undefined) to.rot = Math.max(-720, Math.min(720, R));
+      if (X !== undefined && X > 0) to.sx = Math.max(0.05, Math.min(10, X));
+      if (Y !== undefined && Y > 0) to.sy = Math.max(0.05, Math.min(10, Y));
+      next[idx] = {
+        group: Math.max(1, Math.min(99, parseInt(fGroup.value, 10) || next[idx].group)),
+        trigger: fTrig.value === 'auto' ? 'auto' : 'click',
+        dur: rv(fDur, 50, 10000, 600),
+        delay: rv(fDelay, 0, 10000, 200),
+        mode: ['linear', 'accelerate', 'accelDecel'].indexOf(fMode.value) >= 0 ? fMode.value : 'linear',
+        maxSpeed: rv(fMax, 0.1, 5, 1.5),
+        accel: rv(fAcc, 0, 10, 2),
+        minSpeed: rv(fMin, 0, 2, 0),
+        decel: rv(fDec, 0, 10, 2),
+        to: to
+      };
+      if (!Object.keys(to).length) {
+        next.splice(idx, 1);
+        writeAnimList(el, next);
+        persistSlide();
+        refreshAnimUI();
+        return;
+      }
+      writeAnimList(el, next);
+      persistSlide();
+    }
+    [fGroup, fTrig, fDur, fDelay, fMode, fMax, fAcc, fMin, fDec, fL, fT, fW, fO, fR, fX, fY].forEach(function(inp){
+      inp.addEventListener('change', commit);
+    });
+    row.appendChild(del);
+    host.appendChild(row);
+  });
 }
 function onHandleDown(e){
   var items = selectedItems();
@@ -2132,6 +2232,7 @@ function onHandleDown(e){
 /* ================= PRESENT ================= */
 function openPresent(){
   syncStageToModel();
+  kfCancel();
   App.presentIdx = Math.max(0, activeIndex());
   $('#present-overlay').hidden = false;
   $('#present-bar').style.display = App.model.settings.showBar === false ? 'none' : '';
@@ -2149,56 +2250,194 @@ function showPresent(i, revealAll){
   sec.innerHTML = expandHtml(s.html, App.model.resources);
   host.appendChild(sec);
   void sec.offsetWidth; /* restart CSS animation */
-  resetSteps(sec, !!revealAll);
+  kfReset(sec, !!revealAll);
   updatePresentCount();
   fitPresent();
+  chainAutos();
 }
-/* ---- per-element step animations (click-advance reveal) ---- */
-var ANIM_FX = ['fade-in', 'fade-out', 'move', 'rotate'];
-var ANIM_CLASSES = ['anim-fade-in', 'anim-fade-out', 'anim-move-left', 'anim-move-right', 'anim-move-up', 'anim-move-down', 'anim-rotate'];
-var presentSteps = [], presentStepIdx = 0;
-function animClass(effect, dir){ return 'anim-' + effect + (effect === 'move' ? '-' + (dir || 'left') : ''); }
-function collectSteps(sec){
-  var nodes = Array.prototype.slice.call(sec.querySelectorAll('[data-anim]'));
-  nodes = nodes.filter(function(n){ return ANIM_FX.indexOf(n.getAttribute('data-anim')) >= 0; });
-  nodes.sort(function(a, b){
-    var x = parseInt(a.getAttribute('data-step'), 10), y = parseInt(b.getAttribute('data-step'), 10);
-    return (isNaN(x) ? 1e9 : x) - (isNaN(y) ? 1e9 : y);
+function chainAutos(){
+  /* after arriving/playing, auto groups that follow play by themselves */
+  var nxt = kfGroups[kfGroupIdx + 1];
+  if (!nxt || !nxt.items.length) return;
+  var auto = nxt.items.every(function(x){ return x.entry.trigger === 'auto'; });
+  if (!auto) return;
+  var delay = Math.max.apply(null, nxt.items.map(function(x){ return x.entry.delay || 0; }));
+  kfTimer = setTimeout(function(){ kfTimer = 0; kfPlayGroup(kfGroupIdx + 1); }, delay);
+}
+function kfPlayGroup(gi){
+  var g = kfGroups[gi];
+  if (!g) return;
+  kfGroupIdx = gi;
+  var pending = g.items.length;
+  if (!pending) { updatePresentCount(); chainAutos(); return; }
+  g.items.forEach(function(x){
+    var e = x.entry, el = x.el;
+    el.style.visibility = 'visible';
+    var ef = easeFor(e.mode, e);
+    animateProps(el, e.to, Math.max(50, Math.round(e.dur * ef.durScale)), ef.fn, function(){
+      if (e.to.opacity === 0) el.style.visibility = 'hidden';
+      if (--pending <= 0 && gi === kfGroupIdx) { updatePresentCount(); chainAutos(); }
+    });
   });
-  return nodes;
-}
-function resetSteps(sec, revealAll){
-  var steps = collectSteps(sec);
-  steps.forEach(function(n){
-    ANIM_CLASSES.forEach(function(c){ n.classList.remove(c); });
-    n.style.visibility = (revealAll || n.getAttribute('data-anim') === 'fade-out') ? 'visible' : 'hidden';
-  });
-  presentSteps = revealAll ? [] : steps;
-  presentStepIdx = 0;
-}
-function playAnimNode(n){
-  var fx = n.getAttribute('data-anim');
-  n.style.visibility = 'visible';
-  void n.offsetWidth;
-  n.classList.add(animClass(fx, n.getAttribute('data-dir')));
-  if (fx === 'fade-out') setTimeout(function(){ n.style.visibility = 'hidden'; }, 500);
-}
-function playPresentStep(){
-  var n = presentSteps[presentStepIdx++];
-  if (!n) return false;
-  playAnimNode(n);
   updatePresentCount();
-  return true;
 }
 function advancePresent(){
-  if (presentStepIdx < presentSteps.length) playPresentStep();
+  if (kfTimer) { clearTimeout(kfTimer); kfTimer = 0; }
+  var nxt = kfGroupIdx + 1;
+  if (nxt < kfGroups.length) kfPlayGroup(nxt);
   else showPresent(App.presentIdx + 1);
 }
 function updatePresentCount(){
   var n = App.model.slideOrder.length;
-  $('#present-count').textContent = (App.presentIdx + 1) + ' / ' + n + (presentSteps.length ? ' · ' + presentStepIdx + '/' + presentSteps.length : '');
+  $('#present-count').textContent = (App.presentIdx + 1) + ' / ' + n + (kfGroups.length ? ' · ' + (kfGroupIdx + 1) + '/' + kfGroups.length : '');
+}
+/* ---- per-element step animations (click-advance reveal) ---- */
+/* ---- keyframe step animations (positions/size/scale/rotation/opacity) ----
+   Each animated element carries data-anim: a JSON list of step entries:
+   {group, trigger:click|auto, dur, delay, mode, maxSpeed, accel, minSpeed,
+    decel, to:{left,top,width,opacity,rot,sx,sy}}. All entries sharing a
+   group number play simultaneously on one advance. A group runs on click,
+   or automatically after the previous group when every entry says auto.
+   data-hidden="1" starts the element hidden until its first group plays. */
+var kfGroups = [], kfGroupIdx = -1, kfTimer = 0, kfLive = [];
+function easeFor(mode, p){
+  p = p || {};
+  if (mode === 'accelerate') {
+    var e = 1 + Math.max(0, +p.accel || 0) / 2;
+    var vmax = Math.max(0.5, +p.maxSpeed || 1.5);
+    return { durScale: Math.max(1, e / vmax), fn: function(t){ return Math.pow(t, e); } };
+  }
+  if (mode === 'accelDecel') {
+    var m = Math.max(0, Math.min(0.5, (+p.minSpeed || 0) / 2));
+    var ea = 1 + Math.max(0, +p.accel || 0) / 2;
+    var ed = 1 + Math.max(0, +p.decel || 0) / 2;
+    return { durScale: 1, fn: function(t){
+      var base = t < 0.5 ? 0.5 * Math.pow(t * 2, ea) : 0.5 + 0.5 * (1 - Math.pow(1 - (t * 2 - 1), ed));
+      return (1 - m) * base + m * t;
+    } };
+  }
+  return { durScale: 1, fn: function(t){ return t; } };
+}
+function cleanAnimEntry(e){
+  if (!e || typeof e !== 'object') return null;
+  var group = parseInt(e.group, 10);
+  if (!(group >= 1 && group <= 99)) return null;
+  var to = {};
+  function num(v, lo, hi){ v = parseFloat(v); return isFinite(v) ? Math.max(lo, Math.min(hi, v)) : null; }
+  var l = num(e.to && e.to.left, -100, 300), t = num(e.to && e.to.top, -100, 300), w = num(e.to && e.to.width, 1, 300);
+  var o = num(e.to && e.to.opacity, 0, 1), r = num(e.to && e.to.rot, -720, 720);
+  var x = num(e.to && e.to.sx, 0.05, 10), y = num(e.to && e.to.sy, 0.05, 10);
+  if (l !== null) to.left = l;
+  if (t !== null) to.top = t;
+  if (w !== null) to.width = w;
+  if (o !== null) to.opacity = o;
+  if (r !== null) to.rot = r;
+  if (x !== null) to.sx = x;
+  if (y !== null) to.sy = y;
+  if (!Object.keys(to).length) return null;
+  return {
+    group: group,
+    trigger: e.trigger === 'auto' ? 'auto' : 'click',
+    dur: Math.max(50, Math.min(10000, parseInt(e.dur, 10) || 600)),
+    delay: Math.max(0, Math.min(10000, parseInt(e.delay, 10) || 0)),
+    mode: (e.mode === 'accelerate' || e.mode === 'accelDecel') ? e.mode : 'linear',
+    maxSpeed: Math.max(0.1, Math.min(5, parseFloat(e.maxSpeed) || 1.5)),
+    accel: Math.max(0, Math.min(10, parseFloat(e.accel) || 0)),
+    minSpeed: Math.max(0, Math.min(2, parseFloat(e.minSpeed) || 0)),
+    decel: Math.max(0, Math.min(10, parseFloat(e.decel) || 0)),
+    to: to
+  };
+}
+function parseAnimList(s){
+  try {
+    var v = JSON.parse(s);
+    if (!Array.isArray(v)) return [];
+    return v.map(cleanAnimEntry).filter(function(e){ return !!e; });
+  } catch (e) { return []; }
+}
+function kfEntries(sec){
+  var out = [];
+  Array.prototype.forEach.call(sec.querySelectorAll('[data-anim]'), function(n){
+    parseAnimList(n.getAttribute('data-anim')).forEach(function(e){ out.push({ el: n, entry: e }); });
+  });
+  return out;
+}
+function kfCollect(sec){
+  var groups = {};
+  kfEntries(sec).forEach(function(x){
+    (groups[x.entry.group] = groups[x.entry.group] || []).push(x);
+  });
+  kfGroups = Object.keys(groups).map(Number).sort(function(a, b){ return a - b; }).map(function(g){
+    return { group: g, items: groups[g] };
+  });
+  kfGroupIdx = -1;
+}
+function kfCancel(){
+  if (kfTimer) { clearTimeout(kfTimer); kfTimer = 0; }
+  kfLive.forEach(function(el){ try { if (el._kfRaf) cancelAnimationFrame(el._kfRaf); } catch (e) {} el._kfRaf = 0; });
+  kfLive = [];
+}
+function kfReset(sec, revealAll){
+  kfCancel();
+  kfCollect(sec);
+  Array.prototype.forEach.call(sec.querySelectorAll('[data-hidden]'), function(n){
+    n.style.visibility = revealAll ? 'visible' : 'hidden';
+  });
+  if (revealAll) { kfGroups = []; kfGroupIdx = -1; }
+}
+function kfCurrent(el, to){
+  /* numeric from-state for animated props (inline styles are live values) */
+  var from = {};
+  ['left', 'top', 'width'].forEach(function(k){
+    if (to[k] === undefined) return;
+    var m = /^\s*-?[\d.]+\s*%\s*$/.exec(el.style[k] || '');
+    from[k] = m ? parseFloat(m[0]) : to[k];
+  });
+  if (to.opacity !== undefined) {
+    var o = parseFloat(el.style.opacity);
+    if (!isFinite(o)) { try { o = parseFloat(getComputedStyle(el).opacity); } catch (e) {} }
+    from.opacity = isFinite(o) ? o : 1;
+  }
+  var cur = el._kfSty || transformOf(el);
+  if (to.rot !== undefined || to.sx !== undefined || to.sy !== undefined) {
+    from._t = { rot: cur.rot, sx: cur.sx, sy: cur.sy };
+  }
+  return from;
+}
+function kfWrite(el, from, to, p){
+  function mix(a, b){ return a + (b - a) * p; }
+  ['left', 'top', 'width'].forEach(function(k){
+    if (to[k] !== undefined) el.style[k] = mix(from[k] !== undefined ? from[k] : to[k], to[k]) + '%';
+  });
+  if (to.opacity !== undefined) el.style.opacity = mix(from.opacity !== undefined ? from.opacity : to.opacity, to.opacity);
+  if (from._t) {
+    var r = mix(from._t.rot, to.rot !== undefined ? to.rot : from._t.rot);
+    var x = mix(from._t.sx, to.sx !== undefined ? to.sx : from._t.sx);
+    var y = mix(from._t.sy, to.sy !== undefined ? to.sy : from._t.sy);
+    el.style.transform = 'rotate(' + r + 'deg) scaleX(' + x + ') scaleY(' + y + ')';
+    el._kfSty = { rot: r, sx: x, sy: y };
+  }
+}
+function animateProps(el, to, durMs, easeFn, done){
+  try { if (el._kfRaf) cancelAnimationFrame(el._kfRaf); } catch (e) {}
+  if (kfLive.indexOf(el) < 0) kfLive.push(el);
+  var from = kfCurrent(el, to);
+  if (durMs <= 50) { kfWrite(el, to, to, 1); el._kfRaf = 0; done && done(); return; }
+  var t0 = null;
+  function frame(ts){
+    if (t0 === null) t0 = ts;
+    var t = Math.min(1, (ts - t0) / Math.max(1, durMs));
+    kfWrite(el, from, to, easeFn(t));
+    if (t < 1) {
+      try { el._kfRaf = requestAnimationFrame(frame); }
+      catch (e) { kfWrite(el, to, to, 1); el._kfRaf = 0; done && done(); }
+    } else { el._kfRaf = 0; done && done(); }
+  }
+  try { el._kfRaf = requestAnimationFrame(frame); }
+  catch (e) { kfWrite(el, to, to, 1); el._kfRaf = 0; done && done(); }
 }
 function closePresent(){
+  kfCancel();
   $('#present-overlay').hidden = true;
   try { if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen(); } catch (e) {}
   gotoSlide(App.model.slideOrder[App.presentIdx]);
@@ -2242,20 +2481,32 @@ var PLAYER_JS = [
   "if(t&&t!=='none'){s.classList.add('trans-'+t);}",
   "document.title=s.getAttribute('data-title')+' — '+deckTitle;",
   "}});",
-  "collect();reset(!!reveal);updateCount();",
+  "kfReset(slides[idx],!!reveal);updateCount();",
   "}",
-  "var ANIM_FX=['fade-in','fade-out','move','rotate'];",
-  "var ANIM_CLASSES=['anim-fade-in','anim-fade-out','anim-move-left','anim-move-right','anim-move-up','anim-move-down','anim-rotate'];",
-  "var steps=[],stepIdx=0;",
-  "function animClass(e,d){return 'anim-'+e+(e==='move'?'-'+(d||'left'):'');}",
-  "function collect(){steps=Array.prototype.slice.call(slides[idx].querySelectorAll('[data-anim]'));",
-  "steps=steps.filter(function(s){return ANIM_FX.indexOf(s.getAttribute('data-anim'))>=0;});",
-  "steps.sort(function(a,b){var x=parseInt(a.getAttribute('data-step'),10),y=parseInt(b.getAttribute('data-step'),10);return (isNaN(x)?1e9:x)-(isNaN(y)?1e9:y);});",
-  "stepIdx=0;}",
-  "function reset(reveal){steps.forEach(function(s){var e=s.getAttribute('data-anim');ANIM_CLASSES.forEach(function(c){s.classList.remove(c);});s.style.visibility=(reveal||e==='fade-out')?'visible':'hidden';});if(reveal){steps=[];}}",
-  "function playStep(){var s=steps[stepIdx++];if(!s)return false;var e=s.getAttribute('data-anim');var d=s.getAttribute('data-dir')||'left';s.style.visibility='visible';void s.offsetWidth;s.classList.add(animClass(e,d));if(e==='fade-out'){setTimeout(function(){s.style.visibility='hidden';},500);}updateCount();return true;}",
-  "function advance(){if(stepIdx<steps.length){playStep();}else{show(idx+1);}}",
-  "function updateCount(){if(count){count.textContent=(idx+1)+' / '+slides.length+(steps.length?' · '+stepIdx+'/'+steps.length:'');}}",
+  "var kfGroups=[],kfGroupIdx=-1,kfTimer=0,kfLive=[];",
+  "function easeFor(mode,p){p=p||{};",
+  "if(mode==='accelerate'){var e=1+Math.max(0,+p.accel||0)/2;var vmax=Math.max(0.5,+p.maxSpeed||1.5);return{durScale:Math.max(1,e/vmax),fn:function(t){return Math.pow(t,e);}};}",
+  "if(mode==='accelDecel'){var m=Math.max(0,Math.min(0.5,(+p.minSpeed||0)/2));var ea=1+Math.max(0,+p.accel||0)/2;var ed=1+Math.max(0,+p.decel||0)/2;return{durScale:1,fn:function(t){var base=t<0.5?0.5*Math.pow(t*2,ea):0.5+0.5*(1-Math.pow(1-(t*2-1),ed));return (1-m)*base+m*t;}};}",
+  "return{durScale:1,fn:function(t){return t;}};}",
+  "function cleanAnimEntry(e){if(!e||typeof e!=='object')return null;var group=parseInt(e.group,10);if(!(group>=1&&group<=99))return null;",
+  "function num(v,lo,hi){v=parseFloat(v);return isFinite(v)?Math.max(lo,Math.min(hi,v)):null;}",
+  "var to={};var l=num(e.to&&e.to.left,-100,300),t=num(e.to&&e.to.top,-100,300),w=num(e.to&&e.to.width,1,300);",
+  "var o=num(e.to&&e.to.opacity,0,1),r=num(e.to&&e.to.rot,-720,720),x=num(e.to&&e.to.sx,0.05,10),y=num(e.to&&e.to.sy,0.05,10);",
+  "if(l!==null)to.left=l;if(t!==null)to.top=t;if(w!==null)to.width=w;if(o!==null)to.opacity=o;if(r!==null)to.rot=r;if(x!==null)to.sx=x;if(y!==null)to.sy=y;",
+  "if(!Object.keys(to).length)return null;",
+  "return{group:group,trigger:e.trigger==='auto'?'auto':'click',dur:Math.max(50,Math.min(10000,parseInt(e.dur,10)||600)),delay:Math.max(0,Math.min(10000,parseInt(e.delay,10)||0)),mode:(e.mode==='accelerate'||e.mode==='accelDecel')?e.mode:'linear',maxSpeed:Math.max(0.1,Math.min(5,parseFloat(e.maxSpeed)||1.5)),accel:Math.max(0,Math.min(10,parseFloat(e.accel)||0)),minSpeed:Math.max(0,Math.min(2,parseFloat(e.minSpeed)||0)),decel:Math.max(0,Math.min(10,parseFloat(e.decel)||0)),to:to};}",
+  "function parseAnimList(s){try{var v=JSON.parse(s);if(!Array.isArray(v))return[];return v.map(cleanAnimEntry).filter(function(e){return !!e;});}catch(e){return[];}}",
+  "function kfEntries(sec){var out=[];Array.prototype.forEach.call(sec.querySelectorAll('[data-anim]'),function(n){parseAnimList(n.getAttribute('data-anim')).forEach(function(e){out.push({el:n,entry:e});});});return out;}",
+  "function kfCollect(sec){var groups={};kfEntries(sec).forEach(function(x){(groups[x.entry.group]=groups[x.entry.group]||[]).push(x);});kfGroups=Object.keys(groups).map(Number).sort(function(a,b){return a-b;}).map(function(g){return{group:g,items:groups[g]};});kfGroupIdx=-1;}",
+  "function kfCancel(){if(kfTimer){clearTimeout(kfTimer);kfTimer=0;}kfLive.forEach(function(el){try{if(el._kfRaf)cancelAnimationFrame(el._kfRaf);}catch(e){}el._kfRaf=0;});kfLive=[];}",
+  "function kfReset(sec,reveal){kfCancel();kfCollect(sec);Array.prototype.forEach.call(sec.querySelectorAll('[data-hidden]'),function(n){n.style.visibility=reveal?'visible':'hidden';});if(reveal){kfGroups=[];kfGroupIdx=-1;}}",
+  "function kfCurrent(el,to){var from={};['left','top','width'].forEach(function(k){if(to[k]===undefined)return;var m=/^\\s*-?[\\d.]+\\s*%\\s*$/.exec(el.style[k]||'');from[k]=m?parseFloat(m[0]):to[k];});if(to.opacity!==undefined){var o=parseFloat(el.style.opacity);if(!isFinite(o)){try{o=parseFloat(getComputedStyle(el).opacity);}catch(e){}}from.opacity=isFinite(o)?o:1;}var cur=el._kfSty||{rot:0,sx:1,sy:1};if(to.rot!==undefined||to.sx!==undefined||to.sy!==undefined){from._t={rot:cur.rot,sx:cur.sx,sy:cur.sy};}return from;}",
+  "function kfWrite(el,from,to,p){function mix(a,b){return a+(b-a)*p;}['left','top','width'].forEach(function(k){if(to[k]!==undefined)el.style[k]=mix(from[k]!==undefined?from[k]:to[k],to[k])+'%';});if(to.opacity!==undefined)el.style.opacity=mix(from.opacity!==undefined?from.opacity:to.opacity,to.opacity);if(from._t){var r=mix(from._t.rot,to.rot!==undefined?to.rot:from._t.rot);var x=mix(from._t.sx,to.sx!==undefined?to.sx:from._t.sx);var y=mix(from._t.sy,to.sy!==undefined?to.sy:from._t.sy);el.style.transform='rotate('+r+'deg) scaleX('+x+') scaleY('+y+')';el._kfSty={rot:r,sx:x,sy:y};}}",
+  "function animateProps(el,to,durMs,easeFn,done){try{if(el._kfRaf)cancelAnimationFrame(el._kfRaf);}catch(e){}if(kfLive.indexOf(el)<0)kfLive.push(el);var from=kfCurrent(el,to);if(durMs<=50){kfWrite(el,to,to,1);el._kfRaf=0;done&&done();return;}var t0=null;function frame(ts){if(t0===null)t0=ts;var t=Math.min(1,(ts-t0)/Math.max(1,durMs));kfWrite(el,from,to,easeFn(t));if(t<1){try{el._kfRaf=requestAnimationFrame(frame);}catch(e){kfWrite(el,to,to,1);el._kfRaf=0;done&&done();}}else{el._kfRaf=0;done&&done();}}try{el._kfRaf=requestAnimationFrame(frame);}catch(e){kfWrite(el,to,to,1);el._kfRaf=0;done&&done();}}",
+  "function chainAutos(){var nxt=kfGroups[kfGroupIdx+1];if(!nxt||!nxt.items.length)return;var auto=nxt.items.every(function(x){return x.entry.trigger==='auto';});if(!auto)return;var delay=Math.max.apply(null,nxt.items.map(function(x){return x.entry.delay||0;}));kfTimer=setTimeout(function(){kfTimer=0;kfPlayGroup(kfGroupIdx+1);},delay);}",
+  "function kfPlayGroup(gi){var g=kfGroups[gi];if(!g)return;kfGroupIdx=gi;var pending=g.items.length;if(!pending){updateCount();chainAutos();return;}g.items.forEach(function(x){var e=x.entry,el=x.el;el.style.visibility='visible';var ef=easeFor(e.mode,e);animateProps(el,e.to,Math.max(50,Math.round(e.dur*ef.durScale)),ef.fn,function(){if(e.to.opacity===0)el.style.visibility='hidden';if(--pending<=0&&gi===kfGroupIdx){updateCount();chainAutos();}});});updateCount();}",
+  "function advance(){if(kfTimer){clearTimeout(kfTimer);kfTimer=0;}var nxt=kfGroupIdx+1;if(nxt<kfGroups.length)kfPlayGroup(nxt);else show(idx+1);}",
+  "function updateCount(){if(count){count.textContent=(idx+1)+' / '+slides.length+(kfGroups.length?' · '+(kfGroupIdx+1)+'/'+kfGroups.length:'');}}",
   "function fs(){try{if(document.fullscreenElement){document.exitFullscreen();}else if(document.documentElement.requestFullscreen){document.documentElement.requestFullscreen();}}catch(e){}}",
   "function on(id,ev,fn){var b=document.getElementById(id);if(b){b.addEventListener(ev,function(e){e.stopPropagation();fn();});}}",
   "on('prev','click',function(){show(idx-1,true);});",
@@ -2488,37 +2739,32 @@ function bind(){
   $('#shape-rot').addEventListener('change', transformChanged);
   $('#shape-sx').addEventListener('change', transformChanged);
   $('#shape-sy').addEventListener('change', transformChanged);
-  $('#anim-effect').addEventListener('change', function(e){
-    var els = selectedItems();
-    if (!els.length) return;
-    var v = e.target.value;
-    els.forEach(function(el){
-      if (!v || ANIM_FX.indexOf(v) < 0) {
-        el.removeAttribute('data-anim');
-        el.removeAttribute('data-dir');
-        el.removeAttribute('data-step');
-      } else {
-        el.setAttribute('data-anim', v);
-        if (!el.hasAttribute('data-step')) el.setAttribute('data-step', String(maxStepOnSlide() + 1));
-      }
-    });
-    writeAnimAttrs();
+  $('#anim-hidden').addEventListener('change', function(e){
+    var el = selectedAnimTarget();
+    if (!el) return;
+    if (e.target.checked) el.setAttribute('data-hidden', '1');
+    else el.removeAttribute('data-hidden');
+    persistSlide();
   });
-  $('#anim-dir').addEventListener('change', function(e){
-    var els = selectedItems();
-    if (!els.length) return;
-    els.forEach(function(el){ el.setAttribute('data-dir', e.target.value); });
-    writeAnimAttrs();
-  });
-  $('#anim-step').addEventListener('change', function(e){
-    var els = selectedItems();
-    if (!els.length) return;
-    var v = parseInt(e.target.value, 10);
-    els.forEach(function(el){
-      if (v >= 1 && v <= 99) el.setAttribute('data-step', String(v));
-      else el.removeAttribute('data-step');
+  $('#btn-anim-add').addEventListener('click', function(){
+    var el = selectedAnimTarget();
+    if (!el) return;
+    var list = animListOf(el);
+    list.push({
+      group: maxGroupOnSlide() + 1,
+      trigger: 'click',
+      dur: 600,
+      delay: 200,
+      mode: 'linear',
+      maxSpeed: 1.5,
+      accel: 2,
+      minSpeed: 0,
+      decel: 2,
+      to: captureKeyframe(el)
     });
-    writeAnimAttrs();
+    writeAnimList(el, list);
+    persistSlide();
+    refreshAnimUI();
   });
   var fbar = $('#formatbar');
   fbar.addEventListener('mousedown', function(e){ if (e.target.closest('button')) e.preventDefault(); });

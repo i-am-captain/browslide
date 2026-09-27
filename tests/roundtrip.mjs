@@ -282,7 +282,7 @@ check('export has player bar', !!exDoc.querySelector('#bar #prev') && !!exDoc.qu
 check('export excludes editor shell', !exDoc.querySelector('#filmstrip') && !exDoc.querySelector('#toolbar') &&
   !exDoc.querySelector('#stage') && !exDoc.querySelector('#slider-data'));
 const exScripts = Array.prototype.map.call(exDoc.querySelectorAll('script'), (s) => s.textContent).join('\n');
-check('export excludes editor code', !/slider-data|contentEditable|normalizeModel|renderFilmstrip|syncStageToModel/.test(exScripts) && exScripts.length < 4096, exScripts.length + ' chars player JS');
+check('export excludes editor code', !/slider-data|contentEditable|normalizeModel|renderFilmstrip|syncStageToModel/.test(exScripts) && exScripts.length < 12000, exScripts.length + ' chars player JS');
 check('export carries theme', exDoc.querySelector('body').getAttribute('data-theme') === 'dark');
 check('export keeps dirty state', D5.querySelector('#dirty-flag').textContent.includes('Unsaved'));
 const dom6 = makeDom(exText);
@@ -1031,51 +1031,84 @@ check('second block cascades position', (function(){
   return blks[blks.length - 1].style.left !== blks[blks.length - 2].style.left;
 })());
 
-// ---------- 29. step animations ----------
+// ---------- 29. keyframe animations ----------
 const domA = makeDom(html);
 await wait(400);
 const WA = domA.window, DA = WA.document;
+const linA = WA.easeFor('linear', {});
+check('linear easing is identity', linA.fn(0.3) === 0.3 && linA.durScale === 1 && WA.easeFor('bogus', {}).fn(0.7) === 0.7);
+const accA = WA.easeFor('accelerate', { accel: 2, maxSpeed: 1.5 });
+check('accelerate starts slow, ends exact', accA.fn(0) === 0 && accA.fn(1) === 1 && accA.fn(0.5) < 0.5);
+check('max speed stretches duration', WA.easeFor('accelerate', { accel: 2, maxSpeed: 0.5 }).durScale > accA.durScale);
+const adA = WA.easeFor('accelDecel', { accel: 2, decel: 2, minSpeed: 0 });
+let monoKF = true, prevKF = 0;
+for (let i = 0; i <= 10; i++) { const v = adA.fn(i / 10); if (v < prevKF - 1e-9 || v > 1 + 1e-9) monoKF = false; prevKF = v; }
+check('accel-decel monotone 0..1, symmetric', monoKF && Math.abs(adA.fn(0.5) - 0.5) < 0.05 && adA.fn(1) === 1);
+check('cleanAnimEntry clamps + drops', WA.cleanAnimEntry(null) === null &&
+  WA.cleanAnimEntry({ group: 0, to: { left: 5 } }) === null &&
+  WA.cleanAnimEntry({ group: 2, to: {} }) === null &&
+  WA.cleanAnimEntry({ group: 1, dur: 5, to: { left: 500 } }).dur === 50 &&
+  WA.cleanAnimEntry({ group: 1, to: { left: 500 } }).to.left === 300);
+check('parseAnimList filters garbage', WA.parseAnimList('nope').length === 0 &&
+  WA.parseAnimList('{"a":1}').length === 0 &&
+  WA.parseAnimList(JSON.stringify([{ group: 1, to: { left: 10 } }, { nope: 1 }])).length === 1);
 const aBlk = DA.querySelector('#stage .blk');
 aBlk.dispatchEvent(new WA.MouseEvent('mousedown', { bubbles: true, cancelable: true }));
 check('anim panel activates on block select', DA.querySelector('#anim-hint').hidden === true && DA.querySelector('#anim-controls').hidden === false);
-DA.querySelector('#anim-effect').value = 'fade-in';
-DA.querySelector('#anim-effect').dispatchEvent(new WA.Event('change', { bubbles: true }));
-check('effect sets data attrs + auto step', aBlk.getAttribute('data-anim') === 'fade-in' && aBlk.getAttribute('data-step') === '1');
-DA.querySelector('#anim-step').value = '2';
-DA.querySelector('#anim-step').dispatchEvent(new WA.Event('change', { bubbles: true }));
-check('step editable', aBlk.getAttribute('data-step') === '2');
-DA.querySelector('#anim-effect').value = '';
-DA.querySelector('#anim-effect').dispatchEvent(new WA.Event('change', { bubbles: true }));
-check('effect none clears attrs', !aBlk.hasAttribute('data-anim') && !aBlk.hasAttribute('data-step') && !aBlk.hasAttribute('data-dir'));
+DA.querySelector('#btn-anim-add').click();
+await wait(50);
+check('add step captures row', DA.querySelectorAll('#anim-rows .arow').length === 1 &&
+  JSON.parse(aBlk.getAttribute('data-anim')).length === 1 &&
+  JSON.parse(aBlk.getAttribute('data-anim'))[0].group === 1);
+const gInput = DA.querySelector('#anim-rows .arow input');
+gInput.value = '2';
+gInput.dispatchEvent(new WA.Event('change', { bubbles: true }));
+check('row edit writes back', JSON.parse(aBlk.getAttribute('data-anim'))[0].group === 2);
+DA.querySelector('#anim-rows .adel').click();
+check('row delete clears', DA.querySelectorAll('#anim-rows .arow').length === 0 && !aBlk.hasAttribute('data-anim'));
+DA.querySelector('#anim-hidden').checked = true;
+DA.querySelector('#anim-hidden').dispatchEvent(new WA.Event('change', { bubbles: true }));
+check('hidden checkbox sets attr', aBlk.hasAttribute('data-hidden'));
+DA.querySelector('#anim-hidden').checked = false;
+DA.querySelector('#anim-hidden').dispatchEvent(new WA.Event('change', { bubbles: true }));
+check('hidden checkbox clears attr', !aBlk.hasAttribute('data-hidden'));
 WA.deselectMedia();
 check('anim panel hints without selection', DA.querySelector('#anim-hint').hidden === false);
-const anM = { app: 'browslide', version: 2, title: 'T', theme: 'dark', slideOrder: ['s1'], nextId: 2, nextResId: 1,
+const anM = WA.normalizeModel({ app: 'browslide', version: 2, title: 'T', theme: 'dark', slideOrder: ['s1'], nextId: 2, nextResId: 1,
   settings: { compress: true, downscale: false, maxDim: 1920, showBar: true, tight: false }, aspect: { w: 16, h: 9 },
   resources: {}, slides: { s1: { title: 'T', layout: 'blank', transition: 'none', notes: '',
-    html: '<div class="blk" data-anim="move" data-step="3" data-dir="up" onclick="x()">t</div>' } } };
+    html: '<div class="blk" data-anim=\'[{"group":1,"to":{"left":5}}]\' onclick="x()">t</div>' } } });
 const anH = WA.normalizeModel(JSON.parse(JSON.stringify(anM))).slides.s1.html;
-check('anim attrs survive sanitize', /data-anim="move"/.test(anH) && /data-step="3"/.test(anH) && /data-dir="up"/.test(anH) && !/onclick/.test(anH));
+check('anim JSON survives sanitize', /data-anim=/.test(anH) && /group/.test(anH) && !/onclick/.test(anH));
+check('legacy flat anim attrs inert', WA.parseAnimList('fade-in').length === 0);
 WA.gotoSlide(WA.App.model.slideOrder[1]);
 await wait(100);
 const blks = DA.querySelectorAll('#stage .blk');
-WA.selectMedia(blks[0]);
-DA.querySelector('#anim-effect').value = 'fade-in';
-DA.querySelector('#anim-effect').dispatchEvent(new WA.Event('change', { bubbles: true }));
-WA.selectMedia(blks[1]);
-DA.querySelector('#anim-effect').value = 'fade-out';
-DA.querySelector('#anim-effect').dispatchEvent(new WA.Event('change', { bubbles: true }));
+function setSteps(el, list) {
+  el.setAttribute('data-anim', JSON.stringify(list));
+  WA.syncStageToModel();
+}
+setSteps(blks[0], [{ group: 1, trigger: 'click', dur: 100, delay: 0, mode: 'linear', maxSpeed: 1.5, accel: 2, minSpeed: 0, decel: 2, to: { left: 50 } }]);
+setSteps(blks[1], [{ group: 1, trigger: 'click', dur: 100, delay: 0, mode: 'accelerate', maxSpeed: 5, accel: 4, minSpeed: 0, decel: 2, to: { left: 60 } }]);
+blks[0].setAttribute('data-hidden', '1');
+WA.syncStageToModel();
+let rafQ = [];
+WA.requestAnimationFrame = (fn) => { rafQ.push(fn); return rafQ.length; };
+WA.cancelAnimationFrame = () => {};
+function pumpRaf(stepMs) {
+  let now = 0, guard = 0;
+  while (rafQ.length && guard++ < 100) { const q = rafQ.splice(0); now += stepMs; q.forEach((f) => f(now)); }
+}
 DA.querySelector('#btn-present').click();
 await wait(150);
 const pBlks = DA.querySelectorAll('#present-slide [data-anim]');
-check('present hides entrances, shows exits', pBlks[0].style.visibility === 'hidden' && pBlks[1].style.visibility === 'visible');
-check('present counter shows steps', DA.querySelector('#present-count').textContent === '2 / 3 · 0/2');
+check('present hides hidden-initially', pBlks[0].style.visibility === 'hidden' && pBlks[1].style.visibility !== 'hidden');
+check('present counter shows groups', DA.querySelector('#present-count').textContent === '2 / 3 · 0/1');
 DA.dispatchEvent(new WA.KeyboardEvent('keydown', { key: 'ArrowRight' }));
-await wait(100);
-check('first advance reveals fade-in', pBlks[0].style.visibility === 'visible' && pBlks[0].classList.contains('anim-fade-in') &&
-  DA.querySelector('#present-count').textContent === '2 / 3 · 1/2');
-DA.dispatchEvent(new WA.KeyboardEvent('keydown', { key: 'ArrowRight' }));
-await wait(750);
-check('second advance fades out', pBlks[1].style.visibility === 'hidden' && pBlks[1].classList.contains('anim-fade-out'));
+pumpRaf(40);
+await wait(50);
+check('one advance plays whole group', pBlks[0].style.left === '50%' && pBlks[1].style.left === '60%' &&
+  pBlks[0].style.visibility === 'visible' && DA.querySelector('#present-count').textContent === '2 / 3 · 1/1');
 DA.dispatchEvent(new WA.KeyboardEvent('keydown', { key: 'ArrowRight' }));
 await wait(100);
 check('advance past last goes next slide', DA.querySelector('#present-count').textContent === '3 / 3');
@@ -1084,26 +1117,37 @@ await wait(100);
 check('going back reveals all', DA.querySelector('#present-count').textContent === '2 / 3');
 DA.dispatchEvent(new WA.KeyboardEvent('keydown', { key: 'Escape' }));
 await wait(100);
+const autoList = JSON.parse(blks[0].getAttribute('data-anim'));
+autoList.push({ group: 2, trigger: 'auto', dur: 100, delay: 30, mode: 'linear', maxSpeed: 1.5, accel: 2, minSpeed: 0, decel: 2, to: { left: 55 } });
+setSteps(blks[0], autoList);
 DA.querySelector('#btn-save').click();
 await wait(300);
 const tA = await blobToText(WA.__savedBlob, WA);
 const savedA = JSON.parse(new JSDOM(tA).window.document.querySelector('#slider-data').textContent);
 const savedS2 = savedA.slides[savedA.slideOrder[1]].html;
-check('save persists anim attrs', /data-anim="fade-in"/.test(savedS2) && /data-step="1"/.test(savedS2));
+check('save persists keyframe JSON', /data-anim=/.test(savedS2) && /group/.test(savedS2));
 DA.querySelector('#btn-export').click();
 await wait(300);
 const exA = await blobToText(WA.__savedBlob, WA);
-check('export carries anim markup + player steps', /data-anim="fade-out"/.test(exA) && exA.includes('playStep'));
+check('export carries keyframes + group player', /data-anim=/.test(exA) && exA.includes('kfPlayGroup'));
 const domB = makeDom(exA);
 await wait(400);
 const WB = domB.window, DB = WB.document;
 DB.dispatchEvent(new WB.KeyboardEvent('keydown', { key: 'ArrowRight' }));
 await wait(100);
 const vAnims = DB.querySelectorAll('#deck .slide:not([hidden]) [data-anim]');
-check('viewer hides entrances on arrival', vAnims[0].style.visibility === 'hidden' && vAnims[1].style.visibility === 'visible');
+check('viewer hides hidden-initially on arrival', vAnims[0].style.visibility === 'hidden' && vAnims[1].style.visibility !== 'hidden');
+let rafQ2 = [];
+WB.requestAnimationFrame = (fn) => { rafQ2.push(fn); return rafQ2.length; };
+WB.cancelAnimationFrame = () => {};
 DB.dispatchEvent(new WB.KeyboardEvent('keydown', { key: 'ArrowRight' }));
-await wait(100);
-check('viewer advance reveals', vAnims[0].style.visibility === 'visible' && DB.querySelector('#count').textContent.includes('1/2'));
+await wait(50);
+(function pump2() { let now = 0, guard = 0; while (rafQ2.length && guard++ < 100) { const q = rafQ2.splice(0); now += 40; q.forEach((f) => f(now)); } })();
+check('viewer plays group to targets', vAnims[0].style.left === '50%' && vAnims[1].style.left === '60%');
+await wait(400);
+(function pump3() { let now = 500, guard = 0; while (rafQ2.length && guard++ < 100) { const q = rafQ2.splice(0); now += 40; q.forEach((f) => f(now)); } })();
+check('viewer auto-chains group 2', vAnims[0].style.left === '55%');
+
 
 // ---------- 29. shape presets ----------
 const domS3 = makeDom(html);
@@ -1156,7 +1200,25 @@ const mDiv = DT2.createElement('div');
 mDiv.setAttribute('data-rot', '180');
 check('moveItemsBy respects rotation', WT2.moveItemsBy([{ el: mDiv, l: 10, t: 20 }], 80, 0, 800, 600) === true &&
   mDiv.style.left === '0%' && mDiv.style.top === '20%');
-check('anim fill keeps inline transform after play', /\.anim-rotate\{[^}]*backwards/.test(headCss) && /\.anim-fade-out\{[^}]*both/.test(headCss));
+check('rotation keyframe plays to transform', await (async function(){
+  const rBlk = DT2.querySelector('#stage .blk');
+  rBlk.setAttribute('data-anim', JSON.stringify([{ group: 1, trigger: 'click', dur: 100, delay: 0, mode: 'linear', maxSpeed: 1.5, accel: 2, minSpeed: 0, decel: 2, to: { rot: 45 } }]));
+  WT2.syncStageToModel();
+  let rafQR = [];
+  WT2.requestAnimationFrame = (fn) => { rafQR.push(fn); return rafQR.length; };
+  WT2.cancelAnimationFrame = () => {};
+  DT2.querySelector('#btn-present').click();
+  await wait(100);
+  DT2.dispatchEvent(new WT2.KeyboardEvent('keydown', { key: 'ArrowRight' }));
+  let now = 0, guard = 0;
+  while (rafQR.length && guard++ < 100) { const q = rafQR.splice(0); now += 40; q.forEach((f) => f(now)); }
+  const ok = DT2.querySelector('#present-slide [data-anim]').style.transform.includes('rotate(45deg)');
+  DT2.dispatchEvent(new WT2.KeyboardEvent('keydown', { key: 'Escape' }));
+  await wait(100);
+  rBlk.removeAttribute('data-anim');
+  WT2.syncStageToModel();
+  return ok;
+})());
 // multi-select via direct toggle + ctrl-click
 const mBlks = DT2.querySelectorAll('#stage .blk');
 WT2.toggleSelection(mBlks[0]);
@@ -1195,14 +1257,14 @@ DT2.querySelector('#shape-width').value = '14';
 DT2.querySelector('#shape-width').dispatchEvent(new WT2.Event('change', { bubbles: true }));
 check('width live-applies to shape', DT2.querySelector('#stage .blk svg').getAttribute('stroke-width') === '14' ||
   Array.prototype.some.call(DT2.querySelectorAll('#stage .blk svg'), (s) => s.getAttribute('stroke-width') === '14'));
-// anim applies to whole set
-WT2.toggleSelection(mBlks[0]);
-WT2.toggleSelection(mBlks[1]);
-check('anim applies to whole set', (function(){
-  DT2.querySelector('#anim-effect').value = 'fade-in';
-  DT2.querySelector('#anim-effect').dispatchEvent(new WT2.Event('change', { bubbles: true }));
-  return mBlks[0].hasAttribute('data-anim') && mBlks[1].hasAttribute('data-anim');
-})());
+// anim add targets primary selection (fresh nodes: present round-trip rebuilt the stage)
+const mBlksF = DT2.querySelectorAll('#stage .blk');
+WT2.toggleSelection(mBlksF[0]);
+WT2.toggleSelection(mBlksF[1]);
+DT2.querySelector('#btn-anim-add').click();
+check('anim add targets primary', mBlksF[1].hasAttribute('data-anim') && !mBlksF[0].hasAttribute('data-anim'));
+DT2.querySelector('#anim-rows .adel').click();
+check('anim row delete clears', !mBlksF[1].hasAttribute('data-anim'));
 // copy/paste
 WT2.setSingleSelection(mBlks[0]);
 const beforePaste = DT2.querySelectorAll('#stage .blk').length;
