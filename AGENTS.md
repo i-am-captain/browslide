@@ -4,7 +4,7 @@ Browslide is a single-file presentation app: `browslide.html` (HTML + CSS + plai
 
 ## Context budget (binding)
 
-- `browslide.html` is ~1150 lines. NEVER read it whole into a small context.
+- `browslide.html` is ~2200 lines. NEVER read it whole into a small context.
 - Read only the first 500 lines (agent map + styles + markup + deck data block + start of the JS), then locate areas by anchor:
   `grep -nF 'ANCHOR' browslide.html` returns two hits — the map line itself, then the target. Use the later match, and read only that range.
 - The authoritative section map lives in the comment at the top of `browslide.html`. It uses anchors, never line numbers — do not add line numbers back.

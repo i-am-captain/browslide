@@ -16,7 +16,7 @@ Repo file vs. saved copies: `browslide.html` in this repo is the maintained **te
 
 | Button | What it does |
 |---|---|
-| + Slide / Duplicate / Delete | Add after current, copy current, remove current (delete asks first; a deck always keeps ≥ 1 slide) |
+| + Slide / Duplicate / Delete | Add after current, copy current, remove current — or use + below the list and 🗑 on each row (delete asks first; a deck always keeps ≥ 1 slide) |
 | ◀ ▶ | Previous / next slide |
 | Present | Fullscreen show (`Space`/`→` next, `←` prev, `Home`/`End`, `Esc` exit, click advances). Presentation settings (inspector): toolbar on/off, aesthetic border vs maximum fullscreen. |
 | Export viewer | Downloads a small standalone copy (`<title>-viewer.html`) for sharing: slides + player only, no editor code, no notes. Works from `file://` everywhere. |
@@ -28,9 +28,9 @@ Repo file vs. saved copies: `browslide.html` in this repo is the maintained **te
 | New | Fresh starter deck (asks first if you have unsaved changes) |
 | Save (or Ctrl+S) | Downloads the whole deck as one `.html` file. Note: browsers can't silently overwrite the file you opened, so each Save is a new download — replace the old file with it. |
 
-Right panel: layout, aspect ratio (16:9, 4:3, custom), transition (none/fade/slide), theme (dark/light), per-slide speaker notes, estimated save size, media insert.
+Right panel: layout, aspect ratio (16:9, 4:3, custom), transition (none/fade/slide), theme (dark/light), presentation settings, animation (on selection), per-slide speaker notes, estimated save size, media insert and sizes, GitHub link.
 
-Left list: click to jump, **drag to reorder**, `↑`/`↓` move between slides when the list is focused. Outside the slide text, `PageUp`/`PageDown`/`Home`/`End` also navigate.
+Left list: click to jump, **drag to reorder**, `PageUp`/`PageDown`/`Home`/`End` navigate when not editing text.
 
 Unsaved work additionally autosaves to the browser (IndexedDB) — if you close without saving, reopening offers to resume.
 
@@ -49,6 +49,7 @@ Two optional size savers (both plain browser APIs, zero dependencies, offline):
 
 ```
 browslide.html   # the app template — the only maintained file
+index.html       # landing page for GitHub Pages
 AGENTS.md      # agent instructions (read this first)
 README.md     # this file
 tests/        # dev-only behavioral tests (jsdom; not part of the app)
@@ -62,15 +63,12 @@ Requires Node.js (dev-only; the app itself needs nothing):
 cd tests && npm install && npm test
 ```
 
-This runs both suites: `roundtrip.mjs` (jsdom: boot → edit → save → reopen → presenter → delete → reorder → keyboard → resources → viewer export → compression plumbing) and `codec.mjs` (real native `CompressionStream` round-trips plus a zlib cross-check proving byte-level deflate interop).
+This runs both suites: `roundtrip.mjs` (jsdom: boot → edit/format → save → reopen → presenter → delete → reorder → keyboard → resources → viewer export → compression → layout/fit → toolbar toggle → filmstrip buttons → format reflection → span model → exec-free guarantee → blocks → shapes → animations → review guards) and `codec.mjs` (real native `CompressionStream` round-trips plus a zlib cross-check proving byte-level deflate interop).
 
 ## Browser support
 
-Editable app and saved decks: Chrome, Edge, Firefox, Safari (current versions), from `file://` or any static host. No features used outside plain DOM + IndexedDB + Blob download.
+Editable app and saved decks: Chrome, Edge, Firefox, Safari (current versions), from `file://` or any static host. Plain DOM (incl. contenteditable editing), Canvas, Compression Streams, IndexedDB and Blob download — no network, no dependencies.
 
 ## Roadmap
 
-Done: viewer-only export, native compression + photo downscale (see above).
-Planned:
-- Symbols: insertable arrows, circles and other shapes for annotating slides.
-- Animations: entrance and step-reveal effects per element, previewable in the editor.
+Done: viewer-only export, native compression + photo downscale, responsive layout with aspect control, free-position blocks, shapes, per-element step animations (see above).

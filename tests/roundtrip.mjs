@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// Phase 1+2 behavioral tests for browslide.html. Run: npm install && npm test
+// Behavioral tests for browslide.html (jsdom round-trip + units). Run: npm install && npm test
 const SRC = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'browslide.html');
 const html = fs.readFileSync(SRC, 'utf-8');
 let failures = 0;
@@ -18,7 +18,7 @@ check('no stray closing-script literals in source', (html.match(/<\/script/gi) |
 ['<title>Browslide</title>', '/* ================= CSS ================= */', '<header id="toolbar">',
  '<div id="main">', 'id="present-overlay"', 'id="open-file"', 'id="slider-data"',
  '/* ================= UTIL ================= */', '/* ================= MODEL ================= */',
- '/* ---- optional lossless compression (Phase 5): native deflate, zero dependencies ----',
+ '/* ---- optional lossless compression: native deflate, zero dependencies ----',
  '/* ---- resources table: slides store res://id refs, binaries live once in model.resources ---- */',
  '/* ================= STORE (IndexedDB autosave) ================= */', '/* ================= RENDER ================= */',
  '/* ================= EDIT ================= */', '/* ================= PRESENT ================= */',
@@ -306,7 +306,7 @@ check('viewer Next button works', D6.querySelector('#count').textContent === '2 
 D6.dispatchEvent(new W6.KeyboardEvent('keydown', { key: 'f' }));
 check('viewer F key does not throw', D6.querySelector('#count').textContent === '2 / 3');
 
-// ---------- 11. compression plumbing with injected backend (Phase 5) ----------
+// ---------- 11. compression plumbing with injected backend ----------
 // Real native interop is proven by tests/codec.mjs; here the save/load plumbing,
 // using a tiny reversible RLE stand-in (shrinks runs, like deflate does).
 function rlePack(u8){
@@ -617,7 +617,7 @@ await wait(100);
 check('format click without editing API does not crash', WQ.__alerts.length === 0);
 const secQ = DQ.querySelector('#stage .slide');
 secQ.innerHTML = '<p>ab<font size="7">cd</font>ef</p>';
-WQ.convertFontTags();
+WQ.replaceFontTag(secQ.querySelector('font'));
 check('font markers convert to styled spans', secQ.querySelectorAll('font').length === 0 &&
   secQ.querySelector('span').style.fontSize === '3em' && secQ.textContent === 'abcdef');
 check('restoreSelection false outside stage', WQ.restoreSelection() === false);
@@ -656,7 +656,7 @@ WR.updateFormatUI();
 check('plain text resets selects to slide default', DR.querySelector('#font-select').selectedIndex === 0 && DR.querySelector('#size-select').value === '1em');
 // ---------- 19. font leftovers impossible + selection robustness ----------
 secQ.innerHTML = '<p>a<font size="3">b</font>c<font>d</font>e<font face="Georgia">f</font></p>';
-WQ.convertFontTags();
+Array.prototype.forEach.call(secQ.querySelectorAll('font'), function(f){ WQ.replaceFontTag(f); });
 check('any font tag converts without pending style', secQ.querySelectorAll('font').length === 0 &&
   /font-size:\s*1em/.test(secQ.innerHTML) && secQ.innerHTML.includes('Georgia') && secQ.textContent === 'abcdef');
 secQ.innerHTML = '<p>x<font size="7">s</font></p>';

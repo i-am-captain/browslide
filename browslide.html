@@ -33,7 +33,7 @@
   - deck JSON data block: id="slider-data"
   - utilities: /* ================= UTIL ================= */
   - data model: /* ================= MODEL ================= */
-  - compression/codec: /* ---- optional lossless compression (Phase 5): native deflate, zero dependencies ----
+  - compression/codec: /* ---- optional lossless compression: native deflate, zero dependencies ----
   - resources table: /* ---- resources table: slides store res://id refs, binaries live once in model.resources ---- */
   - autosave store: /* ================= STORE (IndexedDB autosave) ================= */
   - rendering: /* ================= RENDER ================= */
@@ -144,7 +144,6 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 .slide video{max-height:50vh}
 .layout-title{display:flex;flex-direction:column;justify-content:center;text-align:center}
 .layout-title-body h1{border-bottom:2px solid var(--accent);padding-bottom:.2em}
-.layout-two-col .cols{display:grid;grid-template-columns:1fr 1fr;gap:24px}
 .layout-image-full{text-align:center}
 .layout-blank{padding:36px}
 /* ---- presenter ---- */
@@ -443,7 +442,7 @@ function deckAR(){
 function sanitizeSlideHTML(html){
   var tpl = document.createElement('template');
   tpl.innerHTML = String(html || '');
-  /* safety net: legacy font tags can never reach saved HTML (see convertFontTags) */
+  /* safety net: legacy font tags can never reach saved HTML */
   Array.prototype.slice.call(tpl.content.querySelectorAll('font')).forEach(function(el){ replaceFontTag(el); });
   $all('script,iframe,object,embed,link,style', tpl.content).forEach(function(n){ n.remove(); });
   $all('*', tpl.content).forEach(function(el){
@@ -521,7 +520,7 @@ function normalizeModel(raw){
   }
   return m;
 }
-/* ---- optional lossless compression (Phase 5): native deflate, zero dependencies ----
+/* ---- optional lossless compression: native deflate, zero dependencies ----
    Memory model always holds RAW data: URIs (all render paths stay sync). Compression
    applies only to the saved file bytes; entries are decoded back to raw on load.
    Policy: only formats that actually shrink (text/SVG/WAV/JSON); JPEG/PNG/MP4 etc.
@@ -645,7 +644,7 @@ function buildSaveModel(){
     return { json: json, stats: stats, text: text };
   });
 }
-/* ---- optional photo downscale on insert (Phase 5): canvas, lossy resize only ---- */
+/* ---- optional photo downscale on insert: canvas, lossy resize only ---- */
 function shouldDownscale(file){
   return !!(App.model && App.model.settings.downscale) && !!file && /^image\/(png|jpeg|webp|bmp)$/.test(file.type || '');
 }
@@ -858,7 +857,7 @@ function renderFilmstrip(){
     del.textContent = '🗑';
     del.title = 'Delete slide ' + (i + 1);
     del.setAttribute('aria-label', 'Delete slide ' + (i + 1));
-    del.addEventListener('click', (function(sid){ return function(e){ e.stopPropagation(); deleteSlideById(sid); }; })(id));
+    del.addEventListener('click', function(e){ e.stopPropagation(); deleteSlideById(id); });
     li.appendChild(del);
     ol.appendChild(li);
   });
@@ -1052,12 +1051,6 @@ function moveSlideBefore(fromId, toId){
   refreshDirty(); scheduleAutosave();
   return true;
 }
-function appendMedia(el){
-  var sec = $('#stage .slide');
-  if (!sec) return;
-  sec.appendChild(el);
-  syncStageToModel(); refreshDirty(); scheduleSize(); scheduleAutosave();
-}
 /* ---- text formatting (execCommand-based, works offline in every browser) ---- */
 var savedRange = null;
 function trackSelection(){
@@ -1127,6 +1120,13 @@ function nearestStyleValue(node, names){
 function primaryFamily(s){
   return String(s || '').split(',')[0].replace(/['"]/g, '').trim().toLowerCase();
 }
+function selectOption(selEl, match){
+  /* set a select to its first option satisfying match(value) */
+  if (!selEl) return;
+  for (var i = 0; i < selEl.options.length; i++) {
+    if (match(selEl.options[i].value, i)) { selEl.selectedIndex = i; return; }
+  }
+}
 function emOfSize(size){
   var m = /^\s*([\d.]+)\s*em\s*$/i.exec(size || '');
   if (m) return parseFloat(m[1]);
@@ -1166,28 +1166,16 @@ function syncFormatSelects(){
     if (!sec || !(anchor === sec || sec.contains(anchor))) return;
     var fam = primaryFamily(nearestStyleValue(anchor, ['fontFamily']));
     var fsel = $('#font-select');
-    if (fam) {
-      for (var i = 0; i < fsel.options.length; i++) {
-        if (primaryFamily(fsel.options[i].value) === fam) { fsel.selectedIndex = i; break; }
-      }
-    } else fsel.selectedIndex = 0; /* unstyled text renders as the slide default */
+    if (fam) selectOption(fsel, function(v){ return primaryFamily(v) === fam; });
+    else fsel.selectedIndex = 0; /* unstyled text renders as the slide default */
     var em = emOfSize(nearestStyleValue(anchor, ['fontSize']));
     var ssel = $('#size-select');
     if (em > 0) {
       var bi = sizeOptionForEm(em);
       if (bi >= 0) ssel.selectedIndex = bi;
-    } else {
-      for (var k = 0; k < ssel.options.length; k++) {
-        if (ssel.options[k].value === '1em') { ssel.selectedIndex = k; break; }
-      }
-    }
+    } else selectOption(ssel, function(v){ return v === '1em'; });
     var blk = nearestBlock(anchor);
-    var ysel = $('#style-select');
-    if (ysel && blk) {
-      for (var q = 0; q < ysel.options.length; q++) {
-        if (ysel.options[q].value === blk) { ysel.selectedIndex = q; break; }
-      }
-    }
+    if (blk) selectOption($('#style-select'), function(v){ return v === blk; });
   } catch (e) {}
 }
 function dropEmpties(root){
@@ -1410,11 +1398,6 @@ function replaceFontTag(f){
   if (sp) { while (f.firstChild) sp.appendChild(f.firstChild); parent.replaceChild(sp, f); }
   else { while (f.firstChild) parent.insertBefore(f.firstChild, f); parent.removeChild(f); }
 }
-function convertFontTags(){
-  var sec = $('#stage .slide');
-  if (!sec) return;
-  Array.prototype.slice.call(sec.querySelectorAll('font')).forEach(function(f){ replaceFontTag(f); });
-}
 /* Pending format: typing attributes configured at a bare caret (no selection).
    The toolbar keeps showing them (threshold: one cursor placement) while you
    type; the next caret move elsewhere clears them and re-syncs from the DOM.
@@ -1425,29 +1408,16 @@ function paintPending(){
   try {
     var fsel = $('#font-select');
     if (pendingFormat.fontFamily) {
-      for (var i = 0; i < fsel.options.length; i++) {
-        if (primaryFamily(fsel.options[i].value) === primaryFamily(pendingFormat.fontFamily)) { fsel.selectedIndex = i; break; }
-      }
+      var fam = primaryFamily(pendingFormat.fontFamily);
+      selectOption(fsel, function(v){ return primaryFamily(v) === fam; });
     } else fsel.selectedIndex = 0;
     var ssel = $('#size-select');
-    if (pendingFormat.fontSize) {
-      for (var j = 0; j < ssel.options.length; j++) {
-        if (ssel.options[j].value === pendingFormat.fontSize) { ssel.selectedIndex = j; break; }
-      }
-    } else {
-      for (var k = 0; k < ssel.options.length; k++) {
-        if (ssel.options[k].value === '1em') { ssel.selectedIndex = k; break; }
-      }
-    }
+    if (pendingFormat.fontSize) selectOption(ssel, function(v){ return v === pendingFormat.fontSize; });
+    else selectOption(ssel, function(v){ return v === '1em'; });
     Array.prototype.forEach.call(document.querySelectorAll('#formatbar button[data-cmd]'), function(b){
       if (b.dataset.cmd !== 'clear') b.classList.toggle('active', !!pendingFormat.cmds[b.dataset.cmd]);
     });
-    var ysel = $('#style-select');
-    if (ysel && pendingFormat.block) {
-      for (var q = 0; q < ysel.options.length; q++) {
-        if (ysel.options[q].value === pendingFormat.block) { ysel.selectedIndex = q; break; }
-      }
-    }
+    if (pendingFormat.block) selectOption($('#style-select'), function(v){ return v === pendingFormat.block; });
   } catch (e) {}
 }
 function reapplyPending(){
@@ -1513,8 +1483,7 @@ function appendDataMedia(url, file, kind){
     img.style.width = '100%';
     wrap.appendChild(img);
   }
-  if (sec) sec.appendChild(wrap);
-  else appendMedia(kind === 'video' ? wrap.firstChild : wrap.firstChild);
+  sec.appendChild(wrap);
   syncStageToModel(); refreshDirty(); scheduleSize(); scheduleAutosave();
 }
 /* ---- insertable vector shapes (inline SVG, currentColor, no assets) ---- */
@@ -1994,7 +1963,6 @@ function renderSizes(){
   host.innerHTML = '';
   var res = App.model.resources || {};
   var use = deckResourceUse();
-  var big = document.createElement('div');
   function line(parent, text, cls){
     var d = document.createElement('div');
     if (cls) d.className = cls;
@@ -2017,14 +1985,12 @@ function renderSizes(){
       var b = document.createElement('button');
       b.textContent = r.noCompress ? 'store: raw' : 'store: auto';
       b.title = 'Per-file compression override (auto = compress on save when smaller)';
-      b.addEventListener('click', (function(rid){
-        return function(){
-          var rr = App.model.resources[rid];
-          if (!rr) return;
-          rr.noCompress = !rr.noCompress;
-          renderSizes(); refreshDirty(); scheduleAutosave();
-        };
-      })(id));
+      b.addEventListener('click', function(){
+        var rr = App.model.resources[id];
+        if (!rr) return;
+        rr.noCompress = !rr.noCompress;
+        renderSizes(); refreshDirty(); scheduleAutosave();
+      });
       row.appendChild(document.createTextNode(' '));
       row.appendChild(b);
     }

@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 
-// Phase 5 native-codec tests. Runs the REAL CompressionStream/DecompressionStream
+// Native-codec tests. Runs the REAL CompressionStream/DecompressionStream
 // (Node 18+ implements the same WHATWG spec as browsers) plus a zlib cross-check
 // proving byte-level interop with a real deflate implementation. Run: npm test
 const SRC = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'browslide.html');

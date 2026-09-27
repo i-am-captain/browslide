@@ -6,6 +6,6 @@
 - [x] 4. Insertable arrow and symbol graphics for slides. Done: 12 inline SVGs (currentColor) in movable blocks.
 - [x] 5. Animations: fade in, fade out, move, rotate for text, graphics and media files. Done: data-anim/step/dir attrs, Animation panel on selection, click-advance steps in presenter + viewer export.
 - [x] 6. Help slide: fix arrow-key text (PageUp/PageDown is what works). Done.
-- [ ] 7. Full code review: remove obsolete/dead code, unused methods/variables, legacy comments, old-format support (prerelease, no backwards compat needed); shorten where sensible without behavior change; review and clean up tests.
+- [x] 7. Full code review: remove obsolete/dead code, unused methods/variables, legacy comments, old-format support (prerelease, no backwards compat needed); shorten where sensible without behavior change; review and clean up tests. Done: removed dead `appendMedia`/`convertFontTags`/unused var/`(Phase 5)` tags/`.cols` rule, factored `selectOption`, fixed docs (README roadmap/panel lists, AGENTS line count), fixed stale test headers. No dead functions/variables remain; all CSS selectors and element ids resolve.
 
 Conventions: commit per task, full suite (`cd tests && npm test`) green before each commit.
