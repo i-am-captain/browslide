@@ -18,13 +18,13 @@ Repo file vs. saved copies: `browslide.html` in this repo is the maintained **te
 |---|---|
 | + Slide / Duplicate / Delete | Add after current, copy current, remove current (delete asks first; a deck always keeps ≥ 1 slide) |
 | ◀ ▶ | Previous / next slide |
-| Present | Fullscreen show: `Space`/`→` next, `←` prev, `Home`/`End`, `Esc` or click advances/exits |
+| Present | Fullscreen show (`Space`/`→` next, `←` prev, `Home`/`End`, `Esc` exit, click advances). Inspector checkbox toggles the bottom toolbar for true fullscreen. |
 | Export viewer | Downloads a small standalone copy (`<title>-viewer.html`) for sharing: slides + player only, no editor code, no notes. Works from `file://` everywhere. |
 | Open | Load another saved copy (picker or drag-drop) |
 | New | Fresh starter deck (asks first if you have unsaved changes) |
 | Save (or Ctrl+S) | Downloads the whole deck as one `.html` file. Note: browsers can't silently overwrite the file you opened, so each Save is a new download — replace the old file with it. |
 
-Right panel: layout, aspect ratio (16:9, 4:3, custom), transition (none/fade/slide), theme (light/dark), per-slide speaker notes, estimated save size, media insert.
+Right panel: layout, aspect ratio (16:9, 4:3, custom), transition (none/fade/slide), theme (dark/light), per-slide speaker notes, estimated save size, media insert.
 
 Left list: click to jump, **drag to reorder**, `↑`/`↓` move between slides when the list is focused. Outside the slide text, `PageUp`/`PageDown`/`Home`/`End` also navigate.
 

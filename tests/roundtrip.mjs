@@ -148,7 +148,7 @@ check('normalizeModel rejects garbage', NM(null) === null && NM({}) === null && 
 check('normalizeModel rejects empty slides', NM({ app: 'browslide', version: 1, slides: {}, slideOrder: [] }) === null);
 const dirty = NM({ app: 'browslide', version: 2, title: 'T', theme: 'nope', slideOrder: ['s9'],
   slides: { s9: { layout: 'bogus', transition: 'bogus', html: '<h1>H</h1><script>e()<\/script>', notes: 1 } } });
-check('normalizeModel repairs bad enums', dirty && dirty.theme === 'default' && dirty.slides.s9.layout === 'title-body');
+check('normalizeModel repairs bad enums', dirty && dirty.theme === 'dark' && dirty.slides.s9.layout === 'title-body');
 check('normalizeModel sanitizes html', dirty && !/script/i.test(dirty.slides.s9.html));
 
 // ---------- 8. reorder + keyboard (Phase 2) ----------
@@ -279,7 +279,7 @@ check('export excludes editor shell', !exDoc.querySelector('#filmstrip') && !exD
   !exDoc.querySelector('#stage') && !exDoc.querySelector('#slider-data'));
 const exScripts = Array.prototype.map.call(exDoc.querySelectorAll('script'), (s) => s.textContent).join('\n');
 check('export excludes editor code', !/slider-data|contentEditable|normalizeModel|renderFilmstrip|syncStageToModel/.test(exScripts) && exScripts.length < 4096, exScripts.length + ' chars player JS');
-check('export carries theme', exDoc.querySelector('body').getAttribute('data-theme') === 'default');
+check('export carries theme', exDoc.querySelector('body').getAttribute('data-theme') === 'dark');
 check('export keeps dirty state', D5.querySelector('#dirty-flag').textContent.includes('Unsaved'));
 const dom6 = makeDom(exText);
 await wait(400);
@@ -506,6 +506,43 @@ DH.querySelector('#aspect-w').dispatchEvent(new WH.Event('change', { bubbles: tr
 DH.querySelector('#aspect-h').value = '5';
 DH.querySelector('#aspect-h').dispatchEvent(new WH.Event('change', { bubbles: true }));
 check('custom inputs apply', WH.App.model.aspect.w === 7 && WH.App.model.aspect.h === 5 && DH.querySelector('#aspect-select').value === 'custom');
+
+// ---------- 14. dark default + present toolbar toggle ----------
+const domK = makeDom(html);
+await wait(400);
+const WK = domK.window, DK = WK.document;
+check('dark is the default theme', DK.body.getAttribute('data-theme') === 'dark' && WK.App.model.theme === 'dark');
+check('toolbar shown by default', WK.App.model.settings.showBar === true && DK.querySelector('#opt-showbar').checked === true);
+DK.querySelector('#opt-showbar').checked = false;
+DK.querySelector('#opt-showbar').dispatchEvent(new WK.Event('change', { bubbles: true }));
+DK.querySelector('#btn-present').click();
+await wait(100);
+check('toolbar hidden in presentation', DK.querySelector('#present-bar').style.display === 'none' && !!DK.querySelector('#present-slide .slide').style.width);
+DK.dispatchEvent(new WK.KeyboardEvent('keydown', { key: 'Escape' }));
+await wait(100);
+DK.querySelector('#opt-showbar').checked = true;
+DK.querySelector('#opt-showbar').dispatchEvent(new WK.Event('change', { bubbles: true }));
+DK.querySelector('#btn-export').click();
+await wait(100);
+const exK = await blobToText(WK.__savedBlob, WK);
+check('export keeps toolbar when enabled', !!new JSDOM(exK).window.document.querySelector('#bar #count'));
+DK.querySelector('#opt-showbar').checked = false;
+DK.querySelector('#opt-showbar').dispatchEvent(new WK.Event('change', { bubbles: true }));
+DK.querySelector('#btn-export').click();
+await wait(100);
+const exK2 = await blobToText(WK.__savedBlob, WK);
+check('export omits toolbar when disabled', !new JSDOM(exK2).window.document.querySelector('#bar'));
+const domL = makeDom(exK2);
+await wait(400);
+const WL = domL.window, DL = WL.document;
+DL.dispatchEvent(new WL.KeyboardEvent('keydown', { key: 'ArrowRight' }));
+const vSecs = DL.querySelectorAll('#deck .slide');
+check('toolbar-less viewer still navigates', vSecs[0].hidden === true && vSecs[1].hidden === false);
+const NMK = WK.normalizeModel;
+const noSet = { app: 'browslide', version: 2, title: 'T', theme: 'dark', slideOrder: ['s1'], nextId: 2, slides: { s1: { title: 'T', layout: 'blank', transition: 'none', html: '<p>x</p>', notes: '' } } };
+check('showBar defaults true', NMK(JSON.parse(JSON.stringify(noSet))).settings.showBar === true);
+noSet.settings = { showBar: false };
+check('showBar false preserved', NMK(JSON.parse(JSON.stringify(noSet))).settings.showBar === false);
 
 console.log(failures === 0 ? '\nALL TESTS PASSED' : `\n${failures} TEST(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);
