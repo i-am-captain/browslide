@@ -984,5 +984,24 @@ WZ.loadModel(WZ.normalizeModel(JSON.parse(JSON.stringify(classic))));
 await wait(100);
 check('classic flow content still renders', !!DZ.querySelector('#stage ul li'));
 
+// ---------- 28. insertable shapes ----------
+const domS2 = makeDom(html);
+await wait(400);
+const WS2 = domS2.window, DS2 = WS2.document;
+const shapeNames = Object.keys(WS2.SHAPES);
+check('shape library has arrows + symbols', shapeNames.length >= 10 &&
+  ['arrow-right', 'arrow-left', 'arrow-up', 'arrow-down', 'circle', 'star'].every((n) => shapeNames.includes(n)));
+check('shape markup is inert SVG', shapeNames.every((n) => /<(line|polyline|polygon|circle|rect)/.test(WS2.SHAPES[n]) &&
+  !/script|on\w+=|javascript:/i.test(WS2.SHAPES[n])));
+check('insertShape rejects unknown', WS2.insertShape('nope') === false);
+check('insertShape adds positioned svg block', WS2.insertShape('arrow-right') === true &&
+  !!DS2.querySelector('#stage .blk svg') &&
+  DS2.querySelector('#stage .blk svg').getAttribute('viewBox') === '0 0 100 100');
+check('shape svg scales + serializes', /\.slide svg/.test(headCss) &&
+  WS2.activeSlide().html.includes('<svg') && WS2.activeSlide().html.includes('polyline'));
+DS2.querySelector('#btn-shape').click();
+await wait(100);
+check('shape button inserts selected shape', DS2.querySelectorAll('#stage .blk svg').length === 2);
+
 console.log(failures === 0 ? '\nALL TESTS PASSED' : `\n${failures} TEST(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);
