@@ -1003,7 +1003,7 @@ check('shape markup is inert SVG', shapeNames.every((n) => /<(line|polyline|poly
 check('insertShape rejects unknown', WS2.insertShape('nope') === false);
 check('insertShape adds positioned svg block', WS2.insertShape('arrow-right') === true &&
   !!DS2.querySelector('#stage .blk svg') &&
-  DS2.querySelector('#stage .blk svg').getAttribute('viewBox') === '7 29 74 42');
+  DS2.querySelector('#stage .blk svg').getAttribute('viewBox') === '0 0 100 100');
 check('shape svg scales + serializes', /\.slide svg/.test(headCss) &&
   WS2.activeSlide().html.includes('<svg') && WS2.activeSlide().html.includes('polyline'));
 DS2.querySelector('#btn-shape').click();
@@ -1022,14 +1022,6 @@ check('geometry sizes uncapped', WS2.SHAPE_DEFS['arrow-right'].geo({ len: 200 })
 check('circle radius honored', WS2.SHAPE_DEFS.circle.geo({ radius: 10 }).includes('r="10"'));
 check('rect/ellipse dims honored', WS2.SHAPE_DEFS.rectangle.geo({ width: 60, height: 20 }).includes('width="60"') &&
   WS2.SHAPE_DEFS.ellipse.geo({ width: 60, height: 20 }).includes('rx="30"'));
-check('shape boxes hug content', WS2.SHAPE_DEFS.circle.box({ radius: 40 }).join(',') === '10,10,80,80' &&
-  WS2.SHAPE_DEFS.rectangle.box({ width: 72, height: 48 }).join(',') === '14,26,72,48' &&
-  WS2.SHAPE_DEFS.triangle.box({ height: 72 }).join(',') === '10,14,80,72' &&
-  WS2.SHAPE_DEFS['arrow-up'].box({ len: 68 }).join(',') === '32,22,36,68' &&
-  WS2.SHAPE_DEFS.check.box({}).join(',') === '22,30,56,44');
-geoSvg.setAttribute('stroke-width', '10');
-WS2.renderShape(geoSvg);
-check('viewBox pad follows stroke', geoSvg.getAttribute('viewBox') === '3.5 25.5 81 49');
 geoSvg.setAttribute('data-len', '40');
 WS2.renderShape(geoSvg);
 check('param edit rebuilds geometry', geoSvg.getAttribute('data-len') === '40' && geoSvg.innerHTML.includes('x2="28"'));
@@ -1586,7 +1578,7 @@ const hzArrowBlk = hzBlk[hzBlk.length - 1];
 const hzSvg = hzArrowBlk.querySelector('svg');
 hzSvg.getBoundingClientRect = () => ({ width: 200, height: 100, left: 0, top: 0, right: 200, bottom: 100 });
 const upp = WHZ.svgUnitsPerPx(hzSvg);
-check('svg units from viewBox', Math.abs(upp.x - 74 / 200) < 0.001 && Math.abs(upp.y - 42 / 100) < 0.001, JSON.stringify(upp));
+check('svg units from fixed frame', upp.x === 0.5 && upp.y === 1, JSON.stringify(upp));
 WHZ.setSingleSelection(hzArrowBlk);
 const fakeDown = (target) => ({ preventDefault(){}, stopPropagation(){}, currentTarget: target, clientX: 0, clientY: 0, pointerId: 1 });
 const dragHandle = (sel, mode, dx, dy) => {
@@ -1597,9 +1589,9 @@ const dragHandle = (sel, mode, dx, dy) => {
 };
 dragHandle('#media-resizer .mhandle', 'both', 20, 0);
 await wait(100);
-check('corner drag edits arrow length, no literal scale', hzSvg.getAttribute('data-len') === '75.4' &&
+check('corner drag edits arrow length, no literal scale', hzSvg.getAttribute('data-len') === '78' &&
   !hzArrowBlk.hasAttribute('data-sx'));
-check('capture reads shape size', WHZ.captureKeyframe(hzArrowBlk).slen === 75.4);
+check('capture reads shape size', WHZ.captureKeyframe(hzArrowBlk).slen === 78);
 WHZ.applyKeyframeState(hzArrowBlk, { slen: 40 });
 check('apply writes shape size', hzSvg.getAttribute('data-len') === '40' && hzSvg.innerHTML.includes('x2="28"'));
 check('clean keeps shape keys', (function(){
@@ -1654,6 +1646,39 @@ await wait(50);
 check('shape drags clamp to min in the step', (function(){
   const to = JSON.parse(rBlkEl.getAttribute('data-anim'))[0].to;
   return to.sw === 10 && to.sh === 10;
+})());
+
+// ---------- 37. stable sizes + tight overlay ----------
+const domTB = makeDom(html);
+await wait(400);
+const WTB = domTB.window, DTB = WTB.document;
+WTB.gotoSlide(WTB.App.model.slideOrder[1]);
+await wait(100);
+WTB.insertShape('arrow-right');
+const tbBlks = DTB.querySelectorAll('#stage .blk');
+const tbBlk = tbBlks[tbBlks.length - 1];
+const tbSvg = tbBlk.querySelector('svg');
+check('frame stays fixed', tbSvg.getAttribute('viewBox') === '0 0 100 100');
+check('geometry bbox units', JSON.stringify(WTB.svgContentBox(tbSvg)) === '{"x":10,"y":32,"w":68,"h":36}');
+check('bbox maps through CTM', JSON.stringify(WTB.mapBoxClient({ x: 10, y: 32, w: 68, h: 36 }, { a: 2, b: 0, c: 0, d: 2, e: 5, f: 7 })) === '{"x":25,"y":71,"w":136,"h":72}');
+tbSvg.setAttribute('viewBox', '7 29 74 42'); /* tight boxes from earlier revisions normalize */
+WTB.renderShape(tbSvg);
+check('old tight boxes normalize', tbSvg.getAttribute('viewBox') === '0 0 100 100');
+tbSvg.setAttribute('data-len', '100');
+WTB.renderShape(tbSvg);
+check('length grows content, frame fixed', tbSvg.getAttribute('viewBox') === '0 0 100 100' &&
+  JSON.stringify(WTB.svgContentBox(tbSvg)) === '{"x":10,"y":32,"w":100,"h":36}');
+tbSvg.getScreenCTM = () => ({ a: 2, b: 0, c: 0, d: 2, e: 100, f: 50 });
+DTB.querySelector('#stage-wrap').getBoundingClientRect = () => ({ left: 10, top: 20, right: 810, bottom: 620, width: 800, height: 600 });
+WTB.setSingleSelection(tbBlk);
+const tbOv = DTB.querySelector('#media-resizer');
+check('overlay hugs content', tbOv.style.left === '105px' && tbOv.style.top === '89px' &&
+  tbOv.style.width === '210px' && tbOv.style.height === '82px',
+  [tbOv.style.left, tbOv.style.top, tbOv.style.width, tbOv.style.height].join(' '));
+delete tbSvg.getScreenCTM;
+check('overlay falls back without CTM', (function(){
+  WTB.positionResizer();
+  return DTB.querySelector('#media-resizer').hidden === false;
 })());
 
 console.log(failures === 0 ? '\nALL TESTS PASSED' : `\n${failures} TEST(S) FAILED`);

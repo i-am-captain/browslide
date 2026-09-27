@@ -1776,20 +1776,20 @@ function numParam(p, key, def, min, max){
   return (max === undefined || max === null) ? v : Math.min(max, v);
 }
 var SHAPE_DEFS = {
-  'arrow-right': { params: [{ key: 'len', label: 'Length', min: 30, def: 68 }], geo: function(p){ return arrowGeo('right', numParam(p, 'len', 68, 30)); }, box: function(p){ var L = numParam(p, 'len', 68, 30); return [10, 32, L, 36]; } },
-  'arrow-left': { params: [{ key: 'len', label: 'Length', min: 30, def: 68 }], geo: function(p){ return arrowGeo('left', numParam(p, 'len', 68, 30)); }, box: function(p){ var L = numParam(p, 'len', 68, 30); return [10, 32, L, 36]; } },
-  'arrow-up': { params: [{ key: 'len', label: 'Length', min: 30, def: 68 }], geo: function(p){ return arrowGeo('up', numParam(p, 'len', 68, 30)); }, box: function(p){ var L = numParam(p, 'len', 68, 30); return [32, 90 - L, 36, L]; } },
-  'arrow-down': { params: [{ key: 'len', label: 'Length', min: 30, def: 68 }], geo: function(p){ return arrowGeo('down', numParam(p, 'len', 68, 30)); }, box: function(p){ var L = numParam(p, 'len', 68, 30); return [32, 10, 36, L]; } },
-  'arrow-both': { params: [{ key: 'len', label: 'Length', min: 40, def: 68 }], geo: function(p){ return bothGeo(numParam(p, 'len', 68, 40)); }, box: function(p){ var L = numParam(p, 'len', 68, 40); return [18, 36, L - 16, 28]; } },
-  'line': { params: [{ key: 'len', label: 'Length', min: 10, def: 80 }], geo: function(p){ return lineGeo(numParam(p, 'len', 80, 10)); }, box: function(p){ return [10, 44, numParam(p, 'len', 80, 10), 12]; } },
-  'circle': { params: [{ key: 'radius', label: 'Radius', min: 5, def: 40 }], geo: function(p){ return circleGeo(numParam(p, 'radius', 40, 5)); }, box: function(p){ var r = numParam(p, 'radius', 40, 5); return [50 - r, 50 - r, 2 * r, 2 * r]; } },
-  'square': { params: [{ key: 'height', label: 'Height (side)', min: 10, def: 72 }], geo: function(p){ return squareGeo(numParam(p, 'height', 72, 10)); }, box: function(p){ var s = numParam(p, 'height', 72, 10), x = (100 - s) / 2; return [x, x, s, s]; } },
-  'triangle': { params: [{ key: 'height', label: 'Height', min: 10, def: 72 }], geo: function(p){ return triangleGeo(numParam(p, 'height', 72, 10)); }, box: function(p){ var h = numParam(p, 'height', 72, 10); return [10, 50 - h / 2, 80, h]; } },
-  'rectangle': { params: [{ key: 'width', label: 'Width', min: 10, def: 72 }, { key: 'height', label: 'Height', min: 10, def: 48 }], geo: function(p){ return rectGeo(numParam(p, 'width', 72, 10), numParam(p, 'height', 48, 10)); }, box: function(p){ var w = numParam(p, 'width', 72, 10), h = numParam(p, 'height', 48, 10); return [(100 - w) / 2, (100 - h) / 2, w, h]; } },
-  'ellipse': { params: [{ key: 'width', label: 'Width', min: 10, def: 72 }, { key: 'height', label: 'Height', min: 10, def: 48 }], geo: function(p){ return ellipseGeo(numParam(p, 'width', 72, 10), numParam(p, 'height', 48, 10)); }, box: function(p){ var w = numParam(p, 'width', 72, 10), h = numParam(p, 'height', 48, 10); return [(100 - w) / 2, (100 - h) / 2, w, h]; } },
-  'star': { params: [], geo: function(){ return '<polygon points="50,6 61,39 96,39 68,60 79,94 50,73 21,94 32,60 4,39 39,39"/>'; }, box: function(){ return [4, 6, 92, 88]; } },
-  'check': { params: [], geo: function(){ return '<polyline points="22,54 43,74 78,30"/>'; }, box: function(){ return [22, 30, 56, 44]; } },
-  'cross': { params: [], geo: function(){ return '<line x1="26" y1="26" x2="74" y2="74"/><line x1="74" y1="26" x2="26" y2="74"/>'; }, box: function(){ return [26, 26, 48, 48]; } }
+  'arrow-right': { params: [{ key: 'len', label: 'Length', min: 30, def: 68 }], geo: function(p){ return arrowGeo('right', numParam(p, 'len', 68, 30)); } },
+  'arrow-left': { params: [{ key: 'len', label: 'Length', min: 30, def: 68 }], geo: function(p){ return arrowGeo('left', numParam(p, 'len', 68, 30)); } },
+  'arrow-up': { params: [{ key: 'len', label: 'Length', min: 30, def: 68 }], geo: function(p){ return arrowGeo('up', numParam(p, 'len', 68, 30)); } },
+  'arrow-down': { params: [{ key: 'len', label: 'Length', min: 30, def: 68 }], geo: function(p){ return arrowGeo('down', numParam(p, 'len', 68, 30)); } },
+  'arrow-both': { params: [{ key: 'len', label: 'Length', min: 40, def: 68 }], geo: function(p){ return bothGeo(numParam(p, 'len', 68, 40)); } },
+  'line': { params: [{ key: 'len', label: 'Length', min: 10, def: 80 }], geo: function(p){ return lineGeo(numParam(p, 'len', 80, 10)); } },
+  'circle': { params: [{ key: 'radius', label: 'Radius', min: 5, def: 40 }], geo: function(p){ return circleGeo(numParam(p, 'radius', 40, 5)); } },
+  'square': { params: [{ key: 'height', label: 'Height (side)', min: 10, def: 72 }], geo: function(p){ return squareGeo(numParam(p, 'height', 72, 10)); } },
+  'triangle': { params: [{ key: 'height', label: 'Height', min: 10, def: 72 }], geo: function(p){ return triangleGeo(numParam(p, 'height', 72, 10)); } },
+  'rectangle': { params: [{ key: 'width', label: 'Width', min: 10, def: 72 }, { key: 'height', label: 'Height', min: 10, def: 48 }], geo: function(p){ return rectGeo(numParam(p, 'width', 72, 10), numParam(p, 'height', 48, 10)); } },
+  'ellipse': { params: [{ key: 'width', label: 'Width', min: 10, def: 72 }, { key: 'height', label: 'Height', min: 10, def: 48 }], geo: function(p){ return ellipseGeo(numParam(p, 'width', 72, 10), numParam(p, 'height', 48, 10)); } },
+  'star': { params: [], geo: function(){ return '<polygon points="50,6 61,39 96,39 68,60 79,94 50,73 21,94 32,60 4,39 39,39"/>'; } },
+  'check': { params: [], geo: function(){ return '<polyline points="22,54 43,74 78,30"/>'; } },
+  'cross': { params: [], geo: function(){ return '<line x1="26" y1="26" x2="74" y2="74"/><line x1="74" y1="26" x2="26" y2="74"/>'; } }
 };
 var SHAPES = {};
 Object.keys(SHAPE_DEFS).forEach(function(k){
@@ -1817,13 +1817,10 @@ function renderShape(svg){
     svg.setAttribute('data-' + pd.key, String(sp.vals[pd.key]));
   });
   svg.innerHTML = sp.def.geo(sp.vals);
-  if (sp.def.box) {
-    /* tight viewBox (stroke-aware pad) so the selection overlay hugs the icon */
-    var sw = parseFloat(svg.getAttribute('stroke-width'));
-    var pad = (isFinite(sw) && sw > 0 ? sw / 2 : 1.5) + 1.5;
-    var b = sp.def.box(sp.vals);
-    svg.setAttribute('viewBox', r1(b[0] - pad) + ' ' + r1(b[1] - pad) + ' ' + r1(b[2] + 2 * pad) + ' ' + r1(b[3] + 2 * pad));
-  }
+  /* fixed frame: size params change rendered size (content is never rescaled
+     to fit); the selection overlay hugs via contentBox(). Resetting also
+     normalizes tight boxes written by earlier revisions. */
+  svg.setAttribute('viewBox', '0 0 100 100');
   return true;
 }
 function addTextBlock(){
@@ -2335,6 +2332,79 @@ function visualRect(el){
   var w = wrap.getBoundingClientRect();
   return { x: r.left - w.left + wrap.scrollLeft, y: r.top - w.top + wrap.scrollTop, w: r.width, h: r.height };
 }
+function svgContentBox(svg){
+  /* local-unit bounds of shape geometry (known tags only), or null */
+  var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  function num(v){ var n = parseFloat(v); return isFinite(n) ? n : null; }
+  function pt(x, y){
+    if (x === null || y === null) return;
+    if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+  }
+  var kids = svg.childNodes;
+  for (var i = 0; i < kids.length; i++) {
+    var n = kids[i];
+    if (!n.getAttribute) continue;
+    var tag = (n.tagName || '').toLowerCase();
+    if (tag === 'line') {
+      pt(num(n.getAttribute('x1')), num(n.getAttribute('y1')));
+      pt(num(n.getAttribute('x2')), num(n.getAttribute('y2')));
+    } else if (tag === 'polyline' || tag === 'polygon') {
+      String(n.getAttribute('points') || '').trim().split(/\s+/).forEach(function(pair){
+        var xy = pair.split(',');
+        pt(num(xy[0]), num(xy[1]));
+      });
+    } else if (tag === 'circle') {
+      var cx = num(n.getAttribute('cx')), cy = num(n.getAttribute('cy')), cr = num(n.getAttribute('r'));
+      if (cx !== null && cy !== null && cr !== null) { pt(cx - cr, cy - cr); pt(cx + cr, cy + cr); }
+    } else if (tag === 'rect') {
+      var rx = num(n.getAttribute('x')), ry = num(n.getAttribute('y')),
+          rw = num(n.getAttribute('width')), rh = num(n.getAttribute('height'));
+      if (rx !== null && ry !== null && rw !== null && rh !== null) { pt(rx, ry); pt(rx + rw, ry + rh); }
+    } else if (tag === 'ellipse') {
+      var ex = num(n.getAttribute('cx')), ey = num(n.getAttribute('cy')),
+          erx = num(n.getAttribute('rx')), ery = num(n.getAttribute('ry'));
+      if (ex !== null && ey !== null && erx !== null && ery !== null) { pt(ex - erx, ey - ery); pt(ex + erx, ey + ery); }
+    }
+  }
+  if (!(x0 <= x1) || !(y0 <= y1)) return null;
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+}
+function mapBoxClient(bb, m){
+  /* local-unit box through a CTM (a-f) to client coords; rotation-safe */
+  var xs = [bb.x, bb.x + bb.w], ys = [bb.y, bb.y + bb.h];
+  var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  xs.forEach(function(x){ ys.forEach(function(y){
+    var sx = m.a * x + m.c * y + m.e, sy = m.b * x + m.d * y + m.f;
+    if (sx < x0) x0 = sx; if (sx > x1) x1 = sx; if (sy < y0) y0 = sy; if (sy > y1) y1 = sy;
+  }); });
+  return { x: x0, y: y0, w: Math.max(0, x1 - x0), h: Math.max(0, y1 - y0) };
+}
+function contentBox(el){
+  /* tight wrap-coords box: shape geometry mapped through the live CTM.
+     Rendering uses a fixed viewBox (sizes stay stable); the overlay hugs
+     via geometry instead of the element box. Falls back to visualRect. */
+  var wrap = $('#stage-wrap');
+  var svg = shapeSvgOf(el);
+  if (svg && wrap) {
+    try {
+      var bb = svgContentBox(svg);
+      var m = svg.getScreenCTM ? svg.getScreenCTM() : null;
+      var wr = wrap.getBoundingClientRect();
+      if (bb && m && wr) {
+        var c = mapBoxClient(bb, m);
+        var sw = parseFloat(svg.getAttribute('stroke-width'));
+        var unit = Math.hypot(m.a, m.b) || 0;
+        var pad = (isFinite(sw) && sw > 0 ? sw / 2 : 1.5) * unit + 2;
+        return {
+          x: c.x - wr.left + wrap.scrollLeft - pad,
+          y: c.y - wr.top + wrap.scrollTop - pad,
+          w: c.w + 2 * pad, h: c.h + 2 * pad
+        };
+      }
+    } catch (e) {}
+  }
+  return visualRect(el);
+}
 function positionResizer(){
   var ov = $('#media-resizer');
   resizer.extra = resizer.extra.filter(function(el){ return el && document.contains(el); });
@@ -2343,7 +2413,7 @@ function positionResizer(){
     resizer.extra = [];
     if (ov) ov.hidden = true;
   } else if (ov) {
-    var p = visualRect(resizer.el);
+    var p = contentBox(resizer.el);
     ov.hidden = false;
     ov.classList.toggle('formove', !!(resizer.el.classList && resizer.el.classList.contains('blk')));
     ov.style.left = p.x + 'px';
@@ -2370,7 +2440,7 @@ function drawExtraBoxes(){
   Array.prototype.forEach.call(wrap.querySelectorAll('.selextra'), function(n){ n.remove(); });
   resizer.extra.forEach(function(el){
     if (!el || !document.contains(el)) return;
-    var p = visualRect(el);
+    var p = contentBox(el);
     var d = document.createElement('div');
     d.className = 'selextra';
     d.style.left = p.x + 'px';
