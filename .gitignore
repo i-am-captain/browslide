@@ -1,0 +1,6 @@
+# local user artifacts (saved decks / exports) - not committed; only browslide.html template is tracked
+saves/
+exports/
+*.saved.html
+*-export.html
+node_modules/

@@ -1,0 +1,1157 @@
+<!doctype html>
+<!--
+  ===================== BROWSLIDE — AGENT MAP =====================
+  Read this map, NOT the whole file (~1150 lines). Every area has a unique
+  ANCHOR string. Locate it with:
+      grep -nF 'ANCHOR' browslide.html
+  You will get two hits: this map line, then the target. Use the later one.
+  Then read only that range. Anchors never go stale, so this map uses no
+  line numbers — do not add any back.
+  WHAT THIS FILE IS: standalone presentation app in one HTML file (plain
+  CSS + plain JS, zero dependencies, works from file://). The repo copy is
+  the TEMPLATE (starter deck only). In-app Save downloads a copy whose JSON
+  data block holds the real deck; saved copies reopen by double-click.
+  RULES FOR AGENTS (binding):
+  1. Never load the whole file into a small context. Map + grep + slices.
+  2. If you rename or remove a banner anchor, update the map below.
+  3. Slide HTML is sanitized on sync/save/open: script/iframe/object/embed
+     elements, on* attributes, javascript:/blob: URLs and srcset are
+     stripped. Do not try to smuggle executable content into slides.
+  4. Media lives ONCE in model.resources as data: URIs; slide HTML stores
+     res://rN refs (deduped by content hash). The live stage shows expanded
+     data: URIs for editing only; saves/exports store single copies.
+  5. Deck state on disk = the JSON data block only. Never hand-edit app
+     code in a saved copy; change the data block (or use the app UI).
+  AREAS — anchors (copy-paste into grep -nF; take the later hit):
+  doctype ...................... line 1
+  html/head .................... <title>Browslide</title>
+  CSS .......................... /* ================= CSS
+  toolbar ...................... <header id="toolbar">
+  editor columns ............... <div id="main">
+  present overlay .............. id="present-overlay"
+  hidden file inputs ........... id="open-file"
+  deck JSON data block ......... id="slider-data"
+  UTIL ......................... UTIL =================
+  MODEL ........................ MODEL =================
+  COMPRESSION+CODEC ............ optional lossless compression
+  RESOURCES TABLE .............. resources table: slides store
+  STORE (autosave) ............. STORE (IndexedDB
+  RENDER ....................... RENDER =================
+  EDIT ......................... EDIT =================
+  PRESENT ...................... PRESENT =================
+  EXPORT VIEWER ................ EXPORT VIEWER
+  SAVE/OPEN/NEW ................ SAVE / OPEN / NEW
+  SIZES PANEL .................. SIZE METER
+  EVENTS+BOOT .................. EVENTS + BOOT
+  boot() ....................... function boot(){
+  SLIDE OBJECT: {title,layout,transition,html,notes}; layouts: title,
+  title-body, two-col, image-full, blank. Slide html uses res://rN refs
+  for media; new media must go into model.resources (see RESOURCES TABLE).
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Browslide</title>
+<style>
+/* ================= CSS ================= */
+:root{
+  --bg:#f1f2f5; --panel:#ffffff; --ink:#1c1e21; --muted:#6b7280;
+  --accent:#2563eb; --border:#d9dce1;
+  --slide-bg:#ffffff; --slide-ink:#1c1e21;
+}
+body[data-theme="dark"]{
+  --bg:#14161a; --panel:#1e2126; --ink:#e8eaed; --muted:#9aa0a6;
+  --border:#34383f; --slide-bg:#22252b; --slide-ink:#f0f1f3;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+[hidden]{display:none !important}
+#toolbar{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--panel);border-bottom:1px solid var(--border);flex-wrap:wrap;position:sticky;top:0;z-index:10}
+.brand{font-weight:700;margin-right:4px}
+#deck-title{min-width:160px;max-width:280px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--ink)}
+#dirty-flag{color:var(--muted);font-size:12px;min-width:120px}
+#dirty-flag.dirty{color:#b45309}
+.spacer{flex:1}
+button,select{padding:5px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--ink);cursor:pointer;font:inherit}
+button:hover,select:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+#pos-flag{color:var(--muted);font-size:12px}
+#main{display:grid;grid-template-columns:190px 1fr 230px;gap:10px;padding:10px;height:calc(100vh - 53px)}
+#filmstrip{background:var(--panel);border:1px solid var(--border);border-radius:8px;overflow:auto;padding:8px}
+#filmstrip-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+#filmstrip-list button{display:block;width:100%;text-align:left;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--ink)}
+#filmstrip-list li.active button{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+#filmstrip-list .num{color:var(--muted);font-size:11px;margin-right:6px}
+#filmstrip-list li[draggable="true"]{cursor:grab}
+#filmstrip-list li.drop-before{box-shadow:0 -3px 0 var(--accent)}
+#stage-wrap{overflow:auto;padding:18px;background:var(--panel);border:1px solid var(--border);border-radius:8px}
+#stage{width:100%;max-width:880px;margin:0 auto}
+#inspector{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:10px;overflow:auto;display:flex;flex-direction:column;gap:10px}
+#inspector label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+#inspector select,#inspector textarea{width:100%}
+#inspector textarea{resize:vertical;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px}
+#size-meter{font-size:12px;color:var(--muted)}
+#size-meter.warn{color:#b45309}
+#size-meter.big{color:#b91c1c}
+#sizes-body{font-size:12px}
+#sizes-body div{margin:2px 0}
+#sizes-body .unused{color:var(--muted)}
+#save-opts{font-size:12px;display:flex;flex-direction:column;gap:6px}
+#inspector #save-opts label{display:flex;flex-direction:row;align-items:center;gap:6px}
+#save-opts select{width:auto;padding:2px 4px}
+#compress-stats{color:var(--muted)}
+#sizes-body button{padding:2px 8px;font-size:11px}
+/* ---- slides ---- */
+.slide{width:100%;aspect-ratio:16/9;overflow:auto;background:var(--slide-bg);color:var(--slide-ink);
+  border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.12);
+  padding:44px 52px;font-size:16px;outline:none}
+.slide:focus{border-color:var(--accent)}
+.slide h1{font-size:2em;margin:0 0 .4em}
+.slide h2{font-size:1.4em;margin:.8em 0 .3em}
+.slide p,.slide li{font-size:1.05em}
+.slide img,.slide video{max-width:100%;height:auto;border-radius:6px}
+.slide video{max-height:50vh}
+.layout-title{display:flex;flex-direction:column;justify-content:center;text-align:center}
+.layout-title-body h1{border-bottom:2px solid var(--accent);padding-bottom:.2em}
+.layout-two-col .cols{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+.layout-image-full{text-align:center}
+.layout-blank{padding:36px}
+/* ---- presenter ---- */
+#present-overlay{position:fixed;inset:0;z-index:50;background:#0b0c0e;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px}
+#present-slide .slide{width:min(1100px,94vw);font-size:clamp(14px,2.1vw,25px)}
+#present-bar{display:flex;gap:16px;align-items:center;color:#c8ccd2;font-size:13px}
+#present-bar button{background:#22262c;color:#fff;border-color:#3a3f47}
+.trans-fade{animation:fadeIn .35s ease}
+.trans-slide{animation:slideIn .35s ease}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes slideIn{from{opacity:0;transform:translateX(48px)}to{opacity:1;transform:none}}
+@media (max-width:900px){#main{grid-template-columns:1fr}#filmstrip,#inspector{display:none}}
+</style>
+</head>
+<body data-theme="default">
+
+<header id="toolbar">
+  <span class="brand">Browslide</span>
+  <input id="deck-title" maxlength="120" title="Presentation title">
+  <span id="dirty-flag">Saved</span>
+  <span class="spacer"></span>
+  <button id="btn-add" title="Add slide after current">+ Slide</button>
+  <button id="btn-duplicate" title="Duplicate current slide">Duplicate</button>
+  <button id="btn-delete" title="Delete current slide">Delete</button>
+  <button id="btn-prev" title="Previous slide">◀</button>
+  <button id="btn-next" title="Next slide">▶</button>
+  <span id="pos-flag"></span>
+  <button id="btn-present" title="Start presentation">Present</button>
+  <button id="btn-export" title="Export a viewer-only copy for sharing">Export viewer</button>
+  <button id="btn-open" title="Open a saved browslide.html copy">Open</button>
+  <button id="btn-new" title="Start a new deck">New</button>
+  <button id="btn-save" class="primary" title="Save (downloads an .html copy)">Save</button>
+</header>
+
+<div id="main">
+  <aside id="filmstrip"><ol id="filmstrip-list"></ol></aside>
+  <main id="stage-wrap"><div id="stage"></div></main>
+  <aside id="inspector">
+    <label>Layout
+      <select id="layout-select">
+        <option value="title">Title</option>
+        <option value="title-body">Title + body</option>
+        <option value="two-col">Two columns</option>
+        <option value="image-full">Image / media</option>
+        <option value="blank">Blank</option>
+      </select>
+    </label>
+    <label>Transition
+      <select id="transition-select">
+        <option value="none">None</option>
+        <option value="fade">Fade</option>
+        <option value="slide">Slide</option>
+      </select>
+    </label>
+    <label>Theme
+      <select id="theme-select">
+        <option value="default">Light</option>
+        <option value="dark">Dark</option>
+      </select>
+    </label>
+    <label>Speaker notes
+      <textarea id="notes" rows="6" placeholder="Notes for this slide (not shown on stage)"></textarea>
+    </label>
+    <div id="size-meter">Est. save size: —</div>
+    <div id="save-opts">
+      <label><input type="checkbox" id="opt-compress"> Compress media on save (lossless)</label>
+      <label><input type="checkbox" id="opt-downscale"> Downscale photos on insert (max <select id="opt-maxdim"><option value="1280">1280</option><option value="1920" selected>1920</option><option value="2560">2560</option></select> px)</label>
+      <div id="compress-stats"></div>
+    </div>
+    <details id="sizes-wrap">
+      <summary>Media &amp; sizes</summary>
+      <div id="sizes-body"></div>
+      <p><button id="btn-clean-media">Remove unused media</button></p>
+    </details>
+    <details>
+      <summary>Insert media</summary>
+      <p><button id="btn-img">Image…</button> <button id="btn-video">Video…</button></p>
+    </details>
+  </aside>
+</div>
+
+<div id="present-overlay" hidden>
+  <div id="present-slide"></div>
+  <div id="present-bar">
+    <span id="present-count"></span>
+    <span>Space/→ next · ← prev · Esc exit (click advances)</span>
+    <button id="btn-present-close">Exit</button>
+  </div>
+</div>
+
+<input type="file" id="open-file" accept=".html,.htm,text/html" hidden>
+<input type="file" id="insert-image" accept="image/*" hidden>
+<input type="file" id="insert-video" accept="video/*" hidden>
+
+<script type="application/json" id="slider-data">
+{"app":"browslide","version":2,"title":"My Talk","theme":"default","slideOrder":["s1","s2","s3"],"nextId":4,"slides":{"s1":{"title":"My Talk","layout":"title","transition":"fade","html":"<h1>My Talk</h1><p>A presentation made with Browslide — one file, no server.</p>","notes":""},"s2":{"title":"How to use","layout":"title-body","transition":"fade","html":"<h1>How to use</h1><ul><li>Click the slide and type — everything saves into this one file.</li><li><b>Save</b> downloads an updated copy (also Ctrl+S). <b>Open</b> loads another copy. <b>Present</b> starts the show.</li><li>Drag slides in the left list to reorder. Right panel: layout, transition, theme, notes.</li><li>Media is deduplicated and compressed on save; Media & sizes shows per-slide usage.</li><li>Keys: ↑/↓ in the slide list, PageUp/PageDown outside the slide, Space/→ while presenting.</li></ul>","notes":""},"s3":{"title":"Thanks","layout":"title","transition":"fade","html":"<h1>Thanks</h1><p>Questions?</p>","notes":""}},"resources":{},"nextResId":1,"settings":{"compress":true,"downscale":false,"maxDim":1920}}
+</script>
+
+<script>
+'use strict';
+/* ================= UTIL ================= */
+function $(sel, root){ return (root || document).querySelector(sel); }
+function $all(sel, root){ return Array.prototype.slice.call((root || document).querySelectorAll(sel)); }
+function debounce(fn, ms){ var t = null; return function(){ var s = this, a = arguments; clearTimeout(t); t = setTimeout(function(){ fn.apply(s, a); }, ms); }; }
+function slugify(s){ return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'browslide-deck'; }
+function formatBytes(n){ if (n < 1024) return n + ' B'; var u = ['KB','MB','GB'], i = -1; do { n /= 1024; i++; } while (n >= 1024 && i < u.length - 1); return n.toFixed(1) + ' ' + u[i]; }
+function hash53(str){ /* cyrb53 content hash for media dedup (deck-scale; collisions negligible) */
+  var h1 = 0xdeadbeef, h2 = 0x41c6ce57, i, ch;
+  for (i = 0; i < str.length; i++) { ch = str.charCodeAt(i); h1 = Math.imul(h1 ^ ch, 2654435761); h2 = Math.imul(h2 ^ ch, 1597334677); }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (h2 >>> 0).toString(16) + (h1 >>> 0).toString(16);
+}
+var MIME_EXT = { 'image/png': '.png', 'image/jpeg': '.jpg', 'image/gif': '.gif', 'image/webp': '.webp', 'image/svg+xml': '.svg', 'image/bmp': '.bmp', 'video/mp4': '.mp4', 'video/webm': '.webm', 'video/ogg': '.ogv', 'audio/mpeg': '.mp3', 'audio/wav': '.wav', 'audio/ogg': '.ogg' };
+function parseDataUrl(dataURL){
+  var m = /^data:([^;,]+)?(;base64)?,([\s\S]*)$/.exec(String(dataURL || ''));
+  if (!m) return null;
+  var mime = (m[1] || 'application/octet-stream').toLowerCase();
+  var payload = m[3] || '';
+  var bytes = m[2] ? Math.floor(payload.length * 3 / 4) : payload.length;
+  return { mime: mime, bytes: bytes, ext: MIME_EXT[mime] || '', base64: !!m[2], payload: payload };
+}
+
+var LAYOUTS = ['title', 'title-body', 'two-col', 'image-full', 'blank'];
+var TRANSITIONS = ['none', 'fade', 'slide'];
+var THEMES = ['default', 'dark'];
+
+/* ================= MODEL ================= */
+var App = { model: null, activeId: null, dirty: false, lastClean: '', overhead: 0, presentIdx: 0 };
+
+function stable(model){ return JSON.stringify(model); }
+function activeSlide(){ return App.model.slides[App.activeId]; }
+function activeIndex(){ return App.model.slideOrder.indexOf(App.activeId); }
+
+function sanitizeSlideHTML(html){
+  var tpl = document.createElement('template');
+  tpl.innerHTML = String(html || '');
+  $all('script,iframe,object,embed,link,style', tpl.content).forEach(function(n){ n.remove(); });
+  $all('*', tpl.content).forEach(function(el){
+    Array.prototype.slice.call(el.attributes).forEach(function(a){
+      var n = a.name.toLowerCase(), v = String(a.value || '');
+      if (n.indexOf('on') === 0) el.removeAttribute(a.name);
+      else if (n === 'srcset') el.removeAttribute(a.name); /* src may hold data:/res: only; srcset would smuggle copies past dedup */
+      else if ((n === 'href' || n === 'src') && (/^\s*javascript:/i.test(v) || /^\s*blob:/i.test(v))) el.removeAttribute(a.name);
+    });
+  });
+  return tpl.innerHTML;
+}
+function deriveTitle(html){
+  var d = document.createElement('div'); d.innerHTML = String(html || '');
+  var h = d.querySelector('h1,h2');
+  var t = h ? h.textContent.trim() : '';
+  return (t || 'Untitled').slice(0, 60);
+}
+function normalizeModel(raw){
+  if (!raw || raw.app !== 'browslide' || typeof raw !== 'object') return null;
+  if (raw.version !== 2) return null;
+  var m = { app: 'browslide', version: 2, title: String(raw.title || 'Untitled').slice(0, 120),
+    theme: THEMES.indexOf(raw.theme) >= 0 ? raw.theme : 'default',
+    slideOrder: [], slides: {}, resources: {}, nextId: 1, nextResId: 1 };
+  Object.keys(raw.slides || {}).forEach(function(id){
+    var s = raw.slides[id] || {};
+    m.slides[id] = {
+      title: String(s.title || 'Untitled').slice(0, 60),
+      layout: LAYOUTS.indexOf(s.layout) >= 0 ? s.layout : 'title-body',
+      transition: TRANSITIONS.indexOf(s.transition) >= 0 ? s.transition : 'fade',
+      html: sanitizeSlideHTML(s.html || '<p></p>'),
+      notes: String(s.notes || '')
+    };
+    m.slideOrder.push(id);
+    var n = parseInt(String(id).replace(/^s/, ''), 10);
+    if (!isNaN(n) && n >= m.nextId) m.nextId = n + 1;
+  });
+  m.slideOrder = (raw.slideOrder || []).filter(function(id){ return !!m.slides[id]; });
+  Object.keys(m.slides).forEach(function(id){ if (m.slideOrder.indexOf(id) < 0) m.slideOrder.push(id); });
+  if (!m.slideOrder.length) return null;
+  if (raw.nextId && raw.nextId >= m.nextId) m.nextId = raw.nextId;
+  var st = (raw.settings && typeof raw.settings === 'object') ? raw.settings : {};
+  m.settings = { compress: st.compress !== false, downscale: !!st.downscale,
+    maxDim: (st.maxDim === 1280 || st.maxDim === 2560) ? st.maxDim : 1920 };
+  if (raw.resources && typeof raw.resources === 'object') {
+    // keep only well-formed entries; drop anything else (never trust a file blindly)
+    Object.keys(raw.resources).forEach(function(id){
+      var r = raw.resources[id] || {};
+      if (!/^r\d+$/.test(id)) return;
+      var enc = (r.encoding === 'deflate-raw' || r.encoding === 'gzip') ? r.encoding : 'raw';
+      var entry = null;
+      if (enc === 'raw') {
+        var p = parseDataUrl(r.data);
+        if (!p) return;
+        entry = { name: String(r.name || ('file-' + id)).slice(0, 120),
+          mime: p.mime, size: p.bytes, hash: String(r.hash || ''), data: String(r.data), encoding: 'raw' };
+      } else {
+        // compressed entry: data is bare base64 of deflated bytes (decoded async on load)
+        if (typeof r.data !== 'string' || !/^[A-Za-z0-9+/=\s]+$/.test(r.data) || !r.data.replace(/\s/g, '').length) return;
+        if (!/^[a-z]+\/[a-z0-9.+-]+$/.test(String(r.mime || ''))) return;
+        entry = { name: String(r.name || ('file-' + id)).slice(0, 120), mime: String(r.mime),
+          size: (+r.size > 0 ? Math.floor(+r.size) : 0), hash: String(r.hash || ''),
+          data: String(r.data).replace(/\s/g, ''), encoding: enc };
+      }
+      if (r.noCompress === true) entry.noCompress = true;
+      m.resources[id] = entry;
+      var n2 = parseInt(id.slice(1), 10);
+      if (n2 >= m.nextResId) m.nextResId = n2 + 1;
+    });
+    if (raw.nextResId && raw.nextResId >= m.nextResId) m.nextResId = raw.nextResId;
+  }
+  return m;
+}
+/* ---- optional lossless compression (Phase 5): native deflate, zero dependencies ----
+   Memory model always holds RAW data: URIs (all render paths stay sync). Compression
+   applies only to the saved file bytes; entries are decoded back to raw on load.
+   Policy: only formats that actually shrink (text/SVG/WAV/JSON); JPEG/PNG/MP4 etc.
+   are already compressed and stay raw. Absent API -> transparent raw fallback. */
+var COMPRESSIBLE_RE = /^(text\/.*|image\/svg\+xml|audio\/(x-)?wav|application\/json)$/;
+var Codec = {
+  backend: null, /* test seam: {compress(bytes,fmt), decompress(bytes,fmt)} -> Uint8Array (or Promise) */
+  supported: function(){
+    if (this.backend) return true;
+    try { return typeof CompressionStream !== 'undefined' && typeof DecompressionStream !== 'undefined'; }
+    catch (e) { return false; }
+  },
+  preferredFormat: function(){ return 'deflate-raw'; },
+  bytesToB64: function(bytes){
+    var s = '', CH = 0x8000, i;
+    for (i = 0; i < bytes.length; i += CH) s += String.fromCharCode.apply(null, bytes.subarray(i, i + CH));
+    return btoa(s);
+  },
+  b64ToBytes: function(b64){
+    var s = atob(String(b64).replace(/\s/g, ''));
+    var out = new Uint8Array(s.length), i;
+    for (i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
+    return out;
+  },
+  compress: function(bytes, fmt){
+    if (this.backend) return Promise.resolve(this.backend.compress(bytes, fmt || this.preferredFormat()));
+    return pipeBytes(bytes, true, fmt || this.preferredFormat());
+  },
+  decompress: function(bytes, fmt){
+    if (this.backend) return Promise.resolve(this.backend.decompress(bytes, fmt));
+    return pipeBytes(bytes, false, fmt);
+  }
+};
+function pipeBytes(bytes, compress, fmt){
+  var Ctor = compress ? CompressionStream : DecompressionStream;
+  var reader = new Blob([bytes]).stream().pipeThrough(new Ctor(fmt)).getReader();
+  var chunks = [];
+  function pump(){
+    return reader.read().then(function(res){
+      if (res.done) {
+        var total = 0, i, off = 0;
+        for (i = 0; i < chunks.length; i++) total += chunks[i].length;
+        var out = new Uint8Array(total);
+        for (i = 0; i < chunks.length; i++) { out.set(chunks[i], off); off += chunks[i].length; }
+        return out;
+      }
+      chunks.push(res.value);
+      return pump();
+    });
+  }
+  return pump();
+}
+function decodeModelResources(model){
+  /* compressed file entries -> raw in-memory entries (async); undecodable ones are dropped */
+  var jobs = [];
+  Object.keys(model.resources || {}).forEach(function(id){
+    var r = model.resources[id];
+    if (r.encoding && r.encoding !== 'raw') {
+      if (!Codec.supported()) { delete model.resources[id]; }
+      else {
+        jobs.push(new Promise(function(res){
+          var raw;
+          try { raw = Codec.b64ToBytes(r.data); }
+          catch (e) { delete model.resources[id]; return res(); }
+          Codec.decompress(raw, r.encoding).then(function(bytes){
+            r.data = 'data:' + r.mime + ';base64,' + Codec.bytesToB64(bytes);
+            r.encoding = 'raw';
+            r.size = bytes.length;
+            delete r.stored;
+            res();
+          }).catch(function(){ delete model.resources[id]; res(); });
+        }));
+      }
+    }
+  });
+  return Promise.all(jobs).then(function(){ return model; });
+}
+function maybeCompressResource(r, stats){
+  if (r.noCompress || !COMPRESSIBLE_RE.test(r.mime || '')) { stats.skipped++; return Promise.resolve(); }
+  var p = parseDataUrl(r.data);
+  if (!p || !p.base64 || p.bytes < 512) { stats.skipped++; return Promise.resolve(); }
+  var rawBytes;
+  try { rawBytes = Codec.b64ToBytes(p.payload); }
+  catch (e) { stats.skipped++; return Promise.resolve(); }
+  return Codec.compress(rawBytes, Codec.preferredFormat()).then(function(comp){
+    var cb = Codec.bytesToB64(comp);
+    if (cb.length < p.payload.length) {
+      r.data = cb;
+      r.encoding = Codec.preferredFormat();
+      r.stored = cb.length;
+      stats.n++;
+      stats.saved += (p.payload.length - cb.length);
+    } else stats.skipped++;
+  }).catch(function(){ stats.skipped++; });
+}
+function buildSaveModel(){
+  var out = JSON.parse(stable(App.model));
+  var stats = { n: 0, skipped: 0, saved: 0 };
+  var chain = Promise.resolve();
+  if (App.model.settings.compress && Codec.supported()) {
+    Object.keys(out.resources || {}).forEach(function(id){
+      chain = chain.then(function(){ return maybeCompressResource(out.resources[id], stats); });
+    });
+  }
+  return chain.then(function(){
+    var json = JSON.stringify(out).replace(/<\/script/gi, '<\\/script');
+    var text;
+    if (stats.n) {
+      text = 'Last save: ' + stats.n + ' file(s) compressed · ' + formatBytes(stats.saved) + ' smaller' +
+        (stats.skipped ? ' · ' + stats.skipped + ' kept raw' : '');
+    } else {
+      var bigPhoto = Object.keys(out.resources || {}).some(function(id){
+        var r = out.resources[id];
+        return (r.size || 0) > 1024 * 1024 && /^image\/(png|jpeg|webp|bmp)$/.test(r.mime || '');
+      });
+      if (!App.model.settings.compress) text = 'Compression off — saved raw';
+      else if (!Codec.supported()) text = 'Native compression unavailable in this browser — saved raw';
+      else text = 'Last save: nothing worth compressing (already-compressed formats stay raw)';
+      if (bigPhoto) text += ' — photos hardly compress; try Downscale photos on insert';
+    }
+    return { json: json, stats: stats, text: text };
+  });
+}
+/* ---- optional photo downscale on insert (Phase 5): canvas, lossy resize only ---- */
+function shouldDownscale(file){
+  return !!(App.model && App.model.settings.downscale) && !!file && /^image\/(png|jpeg|webp|bmp)$/.test(file.type || '');
+}
+function downscaleImage(dataURL, maxDim){
+  return new Promise(function(res){
+    var done = false;
+    function fin(url){ if (!done) { done = true; res(url); } }
+    var timer = setTimeout(function(){ fin(dataURL); }, 15000); /* stuck decode -> keep original */
+    try {
+      var img = new Image();
+      img.onload = function(){
+        clearTimeout(timer);
+        try {
+          var w = img.naturalWidth, h = img.naturalHeight;
+          if (!w || !h || Math.max(w, h) <= maxDim) return fin(dataURL);
+          var s = maxDim / Math.max(w, h);
+          var c = document.createElement('canvas');
+          c.width = Math.max(1, Math.round(w * s));
+          c.height = Math.max(1, Math.round(h * s));
+          var ctx = c.getContext('2d');
+          if (!ctx) return fin(dataURL);
+          ctx.drawImage(img, 0, 0, c.width, c.height);
+          var mime = (parseDataUrl(dataURL) || {}).mime || 'image/png';
+          if (mime === 'image/bmp') mime = 'image/png';
+          fin(c.toDataURL(mime, 0.85));
+        } catch (e) { fin(dataURL); }
+      };
+      img.onerror = function(){ clearTimeout(timer); fin(dataURL); };
+      img.src = dataURL;
+    } catch (e) { clearTimeout(timer); fin(dataURL); }
+  });
+}
+/* ---- resources table: slides store res://id refs, binaries live once in model.resources ---- */
+function ensureResource(store, dataURL, name){
+  var p = parseDataUrl(dataURL);
+  if (!p) return null;
+  var h = hash53(dataURL);
+  var ids = Object.keys(store.resources || {});
+  for (var i = 0; i < ids.length; i++) {
+    var r = store.resources[ids[i]];
+    if (r.hash === h && r.data === dataURL) return ids[i]; /* dedup: identical bytes reused */
+  }
+  var id = 'r' + (store.nextResId++);
+  store.resources[id] = { name: String(name || ('embedded-' + id + p.ext)).slice(0, 120),
+    mime: p.mime, size: p.bytes, hash: h, data: dataURL, encoding: 'raw' };
+  return id;
+}
+function collapseHtml(html, store){
+  /* display/storage: data: URIs -> res://id refs (deduped into store) */
+  var tpl = document.createElement('template');
+  tpl.innerHTML = String(html || '');
+  $all('[src]', tpl.content).forEach(function(el){
+    var v = el.getAttribute('src') || '';
+    if (/^\s*data:/i.test(v)) {
+      var id = ensureResource(store, v, el.getAttribute('alt') || el.getAttribute('title') || null);
+      if (id) el.setAttribute('src', 'res://' + id);
+      else el.removeAttribute('src');
+    }
+  });
+  return tpl.innerHTML;
+}
+function expandHtml(html, resources){
+  /* storage/display: res://id refs -> data: URIs for rendering */
+  var tpl = document.createElement('template');
+  tpl.innerHTML = String(html || '');
+  $all('[src]', tpl.content).forEach(function(el){
+    var v = el.getAttribute('src') || '';
+    var mt = /^\s*res:\/\/([A-Za-z0-9_-]+)\s*$/i.exec(v);
+    if (mt) {
+      var r = (resources || {})[mt[1]];
+      if (r && r.data) el.setAttribute('src', r.data);
+      else el.removeAttribute('src'); /* dangling ref: render broken, never invent data */
+    }
+  });
+  return tpl.innerHTML;
+}
+function referencedIdsIn(html){
+  var found = [];
+  var tpl = document.createElement('template');
+  tpl.innerHTML = String(html || '');
+  $all('[src]', tpl.content).forEach(function(el){
+    var mt = /^\s*res:\/\/([A-Za-z0-9_-]+)\s*$/i.exec(el.getAttribute('src') || '');
+    if (mt && found.indexOf(mt[1]) < 0) found.push(mt[1]);
+  });
+  return found;
+}
+function deckResourceUse(){
+  var use = {};
+  Object.keys(App.model.slides).forEach(function(sid){
+    referencedIdsIn(App.model.slides[sid].html).forEach(function(rid){ use[rid] = (use[rid] || 0) + 1; });
+  });
+  return use;
+}
+function removeUnusedMedia(){
+  var use = deckResourceUse();
+  var dead = Object.keys(App.model.resources || {}).filter(function(id){ return !use[id]; });
+  if (!dead.length) return 0;
+  var bytes = dead.reduce(function(a, id){ return a + (App.model.resources[id].size || 0); }, 0);
+  if (!confirm('Remove ' + dead.length + ' unused file(s) (' + formatBytes(bytes) + ')?')) return 0;
+  dead.forEach(function(id){ delete App.model.resources[id]; });
+  renderAll(); scheduleAutosave();
+  return dead.length;
+}
+function readEmbeddedModel(){
+  // NOTE: the live #slider-data block is the pristine template starter and is NEVER mutated.
+  // Save writes the updated JSON into a CLONE of the document (see saveNow).
+  try { return normalizeModel(JSON.parse($('#slider-data').textContent)); }
+  catch (e) { return null; }
+}
+function sanitizeAllSlides(){
+  Object.keys(App.model.slides).forEach(function(id){
+    var s = App.model.slides[id];
+    s.html = sanitizeSlideHTML(s.html);
+    s.title = deriveTitle(s.html);
+  });
+}
+function syncStageToModel(){
+  var sec = $('#stage .slide');
+  var s = activeSlide();
+  if (sec && s) {
+    s.html = sanitizeSlideHTML(collapseHtml(sec.innerHTML, App.model));
+    s.title = deriveTitle(s.html);
+  }
+}
+function refreshDirty(){
+  App.dirty = stable(App.model) !== App.lastClean;
+  var f = $('#dirty-flag');
+  f.textContent = App.dirty ? '● Unsaved changes' : 'Saved';
+  f.classList.toggle('dirty', App.dirty);
+}
+
+/* ================= STORE (IndexedDB autosave) ================= */
+var IDB = {
+  db: null,
+  open: function(){
+    var self = this;
+    return new Promise(function(res){
+      if (self.db) return res(self.db);
+      try {
+        var rq = indexedDB.open('browslide-db', 1);
+        rq.onupgradeneeded = function(){ rq.result.createObjectStore('kv'); };
+        rq.onsuccess = function(){ self.db = rq.result; res(self.db); };
+        rq.onerror = function(){ res(null); };
+      } catch (e) { res(null); }
+    });
+  },
+  get: function(k){
+    return this.open().then(function(db){
+      return new Promise(function(res){
+        if (!db) return res(null);
+        try {
+          var rq = db.transaction('kv').objectStore('kv').get(k);
+          rq.onsuccess = function(){ res(rq.result || null); };
+          rq.onerror = function(){ res(null); };
+        } catch (e) { res(null); }
+      });
+    });
+  },
+  set: function(k, v){
+    return this.open().then(function(db){
+      return new Promise(function(res){
+        if (!db) return res(false);
+        try {
+          var rq = db.transaction('kv', 'readwrite').objectStore('kv').put(v, k);
+          rq.onsuccess = function(){ res(true); };
+          rq.onerror = function(){ res(false); };
+        } catch (e) { res(false); }
+      });
+    });
+  }
+};
+var autosaveNow = function(){ IDB.set('autosave', { at: Date.now(), json: stable(App.model) }); };
+var scheduleAutosave = debounce(autosaveNow, 1000);
+
+/* ================= RENDER ================= */
+function skeletonFor(layout){
+  switch (layout) {
+    case 'title': return '<h1>New title</h1><p>Subtitle or presenter name</p>';
+    case 'two-col': return '<h1>Heading</h1><div class="cols"><div><p>Left</p></div><div><p>Right</p></div></div>';
+    case 'image-full': return '<h1>Media slide</h1><p>Use Insert &gt; Image below to add a picture.</p>';
+    case 'blank': return '<p>Blank — start typing.</p>';
+    default: return '<h1>Heading</h1><ul><li>First point</li><li>Second point</li></ul>';
+  }
+}
+function renderFilmstrip(){
+  var ol = $('#filmstrip-list');
+  ol.innerHTML = '';
+  App.model.slideOrder.forEach(function(id, i){
+    var s = App.model.slides[id];
+    var li = document.createElement('li');
+    if (id === App.activeId) li.className = 'active';
+    li.draggable = true;
+    li.dataset.id = id;
+    li.addEventListener('dragstart', onSlideDragStart);
+    li.addEventListener('dragover', onSlideDragOver);
+    li.addEventListener('dragleave', onSlideDragLeave);
+    li.addEventListener('drop', onSlideDrop);
+    li.addEventListener('dragend', onSlideDragEnd);
+    var b = document.createElement('button');
+    b.dataset.id = id;
+    var num = document.createElement('span'); num.className = 'num'; num.textContent = (i + 1);
+    var lbl = document.createElement('span'); lbl.className = 'lbl'; lbl.textContent = s.title;
+    b.appendChild(num); b.appendChild(lbl);
+    b.addEventListener('click', function(){ gotoSlide(id); });
+    li.appendChild(b);
+    ol.appendChild(li);
+  });
+  $('#pos-flag').textContent = (activeIndex() + 1) + ' / ' + App.model.slideOrder.length;
+}
+function updateFilmstripLabel(){
+  var btn = $('#filmstrip-list button[data-id="' + App.activeId + '"] .lbl');
+  if (btn) btn.textContent = activeSlide().title;
+}
+function renderStage(){
+  var wrap = $('#stage');
+  wrap.innerHTML = '';
+  var s = activeSlide();
+  var sec = document.createElement('section');
+  sec.className = 'slide layout-' + s.layout;
+  sec.contentEditable = 'true';
+  sec.innerHTML = expandHtml(s.html, App.model.resources);
+  sec.addEventListener('input', onStageInput);
+  wrap.appendChild(sec);
+}
+function renderInspector(){
+  var s = activeSlide();
+  $('#layout-select').value = s.layout;
+  $('#transition-select').value = s.transition;
+  $('#theme-select').value = App.model.theme;
+  if (document.activeElement !== $('#notes')) $('#notes').value = s.notes;
+}
+function renderAll(){
+  document.title = (App.model.title || 'Browslide') + ' — Browslide';
+  document.body.dataset.theme = App.model.theme;
+  if (document.activeElement !== $('#deck-title')) $('#deck-title').value = App.model.title;
+  renderFilmstrip();
+  renderStage();
+  renderInspector();
+  refreshDirty();
+  updateSize();
+  $('#opt-compress').checked = !!App.model.settings.compress;
+  $('#opt-downscale').checked = !!App.model.settings.downscale;
+  $('#opt-maxdim').value = String(App.model.settings.maxDim);
+}
+var onStageInput = debounce(function(){
+  syncStageToModel();
+  updateFilmstripLabel();
+  refreshDirty();
+  scheduleSize();
+  scheduleAutosave();
+}, 400);
+
+/* ================= EDIT ================= */
+function gotoSlide(id){
+  if (!App.model.slides[id] || id === App.activeId) return;
+  syncStageToModel();
+  App.activeId = id;
+  renderFilmstrip(); renderStage(); renderInspector();
+  refreshDirty(); scheduleAutosave();
+}
+function addSlide(){
+  syncStageToModel();
+  var id = 's' + (App.model.nextId++);
+  App.model.slides[id] = { title: 'New slide', layout: 'title-body', transition: 'fade', html: skeletonFor('title-body'), notes: '' };
+  App.model.slideOrder.splice(activeIndex() + 1, 0, id);
+  App.activeId = id;
+  renderAll(); scheduleAutosave();
+}
+function duplicateSlide(){
+  syncStageToModel();
+  var src = activeSlide();
+  var id = 's' + (App.model.nextId++);
+  App.model.slides[id] = { title: src.title, layout: src.layout, transition: src.transition, html: src.html, notes: src.notes };
+  App.model.slideOrder.splice(activeIndex() + 1, 0, id);
+  App.activeId = id;
+  renderAll(); scheduleAutosave();
+}
+function deleteSlide(){
+  if (App.model.slideOrder.length <= 1) { alert('A deck needs at least one slide.'); return; }
+  if (!confirm('Delete slide "' + activeSlide().title + '"?')) return;
+  var i = activeIndex();
+  delete App.model.slides[App.activeId];
+  App.model.slideOrder.splice(i, 1);
+  App.activeId = App.model.slideOrder[Math.max(0, i - 1)];
+  renderAll(); scheduleAutosave();
+}
+function step(d){ var i = activeIndex() + d; if (i >= 0 && i < App.model.slideOrder.length) gotoSlide(App.model.slideOrder[i]); }
+function isEditingFocus(){
+  var a = document.activeElement;
+  // The whole #stage subtree is the contenteditable slide; form fields count too.
+  return !!a && !!(a.closest && a.closest('#stage,input,textarea,select'));
+}
+/* drag reorder (filmstrip) */
+var dragId = null;
+function onSlideDragStart(e){
+  dragId = this.dataset.id;
+  try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', dragId); } catch (err) {}
+}
+function onSlideDragOver(e){
+  if (!dragId || this.dataset.id === dragId) return;
+  e.preventDefault();
+  try { e.dataTransfer.dropEffect = 'move'; } catch (err) {}
+  this.classList.add('drop-before');
+}
+function onSlideDragLeave(){ this.classList.remove('drop-before'); }
+function onSlideDrop(e){
+  e.preventDefault();
+  this.classList.remove('drop-before');
+  var target = this.dataset.id, from = dragId;
+  dragId = null;
+  moveSlideBefore(from, target);
+}
+function onSlideDragEnd(){
+  dragId = null;
+  $all('#filmstrip-list .drop-before').forEach(function(el){ el.classList.remove('drop-before'); });
+}
+function moveSlideBefore(fromId, toId){
+  if (!fromId || !toId || fromId === toId) return false;
+  var order = App.model.slideOrder;
+  if (order.indexOf(fromId) < 0 || order.indexOf(toId) < 0) return false;
+  syncStageToModel();
+  order.splice(order.indexOf(fromId), 1);
+  order.splice(order.indexOf(toId), 0, fromId);
+  renderFilmstrip();
+  refreshDirty(); scheduleAutosave();
+  return true;
+}
+function appendMedia(el){
+  var sec = $('#stage .slide');
+  if (!sec) return;
+  sec.appendChild(el);
+  syncStageToModel(); refreshDirty(); scheduleSize(); scheduleAutosave();
+}
+function insertFile(file, kind){
+  var approx = formatBytes(Math.ceil(file.size * 4 / 3));
+  if (kind === 'video' && file.size > 8 * 1024 * 1024 &&
+      !confirm('This video is ' + formatBytes(file.size) + ' (≈' + approx + ' in the saved file, videos hardly compress). Consider trimming/compressing it first. Insert anyway?')) return;
+  if (kind !== 'video' && file.size > 6 * 1024 * 1024 &&
+      !confirm('This image is ' + formatBytes(file.size) + ' (≈' + approx + ' in the saved file). Identical files are stored only once. Insert anyway?')) return;
+  var r = new FileReader();
+  r.onload = function(){
+    var url = String(r.result || '');
+    if (kind === 'image' && shouldDownscale(file)) {
+      downscaleImage(url, App.model.settings.maxDim).then(function(small){ appendDataMedia(small, file, kind); });
+    } else appendDataMedia(url, file, kind);
+  };
+  r.onerror = function(){ alert('Could not read ' + file.name); };
+  r.readAsDataURL(file);
+}
+function appendDataMedia(url, file, kind){
+  if (kind === 'video') {
+    var v = document.createElement('video');
+    v.controls = true; v.preload = 'metadata'; v.src = url;
+    appendMedia(v);
+  } else {
+    var img = document.createElement('img');
+    img.alt = file.name; img.src = url;
+    appendMedia(img);
+  }
+}
+
+/* ================= PRESENT ================= */
+function openPresent(){
+  syncStageToModel();
+  App.presentIdx = Math.max(0, activeIndex());
+  $('#present-overlay').hidden = false;
+  showPresent(App.presentIdx);
+  try { var p = document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); if (p && p.catch) p.catch(function(){}); } catch (e) {}
+}
+function showPresent(i){
+  var order = App.model.slideOrder;
+  App.presentIdx = Math.max(0, Math.min(order.length - 1, i));
+  var s = App.model.slides[order[App.presentIdx]];
+  var host = $('#present-slide');
+  host.innerHTML = '';
+  var sec = document.createElement('section');
+  sec.className = 'slide layout-' + s.layout + (s.transition !== 'none' ? ' trans-' + s.transition : '');
+  sec.innerHTML = expandHtml(s.html, App.model.resources);
+  host.appendChild(sec);
+  void sec.offsetWidth; /* restart CSS animation */
+  $('#present-count').textContent = (App.presentIdx + 1) + ' / ' + order.length;
+}
+function closePresent(){
+  $('#present-overlay').hidden = true;
+  try { if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen(); } catch (e) {}
+  gotoSlide(App.model.slideOrder[App.presentIdx]);
+}
+
+/* ================= EXPORT VIEWER =================
+   A viewer copy = player shell + inlined slides (data: URIs), no editor code,
+   no data block. Built by string assembly; slide HTML is sanitized on every
+   sync/save/open, and <script> tags can therefore never reach the output. */
+var VIEWER_CSS = [
+  '#viewer{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:20px;background:var(--bg);color:var(--ink);}',
+  '#deck{display:flex;justify-content:center;width:100%;}',
+  '#deck .slide{width:min(1100px,94vw);font-size:clamp(14px,2.1vw,25px);}',
+  '#bar{display:flex;gap:12px;align-items:center;color:var(--muted);font-size:13px;flex-wrap:wrap;justify-content:center;}'
+].join('\n');
+var PLAYER_JS = [
+  "(function(){",
+  "'use strict';",
+  "var slides=Array.prototype.slice.call(document.querySelectorAll('#deck .slide'));",
+  "var idx=0;",
+  "var count=document.getElementById('count');",
+  "var deckTitle=document.title.replace(/ \\(viewer\\)$/,'');",
+  "function show(i){",
+  "idx=Math.max(0,Math.min(slides.length-1,i));",
+  "slides.forEach(function(s,j){",
+  "s.hidden=(j!==idx);",
+  "if(j===idx){",
+  "var t=s.getAttribute('data-trans');",
+  "s.classList.remove('trans-fade','trans-slide');",
+  "void s.offsetWidth;",
+  "if(t&&t!=='none'){s.classList.add('trans-'+t);}",
+  "document.title=s.getAttribute('data-title')+' — '+deckTitle;",
+  "}});",
+  "count.textContent=(idx+1)+' / '+slides.length;",
+  "}",
+  "function fs(){try{if(document.fullscreenElement){document.exitFullscreen();}else if(document.documentElement.requestFullscreen){document.documentElement.requestFullscreen();}}catch(e){}}",
+  "document.getElementById('prev').addEventListener('click',function(e){e.stopPropagation();show(idx-1);});",
+  "document.getElementById('next').addEventListener('click',function(e){e.stopPropagation();show(idx+1);});",
+  "document.getElementById('fs').addEventListener('click',function(e){e.stopPropagation();fs();});",
+  "document.getElementById('deck').addEventListener('click',function(){show(idx+1);});",
+  "document.addEventListener('keydown',function(e){",
+  "if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown'||e.key==='Enter'){e.preventDefault();show(idx+1);}",
+  "else if(e.key==='ArrowLeft'||e.key==='PageUp'){e.preventDefault();show(idx-1);}",
+  "else if(e.key==='Home'){e.preventDefault();show(0);}",
+  "else if(e.key==='End'){e.preventDefault();show(slides.length-1);}",
+  "else if(e.key==='f'||e.key==='F'){fs();}",
+  "});",
+  "show(0);",
+  "})();"
+].join('\n');
+function escAttr(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;'); }
+function escHtml(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
+function exportViewer(){
+  syncStageToModel();
+  sanitizeAllSlides();
+  renderFilmstrip();
+  var css = document.querySelector('style').textContent;
+  var sections = App.model.slideOrder.map(function(id, i){
+    var s = App.model.slides[id];
+    return '<section class="slide layout-' + s.layout + '" data-trans="' + s.transition +
+      '" data-title="' + escAttr(s.title) + '"' + (i === 0 ? '' : ' hidden') + '>' +
+      expandHtml(s.html, App.model.resources) + '</section>';
+  }).join('\n');
+  var doc = '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n' +
+    '<meta name="viewport" content="width=device-width, initial-scale=1">\n' +
+    '<title>' + escHtml(App.model.title) + ' (viewer)</title>\n<style>\n' + css + '\n' + VIEWER_CSS + '\n</style>\n</head>\n' +
+    '<body data-theme="' + App.model.theme + '">\n<div id="viewer">\n<div id="deck">\n' + sections +
+    '\n</div>\n<div id="bar"><button id="prev" title="Previous">Prev</button><span id="count"></span>' +
+    '<button id="next" title="Next">Next</button><button id="fs" title="Fullscreen">Fullscreen</button>' +
+    '<span id="hint">Space/arrow keys navigate · F fullscreen · click advances</span></div>\n</div>\n' +
+    '<script>\n' + PLAYER_JS + '\n<\/script>\n</body>\n</html>\n';
+  downloadBlob(new Blob([doc], { type: 'text/html;charset=utf-8' }), slugify(App.model.title) + '-viewer.html');
+  refreshDirty(); updateSize(); scheduleAutosave();
+}
+/* ================= SAVE / OPEN / NEW ================= */
+function downloadBlob(blob, name){
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+}
+function saveNow(){
+  syncStageToModel();
+  sanitizeAllSlides();
+  renderFilmstrip();
+  return buildSaveModel().then(function(built){
+    var clone = document.documentElement.cloneNode(true);
+    clone.querySelector('#slider-data').textContent = built.json;
+    clone.querySelector('#present-overlay').setAttribute('hidden', '');
+    // The live stage/presenter hold EXPANDED data: URIs for editing. The file must
+    // not serialize them (each file already lives once in the data block); boot
+    // rebuilds both from the model, so empty them in the clone.
+    ['#stage', '#present-slide'].forEach(function(sel){
+      var n = clone.querySelector(sel);
+      if (n) n.innerHTML = '';
+    });
+    $all('[src],[href]', clone).forEach(function(el){
+      ['src', 'href'].forEach(function(at){
+        var v = el.getAttribute && el.getAttribute(at);
+        if (v && /^\s*blob:/i.test(v)) el.removeAttribute(at);
+      });
+    });
+    var html = '<!doctype html>\n' + clone.outerHTML;
+    downloadBlob(new Blob([html], { type: 'text/html;charset=utf-8' }), slugify(App.model.title) + '.html');
+    App.lastClean = stable(App.model);
+    refreshDirty(); updateSize(); autosaveNow();
+    var el = $('#compress-stats');
+    if (el) el.textContent = built.text;
+  }).catch(function(e){ alert('Save failed: ' + (e && e.message ? e.message : e)); });
+}
+function loadModel(m, cleanJson){
+  App.model = m;
+  App.activeId = m.slideOrder[0];
+  App.lastClean = (typeof cleanJson === 'string') ? cleanJson : stable(m);
+  renderAll(); autosaveNow();
+}
+function openFile(file){
+  var r = new FileReader();
+  r.onload = function(){
+    try {
+      var doc = new DOMParser().parseFromString(String(r.result || ''), 'text/html');
+      var el = doc.querySelector('#slider-data');
+      if (!el) throw new Error('no data block');
+      var m = normalizeModel(JSON.parse(el.textContent));
+      if (!m) throw new Error('bad model');
+      if (App.dirty && !confirm('Discard unsaved changes and open "' + file.name + '"?')) return;
+      decodeModelResources(m).then(function(decoded){ loadModel(decoded); });
+    } catch (e) { alert('Could not open "' + file.name + '" as a Browslide deck.'); }
+  };
+  r.onerror = function(){ alert('Could not read "' + file.name + '".'); };
+  r.readAsText(file);
+}
+function newDeck(){
+  if (App.dirty && !confirm('Discard unsaved changes and start a new deck?')) return;
+  var m = readEmbeddedModel();
+  if (!m) { alert('Template starter data is damaged.'); return; }
+  loadModel(m);
+}
+
+/* ================= SIZE METER ================= */
+function updateSize(){
+  var total = App.overhead + stable(App.model).length;
+  var el = $('#size-meter');
+  el.textContent = 'Est. save size: ' + formatBytes(total);
+  el.classList.toggle('warn', total > 5 * 1024 * 1024 && total <= 20 * 1024 * 1024);
+  el.classList.toggle('big', total > 20 * 1024 * 1024);
+  renderSizes();
+}
+function renderSizes(){
+  /* per-slide + per-resource size breakdown (DOM-built: names are untrusted user input) */
+  var host = $('#sizes-body');
+  if (!host) return;
+  host.innerHTML = '';
+  var res = App.model.resources || {};
+  var use = deckResourceUse();
+  var big = document.createElement('div');
+  function line(parent, text, cls){
+    var d = document.createElement('div');
+    if (cls) d.className = cls;
+    d.textContent = text;
+    parent.appendChild(d);
+  }
+  var rids = Object.keys(res);
+  if (!rids.length) line(host, 'No media files in this deck.');
+  rids.forEach(function(id){
+    var r = res[id];
+    var users = use[id] || 0;
+    var row = document.createElement('div');
+    var t = document.createElement('span');
+    t.textContent = r.name + ' — ' + r.mime + ' — ' + formatBytes(r.size || 0) +
+      (users ? ' — used in ' + users + ' slide(s)' : ' — UNUSED') +
+      (r.size > 8 * 1024 * 1024 ? ' ⚠ large' : '') +
+      (!COMPRESSIBLE_RE.test(r.mime || '') ? ' — already compressed format' : (r.noCompress ? ' — compression off' : ''));
+    row.appendChild(t);
+    if (COMPRESSIBLE_RE.test(r.mime || '')) {
+      var b = document.createElement('button');
+      b.textContent = r.noCompress ? 'store: raw' : 'store: auto';
+      b.title = 'Per-file compression override (auto = compress on save when smaller)';
+      b.addEventListener('click', (function(rid){
+        return function(){
+          var rr = App.model.resources[rid];
+          if (!rr) return;
+          rr.noCompress = !rr.noCompress;
+          renderSizes(); refreshDirty(); scheduleAutosave();
+        };
+      })(id));
+      row.appendChild(document.createTextNode(' '));
+      row.appendChild(b);
+    }
+    if (!users) row.className = 'unused';
+    host.appendChild(row);
+  });
+  line(host, '—');
+  App.model.slideOrder.forEach(function(id, i){
+    var s = App.model.slides[id];
+    var rbytes = referencedIdsIn(s.html).reduce(function(a, rid){ return a + ((res[rid] && res[rid].size) || 0); }, 0);
+    line(host, (i + 1) + '. ' + s.title + ' — text ' + formatBytes(s.html.length) +
+      (rbytes ? ' + media ' + formatBytes(rbytes) + ' (shared files counted per slide)' : ''));
+  });
+  var btn = $('#btn-clean-media');
+  var dead = rids.filter(function(id){ return !use[id]; }).length;
+  btn.textContent = dead ? 'Remove unused media (' + dead + ')' : 'Remove unused media';
+  btn.disabled = !dead;
+}
+var scheduleSize = debounce(updateSize, 1200);
+
+/* ================= EVENTS + BOOT ================= */
+function bind(){
+  $('#btn-add').addEventListener('click', addSlide);
+  $('#btn-duplicate').addEventListener('click', duplicateSlide);
+  $('#btn-delete').addEventListener('click', deleteSlide);
+  $('#btn-prev').addEventListener('click', function(){ step(-1); });
+  $('#btn-next').addEventListener('click', function(){ step(1); });
+  $('#btn-present').addEventListener('click', openPresent);
+  $('#btn-present-close').addEventListener('click', function(e){ e.stopPropagation(); closePresent(); });
+  $('#present-overlay').addEventListener('click', function(){ showPresent(App.presentIdx + 1); });
+  $('#btn-save').addEventListener('click', saveNow);
+  $('#btn-export').addEventListener('click', exportViewer);
+  $('#btn-new').addEventListener('click', newDeck);
+  $('#btn-open').addEventListener('click', function(){ $('#open-file').click(); });
+  $('#open-file').addEventListener('change', function(e){ if (e.target.files[0]) openFile(e.target.files[0]); e.target.value = ''; });
+  $('#btn-img').addEventListener('click', function(){ $('#insert-image').click(); });
+  $('#btn-video').addEventListener('click', function(){ $('#insert-video').click(); });
+  $('#btn-clean-media').addEventListener('click', removeUnusedMedia);
+  $('#opt-compress').addEventListener('change', function(e){ App.model.settings.compress = !!e.target.checked; refreshDirty(); scheduleAutosave(); });
+  $('#opt-downscale').addEventListener('change', function(e){ App.model.settings.downscale = !!e.target.checked; refreshDirty(); scheduleAutosave(); });
+  $('#opt-maxdim').addEventListener('change', function(e){
+    var v = parseInt(e.target.value, 10);
+    App.model.settings.maxDim = (v === 1280 || v === 2560) ? v : 1920;
+    e.target.value = String(App.model.settings.maxDim);
+    refreshDirty(); scheduleAutosave();
+  });
+  $('#insert-image').addEventListener('change', function(e){ if (e.target.files[0]) insertFile(e.target.files[0], 'image'); e.target.value = ''; });
+  $('#insert-video').addEventListener('change', function(e){ if (e.target.files[0]) insertFile(e.target.files[0], 'video'); e.target.value = ''; });
+  $('#deck-title').addEventListener('input', debounce(function(e){
+    App.model.title = e.target.value.slice(0, 120);
+    document.title = (App.model.title || 'Browslide') + ' — Browslide';
+    refreshDirty(); scheduleAutosave();
+  }, 300));
+  $('#layout-select').addEventListener('change', function(e){
+    var s = activeSlide(); if (!s) return;
+    s.layout = e.target.value;
+    var sec = $('#stage .slide'); if (sec) sec.className = 'slide layout-' + s.layout;
+    refreshDirty(); scheduleAutosave();
+  });
+  $('#transition-select').addEventListener('change', function(e){ activeSlide().transition = e.target.value; refreshDirty(); scheduleAutosave(); });
+  $('#theme-select').addEventListener('change', function(e){
+    App.model.theme = e.target.value;
+    document.body.dataset.theme = App.model.theme;
+    refreshDirty(); scheduleAutosave();
+  });
+  $('#notes').addEventListener('input', debounce(function(e){ activeSlide().notes = e.target.value; refreshDirty(); scheduleAutosave(); }, 300));
+  $('#filmstrip-list').addEventListener('keydown', function(e){
+    var ids = App.model.slideOrder, i = activeIndex(), j = -1;
+    if (e.key === 'ArrowDown') j = Math.min(ids.length - 1, i + 1);
+    else if (e.key === 'ArrowUp') j = Math.max(0, i - 1);
+    else if (e.key === 'Home') j = 0;
+    else if (e.key === 'End') j = ids.length - 1;
+    else return;
+    e.preventDefault();
+    gotoSlide(ids[j]);
+    var btn = $('#filmstrip-list li:nth-child(' + (j + 1) + ') button');
+    if (btn) btn.focus();
+  });
+  document.addEventListener('keydown', function(e){
+    var presenting = !$('#present-overlay').hidden;
+    if (presenting) {
+      if (e.key === 'Escape') { e.preventDefault(); closePresent(); }
+      else if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown' || e.key === 'Enter') { e.preventDefault(); showPresent(App.presentIdx + 1); }
+      else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); showPresent(App.presentIdx - 1); }
+      else if (e.key === 'Home') { e.preventDefault(); showPresent(0); }
+      else if (e.key === 'End') { e.preventDefault(); showPresent(App.model.slideOrder.length - 1); }
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) { e.preventDefault(); saveNow(); }
+    else if ((e.ctrlKey || e.metaKey) && (e.key === 'o' || e.key === 'O')) { e.preventDefault(); $('#open-file').click(); }
+    else if ((e.key === 'PageDown' || e.key === 'PageUp' || e.key === 'Home' || e.key === 'End') && !isEditingFocus()) {
+      e.preventDefault();
+      if (e.key === 'PageDown') step(1);
+      else if (e.key === 'PageUp') step(-1);
+      else if (e.key === 'Home') gotoSlide(App.model.slideOrder[0]);
+      else gotoSlide(App.model.slideOrder[App.model.slideOrder.length - 1]);
+    }
+  });
+  window.addEventListener('dragover', function(e){ e.preventDefault(); });
+  window.addEventListener('drop', function(e){
+    e.preventDefault();
+    var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) openFile(f);
+  });
+}
+function boot(){
+  var m = readEmbeddedModel();
+  if (!m) { document.body.innerHTML = '<p style="padding:2em">Browslide template data is damaged.</p>'; return; }
+  try {
+    var full = '<!doctype html>\n' + document.documentElement.outerHTML;
+    App.overhead = full.length - $('#slider-data').textContent.length;
+  } catch (e) { App.overhead = 60000; }
+  decodeModelResources(m).then(function(decoded){
+    App.model = decoded;
+    App.activeId = decoded.slideOrder[0];
+    App.lastClean = stable(decoded);
+    bind();
+    renderAll();
+  IDB.get('autosave').then(function(rec){
+    if (!rec || !rec.json || rec.json === App.lastClean) return;
+    var age = rec.at ? new Date(rec.at).toLocaleString() : 'unknown time';
+    if (confirm('Unsaved work from ' + age + ' was found. Resume it?')) {
+      try {
+        var rm = normalizeModel(JSON.parse(rec.json));
+        if (rm) decodeModelResources(rm).then(function(decoded){ loadModel(decoded, App.lastClean); });
+      } catch (e) {}
+    }
+  });
+  });
+}
+document.addEventListener('DOMContentLoaded', boot);
+</script>
+</body>
+</html>

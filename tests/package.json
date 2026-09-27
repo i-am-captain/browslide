@@ -1,0 +1,13 @@
+{
+  "name": "browslide-tests",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Behavioral tests for browslide.html (dev-only; the app itself has zero dependencies)",
+  "type": "module",
+  "scripts": {
+    "test": "node roundtrip.mjs && node codec.mjs"
+  },
+  "devDependencies": {
+    "jsdom": "^26.1.0"
+  }
+}
