@@ -80,6 +80,7 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 #pos-flag{color:var(--muted);font-size:12px}
 #formatbar{display:flex;align-items:center;gap:6px;padding:6px 12px;background:var(--panel);border-bottom:1px solid var(--border);flex-wrap:wrap;flex:0 0 auto}
 #formatbar select{padding:4px 6px}
+#formatbar input[type="color"]{width:34px;height:26px;padding:1px 2px;background:var(--bg);border:1px solid var(--border);border-radius:6px;cursor:pointer}
 #formatbar button{min-width:30px}
 #formatbar button.active{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
 #formatbar .sep{width:1px;height:20px;background:var(--border)}
@@ -231,6 +232,7 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
     <option value="3em">48</option>
     <option value="4em">64</option>
   </select>
+  <input type="color" id="font-color" value="#000000" title="Text color">
   <span class="sep"></span>
   <button data-cmd="bold" title="Bold"><b>B</b></button>
   <button data-cmd="italic" title="Italic"><i>I</i></button>
@@ -251,6 +253,8 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
   <aside id="filmstrip"><ol id="filmstrip-list"></ol><button id="btn-add-end" title="Add slide at the end">+ Add slide</button></aside>
   <main id="stage-wrap"><div id="stage"></div></main>
   <aside id="inspector">
+    <details id="slide-menu">
+      <summary>Slide</summary>
     <label>Layout
       <select id="layout-select">
         <option value="title">Title</option>
@@ -267,6 +271,10 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
         <option value="slide">Slide</option>
       </select>
     </label>
+      <p><button id="btn-block" title="Add a free text block to this slide">+ Text block</button></p>
+    </details>
+    <details id="present-settings">
+      <summary>Presentation</summary>
     <label>Aspect ratio
       <select id="aspect-select">
         <option value="16:9">16:9</option>
@@ -284,8 +292,6 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
         <option value="dark">Dark</option>
       </select>
     </label>
-    <details id="present-settings">
-      <summary>Presentation settings</summary>
       <label class="row"><input type="checkbox" id="opt-showbar" checked> Toolbar in presentation</label>
       <label class="row"><input type="checkbox" id="opt-tight"> Maximum fullscreen (no border)</label>
     </details>
@@ -299,20 +305,8 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
         <p><button id="btn-anim-add" title="Add a step ending at the current position/size">+ Add step (capture current)</button></p>
       </div>
     </details>
-    <label>Speaker notes
-      <textarea id="notes" rows="6" placeholder="Notes for this slide (not shown on stage)"></textarea>
-    </label>
-    <div id="size-meter">Est. save size: —</div>
-    <details id="sizes-wrap">
-      <summary>Media &amp; sizes</summary>
-      <div id="sizes-body"></div>
-      <label class="row"><input type="checkbox" id="opt-compress"> Compress media on save (lossless)</label>
-      <div id="compress-stats"></div>
-      <p><button id="btn-clean-media">Remove unused media</button></p>
-    </details>
     <details id="insert-wrap">
       <summary>Insert</summary>
-      <p><button id="btn-block" title="Add a free text block to this slide">+ Text block</button></p>
       <p><button id="btn-img">Image…</button> <button id="btn-video">Video…</button></p>
       <label class="row"><input type="checkbox" id="opt-downscale"> Downscale photos on insert (max <select id="opt-maxdim"><option value="1280">1280</option><option value="1920" selected>1920</option><option value="2560">2560</option></select> px)</label>
     </details>
@@ -342,6 +336,17 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
       <div class="srow"><span>Scale Y</span><input id="shape-sy" type="number" min="0.1" max="5" step="0.1" title="Vertical scale of the selected item"></div>
       <div class="srow"><span></span><button id="btn-shape">Add shape</button></div>
     </details>
+    <div id="size-meter">Est. save size: —</div>
+    <details id="sizes-wrap">
+      <summary>Media &amp; Sizes</summary>
+      <div id="sizes-body"></div>
+      <label class="row"><input type="checkbox" id="opt-compress"> Compress media on save (lossless)</label>
+      <div id="compress-stats"></div>
+      <p><button id="btn-clean-media">Remove unused media</button></p>
+    </details>
+    <label>Speaker notes
+      <textarea id="notes" rows="6" placeholder="Notes for this slide (not shown on stage)"></textarea>
+    </label>
     <div id="repo-link"><a href="https://github.com/i-am-captain/browslide" title="Browslide on GitHub" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg> GitHub</a></div>
   </aside>
 </div>
@@ -768,9 +773,33 @@ function syncStageToModel(){
   var sec = $('#stage .slide');
   var s = activeSlide();
   if (sec && s) {
+    var saved = null;
+    try {
+      var sel0 = document.getSelection();
+      if (sel0.rangeCount > 0) {
+        /* static snapshot: Range objects may track live DOM moves */
+        saved = { a: sel0.anchorNode, ao: sel0.anchorOffset, f: sel0.focusNode, fo: sel0.focusOffset };
+      }
+    } catch (e) {}
     ensureStyledSpans(sec);
     s.html = sanitizeSlideHTML(collapseHtml(sec.innerHTML, App.model));
     s.title = deriveTitle(s.html);
+    if (saved) {
+      /* DOM surgery above must not disturb the caret (some engines reset it) */
+      try {
+        var sel1 = document.getSelection();
+        var same = sel1.rangeCount > 0 &&
+          sel1.anchorNode === saved.a && sel1.anchorOffset === saved.ao &&
+          sel1.focusNode === saved.f && sel1.focusOffset === saved.fo;
+        if (!same) {
+          var r = document.createRange();
+          r.setStart(saved.a, saved.ao);
+          r.setEnd(saved.f, saved.fo);
+          sel1.removeAllRanges();
+          sel1.addRange(r);
+        }
+      } catch (e) {}
+    }
   }
 }
 function refreshDirty(){
@@ -1143,11 +1172,84 @@ function moveSlideBefore(fromId, toId){
 }
 /* ---- text formatting (execCommand-based, works offline in every browser) ---- */
 var savedRange = null;
+function snapRange(r){
+  /* static snapshot: Range objects may track live DOM moves, nodes+offsets do not */
+  return { sc: r.startContainer, so: r.startOffset, ec: r.endContainer, eo: r.endOffset };
+}
+function savedInStage(){
+  var sec = $('#stage .slide');
+  return !!(sec && savedRange &&
+    (savedRange.sc === sec || sec.contains(savedRange.sc)) &&
+    (savedRange.ec === sec || sec.contains(savedRange.ec)));
+}
+var ALIGN_VALUES = { justifyLeft: 'left', justifyCenter: 'center', justifyRight: 'right', justifyFull: 'justify' };
+var BLOCK_TAGS_ALIGN = ['P', 'H1', 'H2', 'H3', 'LI', 'DIV', 'BLOCKQUOTE'];
+function blocksInSelection(){
+  /* block elements intersecting the selection (deduped to outermost) */
+  var sec = $('#stage .slide'), out = [];
+  if (!sec) return out;
+  try {
+    var sel = document.getSelection();
+    if (!sel.rangeCount) return out;
+    var range = sel.getRangeAt(0);
+    var walker = document.createTreeWalker(sec, NodeFilter.SHOW_ELEMENT, null);
+    var n;
+    while ((n = walker.nextNode())) {
+      if (BLOCK_TAGS_ALIGN.indexOf(n.tagName) >= 0 && range.intersectsNode(n)) out.push(n);
+    }
+  } catch (e) { return []; }
+  return out.filter(function(b){
+    var p = b.parentNode;
+    while (p && p !== sec) { if (out.indexOf(p) >= 0) return false; p = p.parentNode; }
+    return true;
+  });
+}
+function caretBlock(){
+  try {
+    var sel = document.getSelection();
+    if (!sel.rangeCount) return null;
+    var a = sel.anchorNode, sec = $('#stage .slide');
+    if (!sec || !(a === sec || sec.contains(a))) return null;
+    var n = (a.nodeType === 3) ? a.parentNode : a;
+    while (n && n !== sec) {
+      if (n.nodeType === 1 && BLOCK_TAGS_ALIGN.indexOf(n.tagName) >= 0) return n;
+      n = n.parentNode;
+    }
+  } catch (e) {}
+  return null;
+}
+function applyAlign(cmd){
+  if (!restoreSelection()) return;
+  var v = ALIGN_VALUES[cmd];
+  if (!v) return;
+  var blocks = blocksInSelection();
+  if (!blocks.length) {
+    var host = caretBlock();
+    if (host) blocks = [host];
+    else return;
+  }
+  blocks.forEach(function(b){ b.style.textAlign = v; });
+  afterFormat();
+}
+function alignState(){
+  /* effective alignment at the caret (reads the DOM, never sticks) */
+  try {
+    var b = caretBlock();
+    if (!b) return null;
+    var v = (b.style && b.style.textAlign) || '';
+    if (!v) { try { v = getComputedStyle(b).textAlign; } catch (e) {} }
+    v = String(v || '').toLowerCase();
+    if (v === 'center') return 'justifyCenter';
+    if (v === 'right' || v === 'end') return 'justifyRight';
+    if (v === 'justify') return 'justifyFull';
+    return 'justifyLeft';
+  } catch (e) { return null; }
+}
 function trackSelection(){
   try {
     var sel = document.getSelection();
     if (sel.rangeCount > 0 && $('#stage').contains(sel.anchorNode)) {
-      savedRange = sel.getRangeAt(0).cloneRange();
+      savedRange = snapRange(sel.getRangeAt(0));
     }
   } catch (e) {}
 }
@@ -1155,13 +1257,15 @@ function refocusStage(){
   /* applying via toolbar/selects drops focus; put the cursor back so typing continues */
   var sec = $('#stage .slide');
   if (!sec || !savedRange) return;
+  if (!savedInStage()) return;
   try {
-    var n = savedRange.startContainer;
-    if (!(n === sec || sec.contains(n))) return;
     try { sec.focus({ preventScroll: true }); } catch (e) { sec.focus(); }
     var sel = document.getSelection();
     sel.removeAllRanges();
-    sel.addRange(savedRange);
+    var r = document.createRange();
+    r.setStart(savedRange.sc, savedRange.so);
+    r.setEnd(savedRange.ec, savedRange.eo);
+    sel.addRange(r);
     reapplyPending();
   } catch (e) {}
 }
@@ -1172,12 +1276,15 @@ function restoreSelection(){
     var sel = document.getSelection();
     if (sel.rangeCount > 0 && sec.contains(sel.anchorNode)) return true;
     if (savedRange) {
-      var n = savedRange.startContainer;
-      if (n === sec || sec.contains(n)) {
-        sel.removeAllRanges();
-        sel.addRange(savedRange);
-        return true;
-      }
+      if (!savedInStage()) return false;
+      sel.removeAllRanges();
+      var r = document.createRange();
+      try {
+        r.setStart(savedRange.sc, savedRange.so);
+        r.setEnd(savedRange.ec, savedRange.eo);
+      } catch (e) { return false; }
+      sel.addRange(r);
+      return true;
     }
   } catch (e) {}
   return false;
@@ -1206,6 +1313,21 @@ function nearestStyleValue(node, names){
     n = n.parentNode;
   }
   return '';
+}
+function cssColorToHex(s){
+  s = String(s || '').trim().toLowerCase();
+  var m = /^#([0-9a-f]{3})$/.exec(s);
+  if (m) return '#' + m[1][0] + m[1][0] + m[1][1] + m[1][1] + m[1][2] + m[1][2];
+  if (/^#[0-9a-f]{6}$/.test(s)) return s;
+  m = /^rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)/.exec(s);
+  if (m) {
+    var hx = [m[1], m[2], m[3]].map(function(v){
+      v = Math.max(0, Math.min(255, parseInt(v, 10)));
+      return (v < 16 ? '0' : '') + v.toString(16);
+    });
+    return '#' + hx.join('');
+  }
+  return null;
 }
 function primaryFamily(s){
   return String(s || '').split(',')[0].replace(/['"]/g, '').trim().toLowerCase();
@@ -1264,6 +1386,11 @@ function syncFormatSelects(){
       var bi = sizeOptionForEm(em);
       if (bi >= 0) ssel.selectedIndex = bi;
     } else selectOption(ssel, function(v){ return v === '1em'; });
+    var fc2 = $('#font-color');
+    if (fc2 && document.activeElement !== fc2) {
+      var chx = cssColorToHex(nearestStyleValue(anchor, ['color']));
+      fc2.value = chx || '#000000';
+    }
     var blk = nearestBlock(anchor);
     if (blk) selectOption($('#style-select'), function(v){ return v === blk; });
   } catch (e) {}
@@ -1346,7 +1473,7 @@ function wrapSelectionInSpan(prop, value){
     var r2 = document.createRange();
     r2.selectNodeContents(span);
     sel.addRange(r2);
-    savedRange = r2.cloneRange();
+    savedRange = snapRange(r2);
     return true;
   } catch (e) { return false; }
 }
@@ -1365,6 +1492,10 @@ function capturePendingBase(){
     if (!pendingFormat.fontSize) {
       var bi = sizeOptionForEm(emOfSize(nearestStyleValue(anchor, ['fontSize'])));
       if (bi >= 0) pendingFormat.fontSize = $('#size-select').options[bi].value;
+    }
+    if (!pendingFormat.color) {
+      var col = cssColorToHex(nearestStyleValue(anchor, ['color']));
+      if (col) pendingFormat.color = col;
     }
     if (!pendingFormat.block) {
       var blk = nearestBlock(anchor);
@@ -1413,7 +1544,7 @@ function insertPendingSpan(prop, value){
     r2.collapse(true);
     sel.removeAllRanges();
     sel.addRange(r2);
-    savedRange = r2.cloneRange();
+    savedRange = snapRange(r2);
     return sp;
   } catch (e) { return null; }
 }
@@ -1504,6 +1635,11 @@ function paintPending(){
     var ssel = $('#size-select');
     if (pendingFormat.fontSize) selectOption(ssel, function(v){ return v === pendingFormat.fontSize; });
     else selectOption(ssel, function(v){ return v === '1em'; });
+    var fc = $('#font-color');
+    if (fc) {
+      var fhx = pendingFormat.color ? cssColorToHex(pendingFormat.color) : null;
+      if (document.activeElement !== fc) fc.value = fhx || '#000000';
+    }
     Array.prototype.forEach.call(document.querySelectorAll('#formatbar button[data-cmd]'), function(b){
       if (b.dataset.cmd !== 'clear') b.classList.toggle('active', !!pendingFormat.cmds[b.dataset.cmd]);
     });
@@ -1529,10 +1665,14 @@ function updateFormatUI(){
   try {
     var sel = document.getSelection();
     var inside = sel.rangeCount > 0 && $('#stage').contains(sel.anchorNode);
-    ['bold', 'italic', 'underline', 'strikeThrough', 'justifyLeft', 'justifyCenter', 'justifyRight', 'justifyFull'].forEach(function(c){
+    ['bold', 'italic', 'underline', 'strikeThrough'].forEach(function(c){
       on[c] = inside && document.queryCommandState(c);
     });
   } catch (e) {}
+  var al = alignState();
+  ['justifyLeft', 'justifyCenter', 'justifyRight', 'justifyFull'].forEach(function(c){
+    on[c] = al === c;
+  });
   Array.prototype.forEach.call(document.querySelectorAll('#formatbar button[data-cmd]'), function(b){
     if (b.dataset.cmd !== 'clear') b.classList.toggle('active', !!on[b.dataset.cmd]);
   });
@@ -2776,10 +2916,12 @@ function bind(){
       try { document.execCommand('removeFormat', false, null); } catch (err) {}
       pendingFormat = null;
       afterFormat();
-    } else applyCmd(b.dataset.cmd);
+    } else if (ALIGN_VALUES[b.dataset.cmd]) applyAlign(b.dataset.cmd);
+    else applyCmd(b.dataset.cmd);
   });
   $('#font-select').addEventListener('change', function(e){ applySpanStyle('fontFamily', e.target.value); });
   $('#size-select').addEventListener('change', function(e){ applySpanStyle('fontSize', e.target.value); });
+  $('#font-color').addEventListener('change', function(e){ applySpanStyle('color', e.target.value); });
   $('#style-select').addEventListener('change', function(e){ applyBlock(e.target.value); });
   document.addEventListener('selectionchange', function(){ trackSelection(); scheduleFormatUI(); });
   $('#stage-wrap').addEventListener('keyup', function(){ pendingFormat = null; scheduleFormatUI(); });

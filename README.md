@@ -20,7 +20,7 @@ Repo file vs. saved copies: `browslide.html` in this repo is the maintained **te
 | ◀ ▶ | Previous / next slide |
 | Present | Fullscreen show (`Space`/`→` next, `←` prev, `Home`/`End`, `Esc` exit, click advances). Presentation settings (inspector): toolbar on/off, aesthetic border vs maximum fullscreen. |
 | Export viewer | Downloads a small standalone copy (`<title>-viewer.html`) for sharing: slides + player only, no editor code, no notes. Works from `file://` everywhere. |
-| Format bar | Paragraph style (H1–H3), font (system fonts only) and size, bold/italic/underline/strikethrough, alignment, bullet/numbered lists, clear formatting. Applies to selected text — or set it first, then type. |
+| Format bar | Paragraph style (H1–H3), font (system fonts only), size and text color, bold/italic/underline/strikethrough, alignment, bullet/numbered lists, clear formatting. Applies to selected text — or set it first, then type. |
 | Blocks | Slide content lives in freely positionable blocks: click once to select, drag the ⋮⋮ grip to move, click again to edit text. Ctrl/Cmd/shift-click multi-selects (move/resize/animate together). Images land in blocks too; add more with + Text block under Insert. Copy/paste blocks with Ctrl+C / Ctrl+V. |
 | Shapes | 12 insertable vector symbols (arrows, line, circle, square, triangle, star, check, cross) as movable blocks, with line width and color presets for new shapes. With a shape selected, width/color apply live; rotate and per-axis scale apply to any selected item. |
 | Animations | Per-element keyframe steps (position, size, scale, rotation, opacity) in numbered groups that play together per click, or chained automatically with delay. Easing: linear, accelerate, accel-decel. Set in the Animation panel on any selected block or image; plays in Present and viewer exports. |
@@ -28,7 +28,7 @@ Repo file vs. saved copies: `browslide.html` in this repo is the maintained **te
 | New | Fresh starter deck (asks first if you have unsaved changes) |
 | Save (or Ctrl+S) | Downloads the whole deck as one `.html` file. Note: browsers can't silently overwrite the file you opened, so each Save is a new download — replace the old file with it. |
 
-Right panel: layout, aspect ratio (16:9, 4:3, custom), transition (none/fade/slide), theme (dark/light), presentation settings, animation (on selection), per-slide speaker notes, estimated save size, media insert and sizes, GitHub link.
+Right panel, top to bottom: Slide menu (layout, transition, text block), Presentation (aspect ratio, theme, toolbar, fullscreen), Animation, Insert, Shapes, save-size estimate, Media & Sizes, speaker notes, GitHub link.
 
 Left list: click to jump, **drag to reorder**, `PageUp`/`PageDown`/`Home`/`End` navigate when not editing text.
 

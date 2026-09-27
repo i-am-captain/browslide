@@ -1290,5 +1290,63 @@ DT2.dispatchEvent(new WT2.KeyboardEvent('keydown', { key: 'v', ctrlKey: true, bu
 await wait(100);
 check('paste in fields stays native', WT2.App.model.slides[WT2.App.activeId].html === modelBefore);
 
+// ---------- 31. alignment without execCommand + text color ----------
+const domAA = makeDom(html);
+await wait(400);
+const WAA = domAA.window, DAA = domAA.window.document;
+function aaRange() {
+  const r = DAA.createRange();
+  r.setStart(aaSec().querySelectorAll('p')[0].firstChild, 0);
+  r.setEnd(aaSec().querySelectorAll('p')[1].firstChild, 2);
+  DAA.getSelection().removeAllRanges();
+  DAA.getSelection().addRange(r);
+}
+function aaSec() { return DAA.querySelector('#stage .slide'); }
+check('cssColorToHex units', WAA.cssColorToHex('#abc') === '#aabbcc' && WAA.cssColorToHex('#aabbcc') === '#aabbcc' &&
+  WAA.cssColorToHex('rgb(1, 2, 3)') === '#010203' && WAA.cssColorToHex('bogus') === null && WAA.cssColorToHex('') === null);
+aaSec().innerHTML = '<p>one</p><p>two <b>bold</b></p>';
+aaRange();
+WAA.applyAlign('justifyCenter');
+check('align applies to all blocks in range', aaSec().querySelectorAll('p')[0].style.textAlign === 'center' &&
+  aaSec().querySelectorAll('p')[1].style.textAlign === 'center');
+check('align persists to model', (WAA.activeSlide().html.match(/text-align:\s*center/g) || []).length === 2);
+WAA.updateFormatUI();
+const actBtns = Array.prototype.filter.call(DAA.querySelectorAll('#formatbar button[data-cmd]'), (b) => b.classList.contains('active')).map((b) => b.dataset.cmd);
+check('align buttons reflect exactly one state', JSON.stringify(actBtns) === JSON.stringify(['justifyCenter']), actBtns.join(','));
+const crngAA = DAA.createRange();
+crngAA.setStart(aaSec().querySelectorAll('p')[1].firstChild, 0);
+crngAA.collapse(true);
+DAA.getSelection().removeAllRanges();
+DAA.getSelection().addRange(crngAA);
+WAA.applyAlign('justifyRight');
+check('collapsed caret aligns its block only', aaSec().querySelectorAll('p')[1].style.textAlign === 'right' &&
+  aaSec().querySelectorAll('p')[0].style.textAlign === 'center');
+aaSec().innerHTML = '<p>plain</p>';
+const prngAA = DAA.createRange();
+prngAA.selectNodeContents(aaSec().querySelector('p').firstChild);
+DAA.getSelection().removeAllRanges();
+DAA.getSelection().addRange(prngAA);
+WAA.updateFormatUI();
+const actBtns2 = Array.prototype.filter.call(DAA.querySelectorAll('#formatbar button[data-cmd]'), (b) => b.classList.contains('active')).map((b) => b.dataset.cmd);
+check('unstyled text shows left only', JSON.stringify(actBtns2) === JSON.stringify(['justifyLeft']), actBtns2.join(','));
+const corng = DAA.createRange();
+corng.setStart(aaSec().querySelector('p').firstChild, 0);
+corng.setEnd(aaSec().querySelector('p').firstChild, 5);
+DAA.getSelection().removeAllRanges();
+DAA.getSelection().addRange(corng);
+WAA.applySpanStyle('color', '#ff0000');
+const coSpans = Array.prototype.filter.call(aaSec().querySelectorAll('span'), (s) => s.style.color !== '');
+check('color wraps selection in span', coSpans.length === 1);
+WAA.updateFormatUI();
+check('color input follows cursor', DAA.querySelector('#font-color').value === '#ff0000');
+const ccRng = DAA.createRange();
+ccRng.setStart(aaSec().querySelector('p').firstChild, 0);
+ccRng.collapse(true);
+DAA.getSelection().removeAllRanges();
+DAA.getSelection().addRange(ccRng);
+WAA.applySpanStyle('color', '#00ff00');
+check('collapsed color inserts pending span', WAA.pendingFormat.color === '#00ff00' &&
+  !!aaSec().querySelector('span[data-bsw="pending"]'));
+
 console.log(failures === 0 ? '\nALL TESTS PASSED' : `\n${failures} TEST(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);
