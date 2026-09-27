@@ -66,4 +66,8 @@ Editable app and saved decks: Chrome, Edge, Firefox, Safari (current versions), 
 
 ## Roadmap
 
-Done: viewer-only export, native compression + photo downscale (see above). Remaining: manual browser matrix test (open/edit/save/reopen in Chrome/Edge/Firefox/Safari from `file://`).
+Done: viewer-only export, native compression + photo downscale (see above).
+Planned:
+- Symbols: insertable arrows, circles and other shapes for annotating slides.
+- Animations: entrance and step-reveal effects per element, previewable in the editor.
+Remaining: manual browser matrix test (open/edit/save/reopen in Chrome/Edge/Firefox/Safari from `file://`).
