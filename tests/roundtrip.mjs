@@ -1552,6 +1552,13 @@ DZB.defaultView.dispatchEvent(new WZB.MouseEvent('pointermove', { bubbles: true,
 DZB.defaultView.dispatchEvent(new WZB.MouseEvent('pointerup', { bubbles: true, clientX: 100, clientY: 0 }));
 await wait(100);
 check('group drag moves all', zbBlks[0].style.left !== m0l && zbBlks[1].style.left !== m1l);
+// move grip delegates to the shared whole-item drag (no caret placement)
+const gripL = zbBlks[0].style.left;
+DZB.querySelector('#media-resizer .mmove').dispatchEvent(new WZB.MouseEvent('pointerdown', { bubbles: true, cancelable: true, clientX: 0, clientY: 0 }));
+DZB.defaultView.dispatchEvent(new WZB.MouseEvent('pointermove', { bubbles: true, clientX: 80, clientY: 0 }));
+DZB.defaultView.dispatchEvent(new WZB.MouseEvent('pointerup', { bubbles: true, clientX: 80, clientY: 0 }));
+await wait(100);
+check('grip drag moves selection', zbBlks[0].style.left !== gripL);
 
 // ---------- 35. global stage scrub slider ----------
 const domSB = makeDom(html);

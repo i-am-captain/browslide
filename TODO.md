@@ -24,6 +24,28 @@ decide, document below, continue.
 
 - [x] 13. Step-edit drops keep showing the edited step (canvas no longer strands at rest; consecutive edits work without deselect). Done: 427 checks pass.
 
+# Round 6 (full review pass, fresh-eyes from disk)
+
+- [x] 14. Dead code removed, duplication reduced, anchors verified. Done: 428 checks pass.
+
+# Decisions (round 6)
+
+- Removed: `selectedShapeSvg` (no callers), `snapToFirst` (no-op since initial steps —
+  stage HTML is always rest at `showPresent`, and the viewer player never had it),
+  dead `#shapes-wrap .srow input[type="number"]` CSS rule.
+- Unified: `onGripDown` delegates to `startItemDrag(e, false)` (was a 30-line duplicate);
+  `trackDrag` owns pointer-listener lifecycle for all four drag kinds;
+  `refreshSelectionUI` is the single selection-change path;
+  `SHAPE_KEYS` is the one keyframe-key <-> attr table (4 inline pair-lists rewritten as loops);
+  `removeAnimStep` is the single step-delete path (button + emptied-row).
+- Kept deliberately: `PLAYER_JS` engine duplication (the viewer export must be one
+  self-contained string; the no-editor-code regex + size guard is the real check),
+  `SHAPES` global (built in app, consumed by tests as the library contract),
+  `moveTargetTo` (app helper exercised by tests as an interaction proxy).
+- Fixed stale size comments: map header (~1150 -> ~3700) and AGENTS.md (~2200 -> ~3700).
+- All map anchors re-verified at 2 hits each; no duplicate element IDs (dup-id hits are
+  map-comment mentions by design); no stray console/TODO markers in app code.
+
 # Decisions (round 5)
 
 - `commitStepGeometry` re-applies the written step pose after saving rest, because the

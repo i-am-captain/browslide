@@ -1,7 +1,7 @@
 <!doctype html>
 <!--
   ===================== BROWSLIDE — AGENT MAP =====================
-  Read this map, NOT the whole file (~1150 lines). Every area has a unique
+  Read this map, NOT the whole file (~3700 lines). Every area has a unique
   ANCHOR string. Locate it with:
       grep -nF 'ANCHOR' browslide.html
   You will get two hits: this map line, then the target. Use the later one.
@@ -119,7 +119,6 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 #shapes-wrap .srow{display:flex;align-items:center;gap:8px;margin:5px 0}
 #shapes-wrap .srow>span:first-child{flex:1;color:var(--muted);font-size:12px}
 #shapes-wrap .srow select{width:118px}
-#shapes-wrap .srow input[type="number"]{width:64px}
 #shapes-wrap .srow button{margin-left:auto}
 #shapes-wrap input:disabled{opacity:.45}
 .selextra{position:absolute;border:2px dashed var(--accent);border-radius:4px;pointer-events:none;z-index:4}
@@ -1777,12 +1776,16 @@ function selectedItems(){
   resizer.extra.forEach(function(el){ if (el && document.contains(el) && out.indexOf(el) < 0) out.push(el); });
   return out;
 }
-function setSingleSelection(el){
-  resizer.el = el;
-  resizer.extra = [];
+function refreshSelectionUI(){
+  /* overlay + rows follow every selection change through this one path */
   resizerOverlay();
   positionResizer();
   refreshAnimUI();
+}
+function setSingleSelection(el){
+  resizer.el = el;
+  resizer.extra = [];
+  refreshSelectionUI();
 }
 function toggleSelection(el){
   var all = selectedItems();
@@ -1792,9 +1795,7 @@ function toggleSelection(el){
   resizer.el = all.length ? all[all.length - 1] : null;
   resizer.extra = all.slice(0, -1);
   if (!resizer.el) { deselectMedia(); return; }
-  resizerOverlay();
-  positionResizer();
-  refreshAnimUI();
+  refreshSelectionUI();
 }
 function clearSelection(){
   exitStepEdit();
@@ -1803,8 +1804,7 @@ function clearSelection(){
   var ov = $('#media-resizer');
   if (ov) ov.hidden = true;
   Array.prototype.forEach.call(document.querySelectorAll('#stage-wrap .selextra'), function(n){ n.remove(); });
-  positionResizer();
-  refreshAnimUI();
+  refreshSelectionUI();
 }
 /* ---- internal block clipboard (Ctrl+C / Ctrl+V on selected blocks) ---- */
 var clipItems = [];
@@ -1837,9 +1837,7 @@ function pasteClipboard(){
   resizer.extra = added.slice(0, -1);
   added.forEach(function(n){ ensureInitialStep(n); syncInitialStep(n); }); /* pasted offset pose becomes the copy's initial state */
   persistSlide();
-  resizerOverlay();
-  positionResizer();
-  refreshAnimUI();
+  refreshSelectionUI();
   return true;
 }
 function caretInStageText(){
@@ -1904,12 +1902,6 @@ function ensurePositioned(el){
   try { pos = window.getComputedStyle(el).position; } catch (e) {}
   if (pos !== 'absolute') el.style.position = 'absolute';
 }
-function selectedShapeSvg(el){
-  el = el || resizer.el;
-  if (!el || !document.contains(el)) return null;
-  if (el.tagName && el.tagName.toLowerCase() === 'svg') return el;
-  return el.querySelector ? el.querySelector('svg') : null;
-}
 function caretRangeAtPoint(x, y){
   /* collapsed range at viewport point, or null (missing API / outside slide) */
   try {
@@ -1948,9 +1940,21 @@ function placeCaretAtPoint(x, y){
     return true;
   } catch (e) { return false; }
 }
-function startItemDrag(e){
+function trackDrag(host, onMove, onUp){
+  /* one place for pointer-drag listener lifecycle (handle or window) */
+  function off(){
+    host.removeEventListener('pointermove', onMove);
+    host.removeEventListener('pointerup', up);
+    host.removeEventListener('pointercancel', up);
+  }
+  function up(ev){ off(); onUp(ev); }
+  host.addEventListener('pointermove', onMove);
+  host.addEventListener('pointerup', up);
+  host.addEventListener('pointercancel', up);
+}
+function startItemDrag(e, caret){
   /* press-drag anywhere grabbed on the selection moves the whole set;
-     a clean click without movement just places the caret */
+     a clean click without movement just places the caret (grip: no caret) */
   var items = selectedItems();
   var sec = $('#stage .slide');
   if (!items.length || !sec) return;
@@ -1967,19 +1971,14 @@ function startItemDrag(e){
     if (moveItemsBy(starts, ev.clientX - startX, ev.clientY - startY, slideW, slideH)) positionResizer();
   }
   function onUp(ev){
-    window.removeEventListener('pointermove', onMove);
-    window.removeEventListener('pointerup', onUp);
-    window.removeEventListener('pointercancel', onUp);
     if (!moved) {
-      if (isFinite(ev.clientX)) placeCaretAtPoint(ev.clientX, ev.clientY);
+      if (caret !== false && isFinite(ev.clientX)) placeCaretAtPoint(ev.clientX, ev.clientY);
       return; /* plain click: selection already set, model untouched */
     }
     if (!selectedItems().length) return;
     commitStepGeometries();
   }
-  window.addEventListener('pointermove', onMove);
-  window.addEventListener('pointerup', onUp);
-  window.addEventListener('pointercancel', onUp);
+  trackDrag(window, onMove, onUp);
 }
 function shiftPct(startPx, dxPx, slidePx, max){
   if (!(slidePx > 0) || !(startPx >= 0)) return null;
@@ -2017,15 +2016,10 @@ function onRotateDown(e){
     positionResizer();
   };
   var onUp = function(){
-    g.removeEventListener('pointermove', onMove);
-    g.removeEventListener('pointerup', onUp);
-    g.removeEventListener('pointercancel', onUp);
     if (!selectedItems().length) return;
     commitStepGeometries();
   };
-  g.addEventListener('pointermove', onMove);
-  g.addEventListener('pointerup', onUp);
-  g.addEventListener('pointercancel', onUp);
+  trackDrag(g, onMove, onUp);
 }
 /* ---- size handles edit values, never literal scale: shape geometry params
    for shapes (arrow length, circle radius, rect w+h…), % width/height for
@@ -2039,16 +2033,18 @@ function shapeSizeKeys(kind){
   if (kind === 'rectangle' || kind === 'ellipse') return ['sw', 'sh'];
   return []; /* star/check/cross: fixed size, no size handles */
 }
+/* keyframe key <-> svg geometry attr, single table (player string keeps its own copy) */
+var SHAPE_KEYS = { slen: 'len', sr: 'radius', sw: 'width', sh: 'height' };
 function shapeAttrFor(skey){
-  return skey === 'slen' ? 'len' : skey === 'sr' ? 'radius' : skey === 'sw' ? 'width' : 'height';
+  return SHAPE_KEYS[skey] || 'height';
 }
 function shapeSkeyFor(kind, param){
   /* geometry param name -> keyframe key (null when the kind has no such size) */
-  if (param === 'len' && (kind.indexOf('arrow') === 0 || kind === 'line')) return 'slen';
-  if (param === 'radius' && kind === 'circle') return 'sr';
-  if (param === 'width' && (kind === 'rectangle' || kind === 'ellipse')) return 'sw';
-  if (param === 'height' && (kind === 'square' || kind === 'triangle' || kind === 'rectangle' || kind === 'ellipse')) return 'sh';
-  return null;
+  var skey = null;
+  Object.keys(SHAPE_KEYS).forEach(function(k){ if (SHAPE_KEYS[k] === param) skey = k; });
+  if (!skey) return null;
+  var keys = shapeSizeKeys(kind) || [];
+  return keys.indexOf(skey) >= 0 ? skey : null;
 }
 function shapeKeyLimits(skey){ return skey === 'sr' ? [2, 250] : [5, 500]; }
 function shapeSvgOf(el){
@@ -2148,16 +2144,11 @@ function onSizeDown(e, mode){
     positionResizer();
   };
   var onUp = function(){
-    g.removeEventListener('pointermove', onMove);
-    g.removeEventListener('pointerup', onUp);
-    g.removeEventListener('pointercancel', onUp);
     if (!selectedItems().length) return;
     try { g.releasePointerCapture(e.pointerId); } catch (err) {}
     commitStepGeometries();
   };
-  g.addEventListener('pointermove', onMove);
-  g.addEventListener('pointerup', onUp);
-  g.addEventListener('pointercancel', onUp);
+  trackDrag(g, onMove, onUp);
 }
 function shiftPos(startPct, dPx, slidePx){
   if (!(slidePx > 0) || !isFinite(startPct)) return null;
@@ -2185,36 +2176,12 @@ function moveTargetTo(leftPct, topPct){
   return true;
 }
 function onGripDown(e){
-  var items = selectedItems();
-  if (!items.length) return;
+  /* the ⋮⋮ grip is just a grabbed whole-item drag without caret placement */
+  if (!selectedItems().length) return;
   e.preventDefault();
   e.stopPropagation();
-  var sec = $('#stage .slide');
-  if (!sec) return;
-  items.forEach(ensurePositioned);
-  maybeAutoStepEdit(items);
-  var g = e.currentTarget;
-  try { g.setPointerCapture(e.pointerId); } catch (err) {}
-  var slideW = sec.clientWidth || 0, slideH = sec.clientHeight || 0;
-  var starts = items.map(function(el){
-    return { el: el, l: parseFloat(el.style.left) || 0, t: parseFloat(el.style.top) || 0 };
-  });
-  var startX = e.clientX, startY = e.clientY;
-  var firstMove = true;
-  var onMove = function(ev){
-    if (firstMove) { firstMove = false; forgetScrubbedRest(items); }
-    if (moveItemsBy(starts, ev.clientX - startX, ev.clientY - startY, slideW, slideH)) positionResizer();
-  };
-  var onUp = function(){
-    g.removeEventListener('pointermove', onMove);
-    g.removeEventListener('pointerup', onUp);
-    g.removeEventListener('pointercancel', onUp);
-    if (!selectedItems().length) return;
-    commitStepGeometries();
-  };
-  g.addEventListener('pointermove', onMove);
-  g.addEventListener('pointerup', onUp);
-  g.addEventListener('pointercancel', onUp);
+  try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) {}
+  startItemDrag(e, false);
 }
 function resizerOverlay(){
   var ov = $('#media-resizer');
@@ -2736,6 +2703,19 @@ function stepSummary(e){
   if (e.initial) return 'Initial state · group ' + e.group + ' · ' + base;
   return 'Step ' + e.group + ' · ' + base + ' · ' + e.mode;
 }
+function removeAnimStep(el, list, idx){
+  /* shared step-delete path: splice, write, drop focus so the caret guard
+     can't protect the removed row, force a full row rebuild */
+  exitStepEdit();
+  list.splice(idx, 1);
+  writeAnimList(el, list);
+  if (document.activeElement && document.activeElement.blur) {
+    try { document.activeElement.blur(); } catch (err) {}
+  }
+  animRowsFor = null;
+  persistSlide();
+  refreshAnimUI(true);
+}
 function rowTarget(rowEl){
   /* resolve target live: rows may outlive the element they were built for */
   var el = selectedAnimTarget();
@@ -2777,15 +2757,7 @@ function buildAnimRows(el){
         var t = rowTarget(det);
         if (!t) { refreshAnimUI(true); return; }
         if (t.list[t.idx].initial) return; /* initial state cannot be deleted */
-        exitStepEdit();
-        t.list.splice(t.idx, 1);
-        writeAnimList(t.el, t.list);
-        if (document.activeElement && document.activeElement.blur) {
-          try { document.activeElement.blur(); } catch (err) {}
-        }
-        animRowsFor = null;
-        persistSlide();
-        refreshAnimUI(true);
+        removeAnimStep(t.el, t.list, t.idx);
       });
       sum.appendChild(del);
     }
@@ -2914,15 +2886,7 @@ function buildAnimRows(el){
           refreshAnimUI(true);
           return;
         }
-        next.splice(idx, 1);
-        writeAnimList(el, next);
-        if (stepEdit && stepEdit.el === el) exitStepEdit();
-        if (document.activeElement && document.activeElement.blur) {
-          try { document.activeElement.blur(); } catch (err) {}
-        }
-        animRowsFor = null;
-        persistSlide();
-        refreshAnimUI(true);
+        removeAnimStep(el, next, idx);
         return;
       }
       writeAnimList(el, next);
@@ -2941,8 +2905,8 @@ function buildAnimRows(el){
         var isvg = shapeSvgOf(el);
         if (isvg) {
           var itS = false;
-          [['slen', 'len'], ['sr', 'radius'], ['sw', 'width'], ['sh', 'height']].forEach(function(pr){
-            if (it[pr[0]] !== undefined) { isvg.setAttribute('data-' + pr[1], String(it[pr[0]])); itS = true; }
+          Object.keys(SHAPE_KEYS).forEach(function(sk){
+            if (it[sk] !== undefined) { isvg.setAttribute('data-' + SHAPE_KEYS[sk], String(it[sk])); itS = true; }
           });
           if (itS) renderShape(isvg);
         }
@@ -3138,7 +3102,6 @@ function kfCancel(){
 function kfReset(sec, revealAll){
   kfCancel();
   kfCollect(sec);
-  if (!revealAll) snapToFirst(sec);
   Array.prototype.forEach.call(sec.querySelectorAll('[data-hidden]'), function(n){
     n.style.visibility = revealAll ? 'visible' : 'hidden';
   });
@@ -3167,26 +3130,14 @@ function applyKeyframeState(el, to){
   var asvg = shapeSvgOf(el);
   if (asvg) {
     var touchedS = false;
-    [['slen', 'len'], ['sr', 'radius'], ['sw', 'width'], ['sh', 'height']].forEach(function(pair){
-      if (to[pair[0]] !== undefined && isFinite(+to[pair[0]])) {
-        asvg.setAttribute('data-' + pair[1], String(+to[pair[0]]));
+    Object.keys(SHAPE_KEYS).forEach(function(sk){
+      if (to[sk] !== undefined && isFinite(+to[sk])) {
+        asvg.setAttribute('data-' + SHAPE_KEYS[sk], String(+to[sk]));
         touchedS = true;
       }
     });
     if (touchedS) renderShape(asvg);
   }
-}
-function snapToFirst(sec){
-  /* multi-step elements start at their first keyframe, so the first advance
-     never jumps backward; single-step elements keep their rest state */
-  Array.prototype.forEach.call(sec.querySelectorAll('[data-anim]'), function(n){
-    var list = parseAnimList(n.getAttribute('data-anim'));
-    if (list.length < 2) return;
-    var g0 = Math.min.apply(null, list.map(function(e){ return e.group; }));
-    for (var i = 0; i < list.length; i++) {
-      if (list[i].group === g0) { applyKeyframeState(n, list[i].to); return; }
-    }
-  });
 }
 function entryWouldMove(entry, el){
   if (el.style.visibility === 'hidden') return true; /* playing reveals it */
@@ -3234,10 +3185,10 @@ function kfCurrent(el, to){
   var fsvg = shapeSvgOf(el);
   if (fsvg) {
     from.ss = {};
-    [['slen', 'len'], ['sr', 'radius'], ['sw', 'width'], ['sh', 'height']].forEach(function(pair){
-      if (to[pair[0]] === undefined) return;
-      var v = parseFloat(fsvg.getAttribute('data-' + pair[1]));
-      from.ss[pair[0]] = isFinite(v) ? v : to[pair[0]];
+    Object.keys(SHAPE_KEYS).forEach(function(sk){
+      if (to[sk] === undefined) return;
+      var v = parseFloat(fsvg.getAttribute('data-' + SHAPE_KEYS[sk]));
+      from.ss[sk] = isFinite(v) ? v : to[sk];
     });
   }
   return from;
