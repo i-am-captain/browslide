@@ -1466,9 +1466,18 @@ function saveNow(){
 }
 function loadModel(m, cleanJson){
   App.model = m;
+  sanitizeAllSlides(); /* ultimate backstop: no unsanitized HTML ever renders */
   App.activeId = m.slideOrder[0];
   App.lastClean = (typeof cleanJson === 'string') ? cleanJson : stable(m);
   renderAll(); autosaveNow();
+}
+function resumeModel(json, cleanJson){
+  /* autosave resume goes through the same validation as every other load path */
+  var rm = null;
+  try { rm = normalizeModel(JSON.parse(json)); } catch (e) {}
+  if (!rm) return false;
+  decodeModelResources(rm).then(function(decoded){ loadModel(decoded, cleanJson); });
+  return true;
 }
 function openFile(file){
   var r = new FileReader();
@@ -1700,10 +1709,7 @@ function boot(){
     if (!rec || !rec.json || rec.json === App.lastClean) return;
     var age = rec.at ? new Date(rec.at).toLocaleString() : 'unknown time';
     if (confirm('Unsaved work from ' + age + ' was found. Resume it?')) {
-      try {
-        var rm = normalizeModel(JSON.parse(rec.json));
-        if (rm) decodeModelResources(rm).then(function(decoded){ loadModel(decoded, App.lastClean); });
-      } catch (e) {}
+      resumeModel(rec.json, App.lastClean);
     }
   });
   });

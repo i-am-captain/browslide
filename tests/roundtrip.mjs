@@ -791,6 +791,21 @@ uSec.dispatchEvent(new WU.Event('paste', { bubbles: true }));
 await wait(150);
 check('paste cleans font tags live', uSec.querySelectorAll('font').length === 0 && /font-size:\s*3em/.test(uSec.innerHTML));
 check('paste cleanup reaches model', !WU.activeSlide().html.includes('<font'));
+// ---------- 23. resume + loadModel validate like every other load path ----------
+const domV = makeDom(html);
+await wait(400);
+const WV = domV.window, DV = WV.document;
+const legacy = { app: 'browslide', version: 2, title: 'Old', theme: 'dark', slideOrder: ['s1'], nextId: 2, nextResId: 1,
+  settings: { compress: true, downscale: false, maxDim: 1920, showBar: true, tight: false }, aspect: { w: 16, h: 9 },
+  resources: {}, slides: { s1: { title: 'Old', layout: 'blank', transition: 'none', notes: '', html: '<p>old<font size="7">junk</font></p>' } } };
+check('resumeModel accepts legacy autosave', WV.resumeModel(JSON.stringify(legacy)) === true);
+await wait(300);
+check('resume cleans font tags', !WV.activeSlide().html.includes('<font') && /font-size:\s*3em/.test(WV.activeSlide().html));
+check('resume rejects garbage', WV.resumeModel('not json{{{') === false);
+WV.loadModel({ app: 'browslide', version: 2, title: 'Raw', theme: 'dark', slideOrder: ['s1'], nextId: 2, nextResId: 1,
+  settings: { compress: true, downscale: false, maxDim: 1920, showBar: true, tight: false }, aspect: { w: 16, h: 9 },
+  resources: {}, slides: { s1: { title: 'Raw', layout: 'blank', transition: 'none', notes: '', html: '<p>raw<font size="4">junk</font></p>' } } });
+check('loadModel backstop sanitizes', !WV.activeSlide().html.includes('<font') && DV.querySelectorAll('#stage font').length === 0);
 
 console.log(failures === 0 ? '\nALL TESTS PASSED' : `\n${failures} TEST(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);
