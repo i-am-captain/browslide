@@ -21,7 +21,7 @@ Repo file vs. saved copies: `browslide.html` in this repo is the maintained **te
 | Present | Fullscreen show (`Space`/`→` next, `←` prev, `Home`/`End`, `Esc` exit, click advances). Presentation settings (inspector): toolbar on/off, aesthetic border vs maximum fullscreen. |
 | Export viewer | Downloads a small standalone copy (`<title>-viewer.html`) for sharing: slides + player only, no editor code, no notes. Works from `file://` everywhere. |
 | Format bar | Paragraph style (H1–H3), font (system fonts only) and size, bold/italic/underline/strikethrough, alignment, bullet/numbered lists, clear formatting. Applies to selected text — or set it first, then type. |
-| Blocks | Slide content lives in freely positionable blocks: click once to select, drag the ⋮⋮ grip to move, click again to edit text. Images land in blocks too. |
+| Blocks | Slide content lives in freely positionable blocks: click once to select, drag the ⋮⋮ grip to move, click again to edit text. Images land in blocks too; add more with + Text block under Insert. |
 | Shapes | 12 insertable vector symbols (arrows, line, circle, square, triangle, star, check, cross) as movable blocks. |
 | Animations | Per-element fade in/out, move-in (4 directions), rotate-in with click-advance steps — set in the Animation panel on any selected block or image, plays in Present and viewer exports. |
 | Open | Load another saved copy (picker or drag-drop) |

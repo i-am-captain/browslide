@@ -323,7 +323,8 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
       <p><button id="btn-clean-media">Remove unused media</button></p>
     </details>
     <details id="insert-wrap">
-      <summary>Insert media</summary>
+      <summary>Insert</summary>
+      <p><button id="btn-block" title="Add a free text block to this slide">+ Text block</button></p>
       <p><button id="btn-img">Image…</button> <button id="btn-video">Video…</button></p>
       <label class="row"><input type="checkbox" id="opt-downscale"> Downscale photos on insert (max <select id="opt-maxdim"><option value="1280">1280</option><option value="1920" selected>1920</option><option value="2560">2560</option></select> px)</label>
       <p><select id="shape-select" title="Shape to insert">
@@ -1501,8 +1502,22 @@ var SHAPES = {
   'check': '<polyline points="22,54 43,74 78,30"/>',
   'cross': '<line x1="26" y1="26" x2="74" y2="74"/><line x1="74" y1="26" x2="26" y2="74"/>'
 };
-function insertShape(name){
-  var inner = SHAPES[name];
+function addTextBlock(){
+  var sec = $('#stage .slide');
+  if (!sec || !App.model) return false;
+  var n = sec.querySelectorAll('.blk').length;
+  var wrap = document.createElement('div');
+  wrap.className = 'blk';
+  wrap.style.left = (10 + (n * 7 % 40)) + '%';
+  wrap.style.top = (15 + (n * 9 % 40)) + '%';
+  wrap.style.width = '60%';
+  wrap.innerHTML = '<p>New text — click to edit</p>';
+  sec.appendChild(wrap);
+  syncStageToModel(); refreshDirty(); scheduleSize(); scheduleAutosave();
+  selectMedia(wrap);
+  return true;
+}
+function insertShape(name){  var inner = SHAPES[name];
   var sec = $('#stage .slide');
   if (!inner || !sec) return false;
   var wrap = document.createElement('div');
@@ -2031,6 +2046,7 @@ function bind(){
   $('#btn-video').addEventListener('click', function(){ $('#insert-video').click(); });
   $('#btn-clean-media').addEventListener('click', removeUnusedMedia);
   $('#btn-shape').addEventListener('click', function(){ insertShape($('#shape-select').value); });
+  $('#btn-block').addEventListener('click', addTextBlock);
   $('#anim-effect').addEventListener('change', function(e){
     var el = selectedAnimTarget();
     if (!el) return;

@@ -1002,6 +1002,20 @@ check('shape svg scales + serializes', /\.slide svg/.test(headCss) &&
 DS2.querySelector('#btn-shape').click();
 await wait(100);
 check('shape button inserts selected shape', DS2.querySelectorAll('#stage .blk svg').length === 2);
+check('text block button appends positioned block', (function(){
+  var before = DS2.querySelectorAll('#stage .blk').length;
+  DS2.querySelector('#btn-block').click();
+  var after = DS2.querySelectorAll('#stage .blk');
+  var added = after[after.length - 1];
+  return after.length === before + 1 && added.style.left !== '' && added.style.top !== '' &&
+    added.style.width === '60%' && added.textContent.includes('New text') &&
+    WS2.resizer.el === added && WS2.activeSlide().html.includes('New text');
+})());
+check('second block cascades position', (function(){
+  DS2.querySelector('#btn-block').click();
+  var blks = DS2.querySelectorAll('#stage .blk');
+  return blks[blks.length - 1].style.left !== blks[blks.length - 2].style.left;
+})());
 
 // ---------- 29. step animations ----------
 const domA = makeDom(html);
