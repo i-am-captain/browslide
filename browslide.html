@@ -2375,7 +2375,7 @@ function captureKeyframe(el){
   return to;
 }
 var animRowsFor = null;
-function refreshAnimUI(){
+function refreshAnimUI(force){
   var el = selectedAnimTarget();
   var hint = $('#anim-hint'), ctl = $('#anim-controls');
   if (!hint || !ctl) return;
@@ -2383,7 +2383,7 @@ function refreshAnimUI(){
   hint.hidden = true;
   ctl.hidden = false;
   $('#anim-hidden').checked = el.hasAttribute('data-hidden');
-  if (animRowsFor === el &&
+  if (!force && animRowsFor === el &&
       document.activeElement && $('#anim-rows').contains(document.activeElement)) return; /* same element mid-edit: keep caret */
   buildAnimRows(el); /* selection changed (or first build): always rebuild so rows never lie */
   animRowsFor = el;
@@ -2451,12 +2451,16 @@ function buildAnimRows(el){
       e.preventDefault();
       e.stopPropagation();
       var t = rowTarget(det);
-      if (!t) { refreshAnimUI(); return; }
+      if (!t) { refreshAnimUI(true); return; }
       exitStepEdit();
       t.list.splice(t.idx, 1);
       writeAnimList(t.el, t.list);
+      if (document.activeElement && document.activeElement.blur) {
+        try { document.activeElement.blur(); } catch (err) {}
+      }
+      animRowsFor = null;
       persistSlide();
-      refreshAnimUI();
+      refreshAnimUI(true);
     });
     sum.appendChild(del);
     det.appendChild(sum);
@@ -2523,8 +2527,12 @@ function buildAnimRows(el){
         next.splice(idx, 1);
         writeAnimList(el, next);
         if (stepEdit && stepEdit.el === el) exitStepEdit();
+        if (document.activeElement && document.activeElement.blur) {
+          try { document.activeElement.blur(); } catch (err) {}
+        }
+        animRowsFor = null;
         persistSlide();
-        refreshAnimUI();
+        refreshAnimUI(true);
         return;
       }
       writeAnimList(el, next);

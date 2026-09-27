@@ -1085,6 +1085,13 @@ gInput.dispatchEvent(new WA.Event('change', { bubbles: true }));
 check('row edit writes back', JSON.parse(aBlk.getAttribute('data-anim'))[0].group === 2);
 DA.querySelector('#anim-rows .adel').click();
 check('row delete clears', DA.querySelectorAll('#anim-rows details.astep').length === 0 && !aBlk.hasAttribute('data-anim'));
+// real browsers focus the button on mousedown: delete must still rebuild rows
+DA.querySelector('#btn-anim-add').click();
+await wait(50);
+check('re-add after delete', DA.querySelectorAll('#anim-rows details.astep').length === 1);
+DA.querySelector('#anim-rows .adel').focus();
+DA.querySelector('#anim-rows .adel').click();
+check('focused delete rebuilds rows', DA.querySelectorAll('#anim-rows details.astep').length === 0 && !aBlk.hasAttribute('data-anim'));
 DA.querySelector('#anim-hidden').checked = true;
 DA.querySelector('#anim-hidden').dispatchEvent(new WA.Event('change', { bubbles: true }));
 check('hidden checkbox sets attr', aBlk.hasAttribute('data-hidden'));
