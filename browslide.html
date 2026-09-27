@@ -131,11 +131,13 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 #repo-link{margin-top:auto;padding-top:10px;text-align:center;font-size:12px}
 #repo-link a{color:var(--muted);text-decoration:none;display:inline-flex;align-items:center;gap:6px;border:none;background:none;padding:2px 6px}
 #repo-link a:hover{color:var(--accent)}
-#anim-rows .arow{display:flex;flex-wrap:wrap;gap:4px;margin:6px 0;padding:6px;border:1px solid var(--border);border-radius:6px}
-#anim-rows input{width:52px;padding:2px 4px}
-#anim-rows select{width:auto;padding:2px 4px}
-#anim-legend{font-size:11px;color:var(--muted)}
-#anim-rows .adel{margin-left:auto}
+#anim-rows .astep{border:1px solid var(--border);border-radius:6px;margin:6px 0;padding:2px 8px 8px}
+#anim-rows .astep>summary{cursor:pointer;display:flex;align-items:center;gap:8px;color:var(--ink);padding:2px 0}
+#anim-rows .adel{margin-left:auto;flex:0 0 auto}
+#anim-rows .aline{display:flex;align-items:center;gap:8px;margin:3px 0}
+#anim-rows .aline>span:first-child{flex:1;color:var(--muted);font-size:12px}
+#anim-rows .aline input{width:64px}
+#anim-rows .aline select{width:auto}
 #media-resizer{position:absolute;border:2px solid var(--accent);border-radius:4px;pointer-events:none;z-index:5}
 #media-resizer .mhandle{position:absolute;right:-10px;bottom:-10px;width:20px;height:20px;background:var(--accent);border:2px solid #fff;border-radius:50%;cursor:nwse-resize;pointer-events:auto;touch-action:none}
 #media-resizer .mbadge{position:absolute;top:-26px;right:-2px;background:var(--accent);color:#fff;font-size:11px;padding:1px 7px;border-radius:10px;white-space:nowrap}
@@ -300,7 +302,6 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
       <div id="anim-hint">Select a block or image first.</div>
       <div id="anim-controls" hidden>
         <label class="row"><input type="checkbox" id="anim-hidden"> Start hidden</label>
-        <div id="anim-legend">group · on click/auto · dur ms · delay ms · mode · maxSp · acc · minSp · dec · left% · top% · width% · opac · rot° · scX · scY</div>
         <div id="anim-rows"></div>
         <p><button id="btn-anim-add" title="Add a step ending at the current position/size">+ Add step (capture current)</button></p>
       </div>
@@ -1023,11 +1024,14 @@ function refreshShapesUI(){
   yInput.disabled = !hasSel;
   renderShapeParams();
 }
+var shapeRowsFor = null;
 function renderShapeParams(){
   /* geometry fields for the selected shape kind (rebuilt on selection change) */
   var host = $('#shape-params');
   if (!host) return;
-  if (host.firstChild && host.contains(document.activeElement)) return; /* don't rebuild mid-edit */
+  var el = selectedAnimTarget();
+  if (shapeRowsFor === el && host.firstChild && host.contains(document.activeElement)) return; /* same shape mid-edit: keep caret */
+  shapeRowsFor = el;
   host.innerHTML = '';
   var svg = selectedShapeSvg();
   if (!svg) return;
@@ -1096,6 +1100,7 @@ function gotoSlide(id){
   if (!App.model.slides[id] || id === App.activeId) return;
   syncStageToModel();
   App.activeId = id;
+  clearSelection(); /* stage nodes are rebuilt; drop detached selection */
   renderFilmstrip(); renderStage(); renderInspector();
   refreshDirty(); scheduleAutosave();
 }
@@ -1106,6 +1111,7 @@ function addSlide(at){
   var pos = (typeof at === 'number') ? Math.max(0, Math.min(at, App.model.slideOrder.length)) : activeIndex() + 1;
   App.model.slideOrder.splice(pos, 0, id);
   App.activeId = id;
+  clearSelection();
   renderAll(); scheduleAutosave();
 }
 function duplicateSlide(){
@@ -1115,6 +1121,7 @@ function duplicateSlide(){
   App.model.slides[id] = { title: src.title, layout: src.layout, transition: src.transition, html: src.html, notes: src.notes };
   App.model.slideOrder.splice(activeIndex() + 1, 0, id);
   App.activeId = id;
+  clearSelection();
   renderAll(); scheduleAutosave();
 }
 function deleteSlide(){
@@ -1124,6 +1131,7 @@ function deleteSlide(){
   delete App.model.slides[App.activeId];
   App.model.slideOrder.splice(i, 1);
   App.activeId = App.model.slideOrder[Math.max(0, i - 1)];
+  clearSelection();
   renderAll(); scheduleAutosave();
 }
 function deleteSlideById(id){
@@ -2223,18 +2231,21 @@ function captureKeyframe(el){
   to.sy = tr.sy;
   return to;
 }
+var animRowsFor = null;
 function refreshAnimUI(){
   var el = selectedAnimTarget();
   var hint = $('#anim-hint'), ctl = $('#anim-controls');
   if (!hint || !ctl) return;
-  if (!el) { hint.hidden = false; ctl.hidden = true; return; }
+  if (!el) { hint.hidden = false; ctl.hidden = true; animRowsFor = null; return; }
   hint.hidden = true;
   ctl.hidden = false;
   $('#anim-hidden').checked = el.hasAttribute('data-hidden');
-  if (document.activeElement && $('#anim-rows').contains(document.activeElement)) return; /* don't rebuild mid-edit */
-  buildAnimRows(el);
+  if (animRowsFor === el &&
+      document.activeElement && $('#anim-rows').contains(document.activeElement)) return; /* same element mid-edit: keep caret */
+  buildAnimRows(el); /* selection changed (or first build): always rebuild so rows never lie */
+  animRowsFor = el;
 }
-function animNum(parent, val, min, max, step, title){
+function animNum(val, min, max, step, title){
   var inp = document.createElement('input');
   inp.type = 'number';
   inp.min = min;
@@ -2242,10 +2253,9 @@ function animNum(parent, val, min, max, step, title){
   inp.step = step;
   inp.title = title;
   if (val !== undefined && val !== null && val !== '') inp.value = val;
-  parent.appendChild(inp);
   return inp;
 }
-function animSel(parent, val, opts, title){
+function animSel(val, opts, title){
   var s = document.createElement('select');
   s.title = title;
   opts.forEach(function(o){
@@ -2255,43 +2265,76 @@ function animSel(parent, val, opts, title){
     s.appendChild(op);
   });
   s.value = val;
-  parent.appendChild(s);
   return s;
+}
+function stepSummary(e){
+  return 'Step ' + e.group + ' · ' + (e.trigger === 'auto' ? 'auto' : 'click') + ' · ' + e.mode;
+}
+function rowTarget(rowEl){
+  /* resolve target live: rows may outlive the element they were built for */
+  var el = selectedAnimTarget();
+  if (!el) return null;
+  var host = $('#anim-rows');
+  var at = Array.prototype.slice.call(host.children).indexOf(rowEl);
+  if (at < 0) return null;
+  var list = animListOf(el);
+  if (at >= list.length) return null;
+  return { el: el, list: list, idx: at };
 }
 function buildAnimRows(el){
   var host = $('#anim-rows');
   host.innerHTML = '';
   var list = animListOf(el);
-  list.forEach(function(entry, idx){
-    var row = document.createElement('div');
-    row.className = 'arow';
-    var fGroup = animNum(row, entry.group, 1, 99, 1, 'Step group (same group plays together)');
-    var fTrig = animSel(row, entry.trigger, [['click', 'click'], ['auto', 'auto']], 'Run on click or automatically');
-    var fDur = animNum(row, entry.dur, 50, 10000, 50, 'Duration ms');
-    var fDelay = animNum(row, entry.delay, 0, 10000, 50, 'Delay ms before auto steps');
-    var fMode = animSel(row, entry.mode, [['linear', 'lin'], ['accelerate', 'acc'], ['accelDecel', 'a-d']], 'Easing mode');
-    var fMax = animNum(row, entry.maxSpeed, 0.1, 5, 0.1, 'Max speed (accelerate)');
-    var fAcc = animNum(row, entry.accel, 0, 10, 0.5, 'Acceleration');
-    var fMin = animNum(row, entry.minSpeed, 0, 2, 0.1, 'Min end speed (accel-decel)');
-    var fDec = animNum(row, entry.decel, 0, 10, 0.5, 'Deceleration');
-    var fL = animNum(row, entry.to.left, -100, 300, 1, 'Left %');
-    var fT = animNum(row, entry.to.top, -100, 300, 1, 'Top %');
-    var fW = animNum(row, entry.to.width, 1, 300, 1, 'Width %');
-    var fO = animNum(row, entry.to.opacity, 0, 1, 0.05, 'Opacity');
-    var fR = animNum(row, entry.to.rot, -720, 720, 1, 'Rotation °');
-    var fX = animNum(row, entry.to.sx, 0.05, 10, 0.1, 'Scale X');
-    var fY = animNum(row, entry.to.sy, 0.05, 10, 0.1, 'Scale Y');
+  list.forEach(function(entry){
+    var det = document.createElement('details');
+    det.className = 'astep';
+    var sum = document.createElement('summary');
+    var lab = document.createElement('span');
+    lab.className = 'asum';
+    lab.textContent = stepSummary(entry);
+    sum.appendChild(lab);
     var del = document.createElement('button');
     del.className = 'adel';
     del.textContent = '✕';
     del.title = 'Delete step';
-    del.addEventListener('click', function(){
-      var cur = animListOf(el);
-      cur.splice(idx, 1);
-      writeAnimList(el, cur);
+    del.addEventListener('click', function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      var t = rowTarget(det);
+      if (!t) { refreshAnimUI(); return; }
+      t.list.splice(t.idx, 1);
+      writeAnimList(t.el, t.list);
       persistSlide();
       refreshAnimUI();
     });
+    sum.appendChild(del);
+    det.appendChild(sum);
+    function line(label, input){
+      var l = document.createElement('label');
+      l.className = 'aline';
+      var s = document.createElement('span');
+      s.textContent = label;
+      l.appendChild(s);
+      l.appendChild(input);
+      det.appendChild(l);
+      return input;
+    }
+    var fGroup = line('Group', animNum(entry.group, 1, 99, 1, 'Step group (same group plays together)'));
+    var fTrig = line('Trigger', animSel(entry.trigger, [['click', 'click'], ['auto', 'auto']], 'Run on click or automatically'));
+    var fDur = line('Duration ms', animNum(entry.dur, 50, 10000, 50, 'Duration in milliseconds'));
+    var fDelay = line('Delay ms', animNum(entry.delay, 0, 10000, 50, 'Delay before auto steps'));
+    var fMode = line('Mode', animSel(entry.mode, [['linear', 'linear'], ['accelerate', 'accelerate'], ['accelDecel', 'accel + decel']], 'Easing mode'));
+    var fMax = line('Max speed', animNum(entry.maxSpeed, 0.1, 5, 0.1, 'Max speed (accelerate mode)'));
+    var fAcc = line('Acceleration', animNum(entry.accel, 0, 10, 0.5, 'Acceleration (0 = linear)'));
+    var fMin = line('Min end speed', animNum(entry.minSpeed, 0, 2, 0.1, 'Minimum end speed (accel-decel mode)'));
+    var fDec = line('Deceleration', animNum(entry.decel, 0, 10, 0.5, 'Deceleration'));
+    var fL = line('Left %', animNum(entry.to.left, -100, 300, 1, 'Target left position in percent'));
+    var fT = line('Top %', animNum(entry.to.top, -100, 300, 1, 'Target top position in percent'));
+    var fW = line('Width %', animNum(entry.to.width, 1, 300, 1, 'Target width in percent'));
+    var fO = line('Opacity', animNum(entry.to.opacity, 0, 1, 0.05, 'Target opacity 0-1'));
+    var fR = line('Rotation °', animNum(entry.to.rot, -720, 720, 1, 'Target rotation in degrees'));
+    var fX = line('Scale X', animNum(entry.to.sx, 0.05, 10, 0.1, 'Target horizontal scale'));
+    var fY = line('Scale Y', animNum(entry.to.sy, 0.05, 10, 0.1, 'Target vertical scale'));
     function rv(inp, min, max, fb){
       var v = parseFloat(inp.value);
       return isFinite(v) ? Math.max(min, Math.min(max, v)) : fb;
@@ -2301,8 +2344,9 @@ function buildAnimRows(el){
       return isFinite(v) ? v : undefined;
     }
     function commit(){
-      var next = animListOf(el);
-      if (!next[idx]) return;
+      var t = rowTarget(det);
+      if (!t) { refreshAnimUI(); return; }
+      var next = t.list, idx = t.idx, el = t.el;
       var to = {};
       var L = opt(fL), T = opt(fT), Wd = opt(fW), O = opt(fO), R = opt(fR), X = opt(fX), Y = opt(fY);
       if (L !== undefined) to.left = Math.max(-100, Math.min(300, L));
@@ -2333,12 +2377,12 @@ function buildAnimRows(el){
       }
       writeAnimList(el, next);
       persistSlide();
+      lab.textContent = stepSummary(next[idx]);
     }
     [fGroup, fTrig, fDur, fDelay, fMode, fMax, fAcc, fMin, fDec, fL, fT, fW, fO, fR, fX, fY].forEach(function(inp){
       inp.addEventListener('change', commit);
     });
-    row.appendChild(del);
-    host.appendChild(row);
+    host.appendChild(det);
   });
 }
 function onHandleDown(e){
@@ -2530,10 +2574,59 @@ function kfCancel(){
 function kfReset(sec, revealAll){
   kfCancel();
   kfCollect(sec);
+  if (!revealAll) snapToFirst(sec);
   Array.prototype.forEach.call(sec.querySelectorAll('[data-hidden]'), function(n){
     n.style.visibility = revealAll ? 'visible' : 'hidden';
   });
   if (revealAll) { kfGroups = []; kfGroupIdx = -1; }
+}
+function applyKeyframeState(el, to){
+  /* place an element exactly at a keyframe (no animation, no model writes) */
+  if (to.left !== undefined) el.style.left = to.left + '%';
+  if (to.top !== undefined) el.style.top = to.top + '%';
+  if (to.width !== undefined) el.style.width = to.width + '%';
+  if (to.opacity !== undefined) el.style.opacity = to.opacity;
+  var cur = transformOf(el), touched = false;
+  var r = cur.rot, x = cur.sx, y = cur.sy;
+  if (to.rot !== undefined) { r = to.rot; touched = true; }
+  if (to.sx !== undefined) { x = to.sx; touched = true; }
+  if (to.sy !== undefined) { y = to.sy; touched = true; }
+  if (touched) {
+    el.style.transform = 'rotate(' + r + 'deg) scaleX(' + x + ') scaleY(' + y + ')';
+    el._kfSty = { rot: r, sx: x, sy: y };
+  }
+}
+function snapToFirst(sec){
+  /* multi-step elements start at their first keyframe, so the first advance
+     never jumps backward; single-step elements keep their rest state */
+  Array.prototype.forEach.call(sec.querySelectorAll('[data-anim]'), function(n){
+    var list = parseAnimList(n.getAttribute('data-anim'));
+    if (list.length < 2) return;
+    var g0 = Math.min.apply(null, list.map(function(e){ return e.group; }));
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].group === g0) { applyKeyframeState(n, list[i].to); return; }
+    }
+  });
+}
+function entryWouldMove(entry, el){
+  if (el.style.visibility === 'hidden') return true; /* playing reveals it */
+  var from = kfCurrent(el, entry.to);
+  var eps = { left: 0.01, top: 0.01, width: 0.01, opacity: 0.001 };
+  for (var k in entry.to) {
+    if (k === 'rot' || k === 'sx' || k === 'sy') continue;
+    if (from[k] === undefined) return true;
+    if (Math.abs(entry.to[k] - from[k]) > (eps[k] || 0.01)) return true;
+  }
+  if (from._t) {
+    var t = entry.to;
+    if (t.rot !== undefined && Math.abs(t.rot - from._t.rot) > 0.1) return true;
+    if (t.sx !== undefined && Math.abs(t.sx - from._t.sx) > 0.001) return true;
+    if (t.sy !== undefined && Math.abs(t.sy - from._t.sy) > 0.001) return true;
+  }
+  return false;
+}
+function groupWouldMove(g){
+  return g.items.some(function(x){ return entryWouldMove(x.entry, x.el); });
 }
 function kfCurrent(el, to){
   /* numeric from-state for animated props (inline styles are live values) */
@@ -2749,6 +2842,7 @@ function loadModel(m, cleanJson){
   sanitizeAllSlides(); /* ultimate backstop: no unsanitized HTML ever renders */
   App.activeId = m.slideOrder[0];
   App.lastClean = (typeof cleanJson === 'string') ? cleanJson : stable(m);
+  clearSelection();
   renderAll(); autosaveNow();
 }
 function resumeModel(json, cleanJson){
@@ -2916,6 +3010,8 @@ function bind(){
     writeAnimList(el, list);
     persistSlide();
     refreshAnimUI();
+    var dets = $('#anim-rows').querySelectorAll('details.astep');
+    if (dets.length) dets[dets.length - 1].open = true;
   });
   var fbar = $('#formatbar');
   fbar.addEventListener('mousedown', function(e){ if (e.target.closest('button')) e.preventDefault(); });

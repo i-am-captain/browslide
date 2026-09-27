@@ -1060,9 +1060,11 @@ aBlk.dispatchEvent(new WA.MouseEvent('mousedown', { bubbles: true, cancelable: t
 check('anim panel activates on block select', DA.querySelector('#anim-hint').hidden === true && DA.querySelector('#anim-controls').hidden === false);
 DA.querySelector('#btn-anim-add').click();
 await wait(50);
-check('add step captures row', DA.querySelectorAll('#anim-rows .arow').length === 1 &&
+check('add step captures row', DA.querySelectorAll('#anim-rows details.astep').length === 1 &&
   JSON.parse(aBlk.getAttribute('data-anim')).length === 1 &&
   JSON.parse(aBlk.getAttribute('data-anim'))[0].group === 1);
+check('new step opens expanded with summary', DA.querySelector('#anim-rows details.astep').open === true &&
+  DA.querySelector('#anim-rows details.astep summary').textContent.includes('Step 1'));
 const capEntry = JSON.parse(aBlk.getAttribute('data-anim'))[0];
 check('capture reads explicit coords', capEntry.to.left === 10 && capEntry.to.top === 30 && capEntry.to.width === 80);
 check('unpositioned elements get coords at play', (function(){
@@ -1071,12 +1073,12 @@ check('unpositioned elements get coords at play', (function(){
   WA.ensurePositioned(u);
   return u.style.left === '10%' && u.style.top === '10%' && u.style.position === 'absolute';
 })());
-const gInput = DA.querySelector('#anim-rows .arow input');
+const gInput = DA.querySelector('#anim-rows details.astep input');
 gInput.value = '2';
 gInput.dispatchEvent(new WA.Event('change', { bubbles: true }));
 check('row edit writes back', JSON.parse(aBlk.getAttribute('data-anim'))[0].group === 2);
 DA.querySelector('#anim-rows .adel').click();
-check('row delete clears', DA.querySelectorAll('#anim-rows .arow').length === 0 && !aBlk.hasAttribute('data-anim'));
+check('row delete clears', DA.querySelectorAll('#anim-rows details.astep').length === 0 && !aBlk.hasAttribute('data-anim'));
 DA.querySelector('#anim-hidden').checked = true;
 DA.querySelector('#anim-hidden').dispatchEvent(new WA.Event('change', { bubbles: true }));
 check('hidden checkbox sets attr', aBlk.hasAttribute('data-hidden'));
@@ -1354,6 +1356,47 @@ DAA.getSelection().addRange(ccRng);
 WAA.applySpanStyle('color', '#00ff00');
 check('collapsed color inserts pending span', WAA.pendingFormat.color === '#00ff00' &&
   !!aaSec().querySelector('span[data-bsw="pending"]'));
+
+// ---------- 32. rows follow selection switches, navigation clears ----------
+// (regression: row rebuild guard skipped rebuilds on selection change,
+//  so delete/param edits hit the previously selected element)
+const domAB = makeDom(html);
+await wait(400);
+const WAB = domAB.window, DAB = WAB.document;
+WAB.gotoSlide(WAB.App.model.slideOrder[1]);
+await wait(100);
+const abBlks = DAB.querySelectorAll('#stage .blk');
+abBlks[0].dispatchEvent(new WAB.MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+DAB.querySelector('#btn-anim-add').click();
+await wait(50);
+check('step added on A', DAB.querySelectorAll('#anim-rows details.astep').length === 1);
+DAB.querySelector('#anim-rows details.astep input').focus();
+abBlks[1].dispatchEvent(new WAB.MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+check('rows rebuild for B despite focused input', DAB.querySelectorAll('#anim-rows details.astep').length === 0);
+DAB.querySelector('#btn-anim-add').click();
+await wait(50);
+check('step added on B', DAB.querySelectorAll('#anim-rows details.astep').length === 1 &&
+  JSON.parse(abBlks[1].getAttribute('data-anim')).length === 1);
+DAB.querySelector('#anim-rows .adel').click();
+check('delete hits current selection', DAB.querySelectorAll('#anim-rows details.astep').length === 0 &&
+  !abBlks[1].hasAttribute('data-anim') && abBlks[0].hasAttribute('data-anim'));
+WAB.gotoSlide(WAB.App.model.slideOrder[0]);
+check('navigation clears selection', WAB.resizer.el === null && DAB.querySelector('#anim-hint').hidden === false);
+// same staleness class for shape geometry rows
+WAB.gotoSlide(WAB.App.model.slideOrder[1]);
+await wait(100);
+WAB.insertShape('circle');
+WAB.insertShape('circle');
+await wait(100);
+const shWraps = Array.prototype.filter.call(DAB.querySelectorAll('#stage .blk'), (b) => b.querySelector('svg'));
+WAB.setSingleSelection(shWraps[0]);
+let lenInput = DAB.querySelector('#shape-params input');
+lenInput.value = '20';
+lenInput.dispatchEvent(new WAB.Event('change', { bubbles: true }));
+lenInput.focus();
+shWraps[1].dispatchEvent(new WAB.MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+check('shape rows follow selection', DAB.querySelector('#shape-params input').value === '40');
+check('first shape untouched', shWraps[0].querySelector('svg').getAttribute('data-radius') === '20');
 
 console.log(failures === 0 ? '\nALL TESTS PASSED' : `\n${failures} TEST(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);
