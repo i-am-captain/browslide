@@ -288,7 +288,8 @@ check('export has player bar', !!exDoc.querySelector('#bar #prev') && !!exDoc.qu
 check('export excludes editor shell', !exDoc.querySelector('#filmstrip') && !exDoc.querySelector('#toolbar') &&
   !exDoc.querySelector('#stage') && !exDoc.querySelector('#slider-data'));
 const exScripts = Array.prototype.map.call(exDoc.querySelectorAll('script'), (s) => s.textContent).join('\n');
-check('export excludes editor code', !/slider-data|contentEditable|normalizeModel|renderFilmstrip|syncStageToModel/.test(exScripts) && exScripts.length < 12000, exScripts.length + ' chars player JS');
+check('export excludes editor code', !/slider-data|contentEditable|normalizeModel|renderFilmstrip|syncStageToModel/.test(exScripts) && exScripts.length < 16000, exScripts.length + ' chars player JS');
+check('viewer player carries shape keyframes', /paintShape/.test(exScripts) && /slen/.test(exScripts));
 check('export carries theme', exDoc.querySelector('body').getAttribute('data-theme') === 'dark');
 check('export keeps dirty state', D5.querySelector('#dirty-flag').textContent.includes('Unsaved'));
 const dom6 = makeDom(exText);
@@ -1275,9 +1276,7 @@ check('transform inputs enable on selection', DT2.querySelector('#shape-rot').di
 DT2.querySelector('#shape-rot').value = '45';
 DT2.querySelector('#shape-rot').dispatchEvent(new WT2.Event('change', { bubbles: true }));
 check('rotate applies to selection', mBlks[0].getAttribute('data-rot') === '45' && mBlks[0].style.transform.includes('rotate(45deg)'));
-DT2.querySelector('#shape-sx').value = '1.5';
-DT2.querySelector('#shape-sx').dispatchEvent(new WT2.Event('change', { bubbles: true }));
-check('scale applies to selection', mBlks[0].getAttribute('data-sx') === '1.5');
+check('literal scale inputs removed', !DT2.querySelector('#shape-sx') && !DT2.querySelector('#shape-sy'));
 check('transform persists in model', WT2.activeSlide().html.includes('data-rot="45"'));
 // width/color live-apply on selected shape
 WT2.insertShape('circle');
@@ -1562,6 +1561,100 @@ WSB.kfGroups = []; WSB.kfGroupIdx = -1;
 WSB.gotoSlide(WSB.App.model.slideOrder[0]);
 await wait(100);
 check('slide change resets scrub', WSB.scrubGroup === 0 && DSB.querySelector('#scrub-range').disabled === true);
+
+// ---------- 36. size handles edit values + shape keyframes ----------
+const domHZ = makeDom(html);
+await wait(400);
+const WHZ = domHZ.window, DHZ = WHZ.document;
+WHZ.gotoSlide(WHZ.App.model.slideOrder[1]);
+await wait(100);
+check('shapeSizeKeys mapping', JSON.stringify(WHZ.shapeSizeKeys('arrow-right')) === '["slen"]' &&
+  JSON.stringify(WHZ.shapeSizeKeys('circle')) === '["sr"]' &&
+  JSON.stringify(WHZ.shapeSizeKeys('rectangle')) === '["sw","sh"]' &&
+  JSON.stringify(WHZ.shapeSizeKeys('star')) === '[]' && WHZ.shapeSizeKeys(null) === null);
+check('shapeAttrFor mapping', WHZ.shapeAttrFor('slen') === 'len' && WHZ.shapeAttrFor('sr') === 'radius' &&
+  WHZ.shapeAttrFor('sw') === 'width' && WHZ.shapeAttrFor('sh') === 'height');
+check('shapeDeltas routing', JSON.stringify(WHZ.shapeDeltas(['sw', 'sh'], 'rectangle', 'both', 2, 3)) === '{"sw":2,"sh":3}' &&
+  JSON.stringify(WHZ.shapeDeltas(['sw', 'sh'], 'rectangle', 'w', 2, 3)) === '{"sw":2}' &&
+  JSON.stringify(WHZ.shapeDeltas(['sw', 'sh'], 'rectangle', 'h', 2, 3)) === '{"sh":3}' &&
+  JSON.stringify(WHZ.shapeDeltas(['slen'], 'arrow-up', 'both', 2, 3)) === '{"slen":3}' &&
+  JSON.stringify(WHZ.shapeDeltas(['slen'], 'arrow-right', 'both', 2, 3)) === '{"slen":2}' &&
+  JSON.stringify(WHZ.shapeDeltas(['sr'], 'circle', 'h', 2, 3)) === '{"sr":3}');
+WHZ.insertShape('arrow-right');
+const hzBlk = DHZ.querySelectorAll('#stage .blk');
+const hzArrowBlk = hzBlk[hzBlk.length - 1];
+const hzSvg = hzArrowBlk.querySelector('svg');
+hzSvg.getBoundingClientRect = () => ({ width: 200, height: 100, left: 0, top: 0, right: 200, bottom: 100 });
+const upp = WHZ.svgUnitsPerPx(hzSvg);
+check('svg units from viewBox', Math.abs(upp.x - 74 / 200) < 0.001 && Math.abs(upp.y - 42 / 100) < 0.001, JSON.stringify(upp));
+WHZ.setSingleSelection(hzArrowBlk);
+const fakeDown = (target) => ({ preventDefault(){}, stopPropagation(){}, currentTarget: target, clientX: 0, clientY: 0, pointerId: 1 });
+const dragHandle = (sel, mode, dx, dy) => {
+  const h = DHZ.querySelector(sel);
+  WHZ.onSizeDown(fakeDown(h), mode);
+  h.dispatchEvent(new WHZ.MouseEvent('pointermove', { bubbles: true, clientX: dx, clientY: dy }));
+  h.dispatchEvent(new WHZ.MouseEvent('pointerup', { bubbles: true, clientX: dx, clientY: dy }));
+};
+dragHandle('#media-resizer .mhandle', 'both', 20, 0);
+await wait(100);
+check('corner drag edits arrow length, no literal scale', hzSvg.getAttribute('data-len') === '75.4' &&
+  !hzArrowBlk.hasAttribute('data-sx'));
+check('capture reads shape size', WHZ.captureKeyframe(hzArrowBlk).slen === 75.4);
+WHZ.applyKeyframeState(hzArrowBlk, { slen: 40 });
+check('apply writes shape size', hzSvg.getAttribute('data-len') === '40' && hzSvg.innerHTML.includes('x2="28"'));
+check('clean keeps shape keys', (function(){
+  const list = WHZ.parseAnimList(JSON.stringify([{ group: 1, trigger: 'click', dur: 600, delay: 200, mode: 'linear', maxSpeed: 1.5, accel: 2, minSpeed: 0, decel: 2, to: { slen: 50, sr: 99, sw: 'x' } }]));
+  return list.length === 1 && list[0].to.slen === 50 && list[0].to.sr === 60 && list[0].to.sw === undefined;
+})());
+WHZ.insertShape('rectangle');
+const rBlks = DHZ.querySelectorAll('#stage .blk');
+const rBlkEl = rBlks[rBlks.length - 1];
+const rSvg = rBlkEl.querySelector('svg');
+rSvg.getBoundingClientRect = () => ({ width: 200, height: 100, left: 0, top: 0, right: 200, bottom: 100 });
+WHZ.setSingleSelection(rBlkEl);
+const w0 = rSvg.getAttribute('data-width'), h0 = rSvg.getAttribute('data-height');
+dragHandle('#media-resizer .mh-e', 'w', 20, 30);
+await wait(50);
+check('right edge edits width only', parseFloat(rSvg.getAttribute('data-width')) > parseFloat(w0) &&
+  rSvg.getAttribute('data-height') === h0);
+const wAfterR = rSvg.getAttribute('data-width');
+dragHandle('#media-resizer .mh-s', 'h', 5, 10);
+await wait(50);
+check('bottom edge edits height only', rSvg.getAttribute('data-width') === wAfterR &&
+  parseFloat(rSvg.getAttribute('data-height')) > parseFloat(h0));
+const w1 = rSvg.getAttribute('data-width'), h1 = rSvg.getAttribute('data-height');
+dragHandle('#media-resizer .mhandle', 'both', 10, 10);
+await wait(50);
+check('corner edits both', parseFloat(rSvg.getAttribute('data-width')) > parseFloat(w1) &&
+  parseFloat(rSvg.getAttribute('data-height')) > parseFloat(h1));
+WHZ.insertShape('star');
+const sBlks = DHZ.querySelectorAll('#stage .blk');
+WHZ.setSingleSelection(sBlks[sBlks.length - 1]);
+check('star hides size handles', DHZ.querySelector('#media-resizer .mhandle').style.display === 'none' &&
+  DHZ.querySelector('#media-resizer .mh-e').style.display === 'none' &&
+  DHZ.querySelector('#media-resizer .mh-s').style.display === 'none');
+// scrub + step fields move shape sizes too
+rBlkEl.setAttribute('data-anim', JSON.stringify([{ group: 1, trigger: 'click', dur: 600, delay: 200, mode: 'linear', maxSpeed: 1.5, accel: 2, minSpeed: 0, decel: 2, to: { sw: 90, sh: 60 } }]));
+WHZ.syncStageToModel();
+WHZ.rebuildScrub();
+const hzRange = DHZ.querySelector('#scrub-range');
+hzRange.value = '1';
+hzRange.dispatchEvent(new WHZ.Event('input', { bubbles: true }));
+check('scrub applies shape size', rSvg.getAttribute('data-width') === '90' && rSvg.getAttribute('data-height') === '60');
+WHZ.syncStageToModel();
+check('sync restores shape size', rSvg.getAttribute('data-width') !== '90');
+WHZ.setSingleSelection(rBlkEl);
+check('step rows have shape fields', DHZ.querySelector('#anim-rows').textContent.includes('Shape width'));
+const swRow = Array.prototype.find.call(DHZ.querySelectorAll('#anim-rows .aline'), (l) => l.firstChild.textContent === 'Shape width');
+swRow.querySelector('input').value = '95';
+swRow.querySelector('input').dispatchEvent(new WHZ.Event('change', { bubbles: true }));
+check('shape field commits to step', JSON.parse(rBlkEl.getAttribute('data-anim'))[0].to.sw === 95);
+dragHandle('#media-resizer .mhandle', 'both', -5000, -5000);
+await wait(50);
+check('shape drags clamp to min in the step', (function(){
+  const to = JSON.parse(rBlkEl.getAttribute('data-anim'))[0].to;
+  return to.sw === 10 && to.sh === 10;
+})());
 
 console.log(failures === 0 ? '\nALL TESTS PASSED' : `\n${failures} TEST(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);

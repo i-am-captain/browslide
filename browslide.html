@@ -150,9 +150,9 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 #media-resizer .mmove{position:absolute;left:-10px;top:-10px;width:20px;height:20px;line-height:16px;text-align:center;background:var(--accent);color:#fff;border:2px solid #fff;border-radius:50%;cursor:move;pointer-events:auto;touch-action:none;display:none;font-size:11px}
 #media-resizer.formove .mmove{display:block}
 #media-resizer .mrot{position:absolute;left:50%;top:-36px;width:20px;height:20px;margin-left:-10px;line-height:15px;text-align:center;background:var(--accent);color:#fff;border:2px solid #fff;border-radius:50%;cursor:grab;pointer-events:auto;touch-action:none;font-size:12px}
-#media-resizer .mh-n,#media-resizer .mh-s{position:absolute;left:50%;width:20px;height:12px;margin-left:-10px;background:var(--accent);border:2px solid #fff;border-radius:3px;pointer-events:auto;touch-action:none}
-#media-resizer .mh-n{top:-8px;cursor:ns-resize}
-#media-resizer .mh-s{bottom:-8px;cursor:ns-resize}
+#media-resizer .mh-e,#media-resizer .mh-s{position:absolute;background:var(--accent);border:2px solid #fff;border-radius:3px;pointer-events:auto;touch-action:none}
+#media-resizer .mh-e{right:-9px;top:50%;width:12px;height:22px;margin-top:-11px;cursor:ew-resize}
+#media-resizer .mh-s{left:50%;bottom:-9px;width:22px;height:12px;margin-left:-11px;cursor:ns-resize}
 .slide .blk{position:absolute;box-sizing:border-box;min-width:8%;min-height:1.2em}
 #inspector label.row{display:flex;flex-direction:row;align-items:center}
 #present-settings{display:flex;flex-direction:column;gap:6px}
@@ -339,8 +339,6 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
       <div class="srow"><span>Line color</span><input id="shape-color" type="color" value="#2563eb" title="Stroke color: preset for new shapes, live for the selected shape"></div>
       <div id="shape-params"></div>
       <div class="srow"><span>Rotate °</span><input id="shape-rot" type="number" min="-180" max="180" step="1" title="Rotate the selected item (degrees)"></div>
-      <div class="srow"><span>Scale X</span><input id="shape-sx" type="number" min="0.1" max="5" step="0.1" title="Horizontal scale of the selected item"></div>
-      <div class="srow"><span>Scale Y</span><input id="shape-sy" type="number" min="0.1" max="5" step="0.1" title="Vertical scale of the selected item"></div>
       <div class="srow"><span></span><button id="btn-shape">Add shape</button></div>
     </details>
     <div id="size-meter">Est. save size: —</div>
@@ -1034,13 +1032,9 @@ function refreshShapesUI(){
   }
   var hasSel = !!(resizer.el && document.contains(resizer.el));
   var t = hasSel ? transformOf(resizer.el) : { rot: 0, sx: 1, sy: 1 };
-  var rInput = $('#shape-rot'), xInput = $('#shape-sx'), yInput = $('#shape-sy');
+  var rInput = $('#shape-rot');
   if (document.activeElement !== rInput) rInput.value = t.rot;
-  if (document.activeElement !== xInput) xInput.value = t.sx;
-  if (document.activeElement !== yInput) yInput.value = t.sy;
   rInput.disabled = !hasSel;
-  xInput.disabled = !hasSel;
-  yInput.disabled = !hasSel;
   renderShapeParams();
 }
 var shapeRowsFor = null;
@@ -1074,8 +1068,11 @@ function renderShapeParams(){
         if (!isFinite(v)) return;
         v = Math.max(min, v);
         if (max !== undefined && max !== null) v = Math.min(max, v);
+        var blk = (svg.closest && svg.closest('.blk')) || null;
+        if (blk) maybeAutoStepEdit([blk]); /* geometry edits land in the displayed step */
         svg.setAttribute('data-' + key, String(v));
         renderShape(svg);
+        if (blk) commitStepGeometry(blk);
         persistSlide();
         refreshShapesUI();
       });
@@ -1086,12 +1083,8 @@ function renderShapeParams(){
   });
 }
 function readTransformInputs(){
-  var r = parseFloat($('#shape-rot').value), x = parseFloat($('#shape-sx').value), y = parseFloat($('#shape-sy').value);
-  return {
-    rot: isFinite(r) ? Math.max(-180, Math.min(180, r)) : 0,
-    sx: (isFinite(x) && x >= 0.1 && x <= 5) ? Math.round(x * 100) / 100 : 1,
-    sy: (isFinite(y) && y >= 0.1 && y <= 5) ? Math.round(y * 100) / 100 : 1
-  };
+  var r = parseFloat($('#shape-rot').value);
+  return { rot: isFinite(r) ? Math.max(-180, Math.min(180, r)) : 0 };
 }
 function transformChanged(){
   var els = selectedItems();
@@ -1099,9 +1092,8 @@ function transformChanged(){
   maybeAutoStepEdit(els);
   var t = readTransformInputs();
   els.forEach(function(el){
-    el.setAttribute('data-rot', String(t.rot));
-    el.setAttribute('data-sx', String(t.sx));
-    el.setAttribute('data-sy', String(t.sy));
+    if (t.rot) el.setAttribute('data-rot', String(t.rot));
+    else el.removeAttribute('data-rot');
     applyTransform(el);
   });
   els.forEach(commitStepGeometry);
@@ -2128,26 +2120,112 @@ function onRotateDown(e){
   g.addEventListener('pointerup', onUp);
   g.addEventListener('pointercancel', onUp);
 }
-function onHeightDown(e, dir){
+/* ---- size handles edit values, never literal scale: shape geometry params
+   for shapes (arrow length, circle radius, rect w+h…), % width/height for
+   plain blocks and media. Corner = both axes, right edge = width-ish,
+   bottom edge = height-ish. ---- */
+function shapeSizeKeys(kind){
+  if (!kind) return null; /* not a shape: plain % box */
+  if (kind.indexOf('arrow') === 0 || kind === 'line') return ['slen'];
+  if (kind === 'circle') return ['sr'];
+  if (kind === 'square' || kind === 'triangle') return ['sh'];
+  if (kind === 'rectangle' || kind === 'ellipse') return ['sw', 'sh'];
+  return []; /* star/check/cross: fixed size, no size handles */
+}
+function shapeAttrFor(skey){
+  return skey === 'slen' ? 'len' : skey === 'sr' ? 'radius' : skey === 'sw' ? 'width' : 'height';
+}
+function shapeSvgOf(el){
+  if (!el) return null;
+  if (el.tagName && el.tagName.toLowerCase() === 'svg') return el.hasAttribute('data-kind') ? el : null;
+  return el.querySelector ? el.querySelector('svg[data-kind]') : null;
+}
+function svgUnitsPerPx(svg){
+  var w = 0, h = 0;
+  try { var b = svg.getBoundingClientRect(); w = b.width; h = b.height; } catch (e) {}
+  if (!(w > 0)) w = svg.offsetWidth || 0;
+  if (!(h > 0)) h = svg.offsetHeight || 0;
+  var vb = [0, 0, 100, 100];
+  try {
+    var parts = String(svg.getAttribute('viewBox') || '').trim().split(/[\s,]+/).map(Number);
+    if (parts.length === 4 && parts.every(isFinite)) vb = parts;
+  } catch (e) {}
+  return { x: w > 0 ? vb[2] / w : 0, y: h > 0 ? vb[3] / h : 0 };
+}
+function shapeDeltas(keys, kind, mode, dxU, dyU){
+  /* drag deltas (viewBox units) -> {shapeKey: delta} */
+  if (keys.length === 2) {
+    if (mode === 'w') return { sw: dxU };
+    if (mode === 'h') return { sh: dyU };
+    return { sw: dxU, sh: dyU };
+  }
+  var k = keys[0], d;
+  if (mode === 'w') d = dxU;
+  else if (mode === 'h') d = dyU;
+  else d = (kind === 'arrow-up' || kind === 'arrow-down') ? dyU : dxU;
+  var o = {};
+  o[k] = d;
+  return o;
+}
+function onSizeDown(e, mode){
   var items = selectedItems();
   if (!items.length) return;
   e.preventDefault();
   e.stopPropagation();
+  maybeAutoStepEdit(items);
   var sec = $('#stage .slide');
-  var slideH = (sec && sec.clientHeight) || 0;
-  if (!(slideH > 0)) return;
+  var slideW = (sec && sec.clientWidth) || 0, slideH = (sec && sec.clientHeight) || 0;
   var g = e.currentTarget;
   try { g.setPointerCapture(e.pointerId); } catch (err) {}
-  maybeAutoStepEdit(items);
-  var startY = e.clientY;
-  var starts = items.map(function(el){ return { el: el, hh: el.offsetHeight || 0 }; });
+  var startX = e.clientX, startY = e.clientY;
+  var jobs = items.map(function(el){
+    if (!el || !document.contains(el)) return null;
+    var svg = shapeSvgOf(el);
+    var kind = svg ? svg.getAttribute('data-kind') : null;
+    var keys = kind ? shapeSizeKeys(kind) : null;
+    if (svg && keys && keys.length) {
+      var sp = shapeParams(svg);
+      if (!sp) return null;
+      var mins = {}, maxs = {};
+      sp.def.params.forEach(function(pd){ mins[pd.key] = pd.min; maxs[pd.key] = (pd.max === undefined || pd.max === null) ? 0 : pd.max; });
+      return { type: 'shape', svg: svg, kind: kind, keys: keys, start: sp.vals, mins: mins, maxs: maxs, upp: svgUnitsPerPx(svg) };
+    }
+    if (svg && keys) return { type: 'fixed' }; /* fixed-size symbol: move/rotate only */
+    if (mode === 'h') return { type: 'boxh', el: el, hh: el.offsetHeight || 0 };
+    return { type: 'boxw', el: el, startW: el.offsetWidth || 0 };
+  });
+  var basePx = 0;
+  jobs.forEach(function(j){ if (j && j.type === 'boxw' && !basePx) basePx = j.startW; });
   var onMove = function(ev){
-    var dy = (ev.clientY - startY) * dir;
-    starts.forEach(function(s){
-      if (!document.contains(s.el)) return;
-      var pct = shiftPct(s.hh, dy, slideH, 300);
-      if (pct === null) return;
-      s.el.style.height = pct + '%';
+    var dx = ev.clientX - startX, dy = ev.clientY - startY;
+    jobs.forEach(function(j){
+      if (!j) return;
+      if (j.type === 'shape') {
+        var del = shapeDeltas(j.keys, j.kind, mode, dx * j.upp.x, dy * j.upp.y);
+        var changed = false;
+        Object.keys(del).forEach(function(sk){
+          var param = shapeAttrFor(sk);
+          var v = (parseFloat(j.start[param]) || 0) + del[sk];
+          v = Math.max(j.mins[param], v);
+          if (j.maxs[param] > 0) v = Math.min(j.maxs[param], v);
+          v = Math.round(v * 10) / 10;
+          j.svg.setAttribute('data-' + param, String(v));
+          changed = true;
+        });
+        if (changed) renderShape(j.svg);
+      } else if (j.type === 'boxw') {
+        if (!(slideW > 0)) return;
+        if (shiftPct(basePx, dx, slideW) === null) return;
+        var f = basePx > 0 ? (basePx + dx) / basePx : 1;
+        var pct = (j.startW * f) / slideW * 100;
+        j.el.style.width = Math.max(5, Math.min(100, Math.round(pct * 10) / 10)) + '%';
+        j.el.style.height = 'auto';
+      } else if (j.type === 'boxh') {
+        if (!(slideH > 0)) return;
+        var pct2 = shiftPct(j.hh, dy, slideH, 300);
+        if (pct2 === null) return;
+        j.el.style.height = pct2 + '%';
+      }
     });
     positionResizer();
   };
@@ -2156,6 +2234,7 @@ function onHeightDown(e, dir){
     g.removeEventListener('pointerup', onUp);
     g.removeEventListener('pointercancel', onUp);
     if (!selectedItems().length) return;
+    try { g.releasePointerCapture(e.pointerId); } catch (err) {}
     selectedItems().forEach(commitStepGeometry);
     persistSlide();
   };
@@ -2225,13 +2304,13 @@ function resizerOverlay(){
   ov = document.createElement('div');
   ov.id = 'media-resizer';
   ov.hidden = true;
-  ov.innerHTML = '<span class="mbadge"></span><span class="mmove" title="Drag to move">⋮⋮</span><span class="mrot" title="Drag to rotate">↻</span><span class="mh-n" title="Drag to scale height"></span><span class="mh-s" title="Drag to scale height"></span><span class="mhandle" title="Drag to resize"></span>';
+  ov.innerHTML = '<span class="mbadge"></span><span class="mmove" title="Drag to move">⋮⋮</span><span class="mrot" title="Drag to rotate">↻</span><span class="mh-e" title="Drag to change width"></span><span class="mh-s" title="Drag to change height"></span><span class="mhandle" title="Drag to resize"></span>';
   $('#stage-wrap').appendChild(ov);
-  ov.querySelector('.mhandle').addEventListener('pointerdown', onHandleDown);
+  ov.querySelector('.mhandle').addEventListener('pointerdown', function(e){ onSizeDown(e, 'both'); });
   ov.querySelector('.mmove').addEventListener('pointerdown', onGripDown);
   ov.querySelector('.mrot').addEventListener('pointerdown', onRotateDown);
-  ov.querySelector('.mh-n').addEventListener('pointerdown', function(e){ onHeightDown(e, -1); });
-  ov.querySelector('.mh-s').addEventListener('pointerdown', function(e){ onHeightDown(e, 1); });
+  ov.querySelector('.mh-e').addEventListener('pointerdown', function(e){ onSizeDown(e, 'w'); });
+  ov.querySelector('.mh-s').addEventListener('pointerdown', function(e){ onSizeDown(e, 'h'); });
   return ov;
 }
 function posInWrap(el){
@@ -2273,6 +2352,15 @@ function positionResizer(){
     ov.style.height = Math.max(0, p.h) + 'px';
     var badge = ov.querySelector('.mbadge');
     if (badge) badge.textContent = currentMediaPct();
+    var hC = ov.querySelector('.mhandle'), hE = ov.querySelector('.mh-e'), hS = ov.querySelector('.mh-s');
+    var sizable = true;
+    try {
+      var _svg = shapeSvgOf(resizer.el);
+      if (_svg) { var _keys = shapeSizeKeys(_svg.getAttribute('data-kind')); sizable = !!(_keys && _keys.length); }
+    } catch (err) {}
+    if (hC) hC.style.display = sizable ? '' : 'none';
+    if (hE) hE.style.display = sizable ? '' : 'none';
+    if (hS) hS.style.display = sizable ? '' : 'none';
   }
   drawExtraBoxes();
 }
@@ -2325,8 +2413,19 @@ function snapStepState(el){
   return {
     left: el.style.left, top: el.style.top, width: el.style.width,
     opacity: el.style.opacity, transform: el.style.transform, vis: el.style.visibility,
-    rot: el.getAttribute('data-rot'), sx: el.getAttribute('data-sx'), sy: el.getAttribute('data-sy')
+    rot: el.getAttribute('data-rot'), sx: el.getAttribute('data-sx'), sy: el.getAttribute('data-sy'),
+    shape: snapShapeOf(el)
   };
+}
+function snapShapeOf(el){
+  var svg = shapeSvgOf(el);
+  if (!svg || !document.contains(svg)) return null;
+  var attrs = {};
+  ['len', 'radius', 'width', 'height'].forEach(function(k){
+    var v = svg.getAttribute('data-' + k);
+    if (v !== null) attrs[k] = v;
+  });
+  return { svg: svg, attrs: attrs, html: svg.innerHTML, vb: svg.getAttribute('viewBox') };
 }
 function restoreStepState(el, snap){
   if (!el || !snap || !document.contains(el)) return;
@@ -2340,6 +2439,16 @@ function restoreStepState(el, snap){
     if (pair[1] === null || pair[1] === undefined) el.removeAttribute(pair[0]);
     else el.setAttribute(pair[0], pair[1]);
   });
+  if (snap.shape && snap.shape.svg && document.contains(snap.shape.svg)) {
+    var ssvg = snap.shape.svg;
+    ['len', 'radius', 'width', 'height'].forEach(function(k){
+      if (snap.shape.attrs[k] === undefined) ssvg.removeAttribute('data-' + k);
+      else ssvg.setAttribute('data-' + k, snap.shape.attrs[k]);
+    });
+    ssvg.innerHTML = snap.shape.html;
+    if (snap.shape.vb === null) ssvg.removeAttribute('viewBox');
+    else ssvg.setAttribute('viewBox', snap.shape.vb);
+  }
   try { delete el._kfSty; } catch (e) {}
 }
 function enterStepEdit(el, idx){
@@ -2371,7 +2480,7 @@ function commitStepGeometry(el){
   var entry = list[se.idx];
   if (!entry) { exitStepEdit(); return false; }
   var cur = captureKeyframe(el);
-  ['left', 'top', 'width', 'rot', 'sx', 'sy'].forEach(function(k){
+  ['left', 'top', 'width', 'rot', 'sx', 'sy', 'slen', 'sr', 'sw', 'sh'].forEach(function(k){
     if (cur[k] !== undefined) entry.to[k] = cur[k];
   });
   writeAnimList(el, list);
@@ -2405,6 +2514,14 @@ function captureKeyframe(el){
   to.rot = tr.rot;
   to.sx = tr.sx;
   to.sy = tr.sy;
+  var ksvg = shapeSvgOf(el);
+  if (ksvg) {
+    var kkind = ksvg.getAttribute('data-kind');
+    (shapeSizeKeys(kkind) || []).forEach(function(sk){
+      var v = parseFloat(ksvg.getAttribute('data-' + shapeAttrFor(sk)));
+      if (isFinite(v)) to[sk] = Math.round(v * 10) / 10;
+    });
+  }
   return to;
 }
 /* ---- global stage scrubber: a bottom slider previews any animation group
@@ -2621,6 +2738,10 @@ function buildAnimRows(el){
     var fR = line('Rotation °', animNum(entry.to.rot, -720, 720, 1, 'Target rotation in degrees'));
     var fX = line('Scale X', animNum(entry.to.sx, 0.05, 10, 0.1, 'Target horizontal scale'));
     var fY = line('Scale Y', animNum(entry.to.sy, 0.05, 10, 0.1, 'Target vertical scale'));
+    var fSL = line('Shape len', animNum(entry.to.slen, 5, 100, 1, 'Arrow/line length target'));
+    var fSR = line('Shape radius', animNum(entry.to.sr, 2, 60, 1, 'Circle radius target'));
+    var fSW = line('Shape width', animNum(entry.to.sw, 5, 100, 1, 'Rectangle/ellipse width target'));
+    var fSH = line('Shape height', animNum(entry.to.sh, 5, 100, 1, 'Shape height target'));
     function rv(inp, min, max, fb){
       var v = parseFloat(inp.value);
       return isFinite(v) ? Math.max(min, Math.min(max, v)) : fb;
@@ -2635,6 +2756,7 @@ function buildAnimRows(el){
       var next = t.list, idx = t.idx, el = t.el;
       var to = {};
       var L = opt(fL), T = opt(fT), Wd = opt(fW), O = opt(fO), R = opt(fR), X = opt(fX), Y = opt(fY);
+      var SL = opt(fSL), SR = opt(fSR), SW = opt(fSW), SH = opt(fSH);
       if (L !== undefined) to.left = Math.max(-100, Math.min(300, L));
       if (T !== undefined) to.top = Math.max(-100, Math.min(300, T));
       if (Wd !== undefined && Wd >= 1) to.width = Math.max(1, Math.min(300, Wd));
@@ -2642,6 +2764,10 @@ function buildAnimRows(el){
       if (R !== undefined) to.rot = Math.max(-720, Math.min(720, R));
       if (X !== undefined && X > 0) to.sx = Math.max(0.05, Math.min(10, X));
       if (Y !== undefined && Y > 0) to.sy = Math.max(0.05, Math.min(10, Y));
+      if (SL !== undefined) to.slen = Math.max(5, Math.min(100, SL));
+      if (SR !== undefined) to.sr = Math.max(2, Math.min(60, SR));
+      if (SW !== undefined) to.sw = Math.max(5, Math.min(100, SW));
+      if (SH !== undefined) to.sh = Math.max(5, Math.min(100, SH));
       var ng = Math.max(1, Math.min(99, parseInt(fGroup.value, 10) || next[idx].group));
       next[idx] = {
         group: ng,
@@ -2673,51 +2799,12 @@ function buildAnimRows(el){
       if (stepEdit && stepEdit.el === el && stepEdit.idx === idx) applyKeyframeState(el, next[idx].to);
       if (ng !== scrubGroup) { scrubGroup = ng; rebuildScrub(); } /* group edit drives the slider */
     }
-    [fGroup, fTrig, fDur, fDelay, fMode, fMax, fAcc, fMin, fDec, fL, fT, fW, fO, fR, fX, fY].forEach(function(inp){
+    [fGroup, fTrig, fDur, fDelay, fMode, fMax, fAcc, fMin, fDec, fL, fT, fW, fO, fR, fX, fY, fSL, fSR, fSW, fSH].forEach(function(inp){
       inp.addEventListener('change', commit);
     });
     host.appendChild(det);
   });
 }
-function onHandleDown(e){
-  var items = selectedItems();
-  if (!items.length) return;
-  e.preventDefault();
-  e.stopPropagation();
-  var h = e.currentTarget;
-  try { h.setPointerCapture(e.pointerId); } catch (err) {}
-  maybeAutoStepEdit(items);
-  var sec = $('#stage .slide');
-  var slideW = (sec && sec.clientWidth) || 0;
-  var startX = e.clientX;
-  var basePx = items[0].offsetWidth || 0;
-  var startW = items.map(function(el){ return el.offsetWidth || 0; });
-  if (!(slideW > 0)) return;
-  var onMove = function(ev){
-    if (shiftPct(basePx, ev.clientX - startX, slideW) === null) return;
-    var f = basePx > 0 ? (basePx + (ev.clientX - startX)) / basePx : 1;
-    items.forEach(function(el, ix){
-      if (!document.contains(el)) return;
-      var pct = (startW[ix] * f) / slideW * 100;
-      el.style.width = Math.max(5, Math.min(100, Math.round(pct * 10) / 10)) + '%';
-      el.style.height = 'auto';
-    });
-    positionResizer();
-  };
-  var onUp = function(){
-    h.removeEventListener('pointermove', onMove);
-    h.removeEventListener('pointerup', onUp);
-    h.removeEventListener('pointercancel', onUp);
-    if (!selectedItems().length) return;
-    try { h.releasePointerCapture(e.pointerId); } catch (err) {}
-    selectedItems().forEach(commitStepGeometry);
-    persistSlide();
-  };
-  h.addEventListener('pointermove', onMove);
-  h.addEventListener('pointerup', onUp);
-  h.addEventListener('pointercancel', onUp);
-}
-
 /* ================= PRESENT ================= */
 function openPresent(){
   exitStepEdit();
@@ -2818,6 +2905,8 @@ function cleanAnimEntry(e){
   var l = num(e.to && e.to.left, -100, 300), t = num(e.to && e.to.top, -100, 300), w = num(e.to && e.to.width, 1, 300);
   var o = num(e.to && e.to.opacity, 0, 1), r = num(e.to && e.to.rot, -720, 720);
   var x = num(e.to && e.to.sx, 0.05, 10), y = num(e.to && e.to.sy, 0.05, 10);
+  var sl = num(e.to && e.to.slen, 5, 100), sr = num(e.to && e.to.sr, 2, 60);
+  var sw = num(e.to && e.to.sw, 5, 100), sh = num(e.to && e.to.sh, 5, 100);
   if (l !== null) to.left = l;
   if (t !== null) to.top = t;
   if (w !== null) to.width = w;
@@ -2825,6 +2914,10 @@ function cleanAnimEntry(e){
   if (r !== null) to.rot = r;
   if (x !== null) to.sx = x;
   if (y !== null) to.sy = y;
+  if (sl !== null) to.slen = sl;
+  if (sr !== null) to.sr = sr;
+  if (sw !== null) to.sw = sw;
+  if (sh !== null) to.sh = sh;
   if (!Object.keys(to).length) return null;
   return {
     group: group,
@@ -2892,6 +2985,17 @@ function applyKeyframeState(el, to){
     el.style.transform = 'rotate(' + r + 'deg) scaleX(' + x + ') scaleY(' + y + ')';
     el._kfSty = { rot: r, sx: x, sy: y };
   }
+  var asvg = shapeSvgOf(el);
+  if (asvg) {
+    var touchedS = false;
+    [['slen', 'len'], ['sr', 'radius'], ['sw', 'width'], ['sh', 'height']].forEach(function(pair){
+      if (to[pair[0]] !== undefined && isFinite(+to[pair[0]])) {
+        asvg.setAttribute('data-' + pair[1], String(+to[pair[0]]));
+        touchedS = true;
+      }
+    });
+    if (touchedS) renderShape(asvg);
+  }
 }
 function snapToFirst(sec){
   /* multi-step elements start at their first keyframe, so the first advance
@@ -2911,6 +3015,12 @@ function entryWouldMove(entry, el){
   var eps = { left: 0.01, top: 0.01, width: 0.01, opacity: 0.001 };
   for (var k in entry.to) {
     if (k === 'rot' || k === 'sx' || k === 'sy') continue;
+    if (k === 'slen' || k === 'sr' || k === 'sw' || k === 'sh') {
+      var curS = from.ss && from.ss[k];
+      if (curS === undefined) return true;
+      if (Math.abs(entry.to[k] - curS) > 0.01) return true;
+      continue;
+    }
     if (from[k] === undefined) return true;
     if (Math.abs(entry.to[k] - from[k]) > (eps[k] || 0.01)) return true;
   }
@@ -2942,6 +3052,15 @@ function kfCurrent(el, to){
   if (to.rot !== undefined || to.sx !== undefined || to.sy !== undefined) {
     from._t = { rot: cur.rot, sx: cur.sx, sy: cur.sy };
   }
+  var fsvg = shapeSvgOf(el);
+  if (fsvg) {
+    from.ss = {};
+    [['slen', 'len'], ['sr', 'radius'], ['sw', 'width'], ['sh', 'height']].forEach(function(pair){
+      if (to[pair[0]] === undefined) return;
+      var v = parseFloat(fsvg.getAttribute('data-' + pair[1]));
+      from.ss[pair[0]] = isFinite(v) ? v : to[pair[0]];
+    });
+  }
   return from;
 }
 function kfWrite(el, from, to, p){
@@ -2956,6 +3075,15 @@ function kfWrite(el, from, to, p){
     var y = mix(from._t.sy, to.sy !== undefined ? to.sy : from._t.sy);
     el.style.transform = 'rotate(' + r + 'deg) scaleX(' + x + ') scaleY(' + y + ')';
     el._kfSty = { rot: r, sx: x, sy: y };
+  }
+  if (from.ss) {
+    var wsvg = shapeSvgOf(el), wch = false;
+    Object.keys(from.ss).forEach(function(k){
+      if (to[k] === undefined || !wsvg) return;
+      wsvg.setAttribute('data-' + shapeAttrFor(k), String(Math.round(mix(from.ss[k], to[k]) * 10) / 10));
+      wch = true;
+    });
+    if (wch) renderShape(wsvg);
   }
 }
 function animateProps(el, to, durMs, easeFn, done){
@@ -3032,16 +3160,23 @@ var PLAYER_JS = [
   "function num(v,lo,hi){v=parseFloat(v);return isFinite(v)?Math.max(lo,Math.min(hi,v)):null;}",
   "var to={};var l=num(e.to&&e.to.left,-100,300),t=num(e.to&&e.to.top,-100,300),w=num(e.to&&e.to.width,1,300);",
   "var o=num(e.to&&e.to.opacity,0,1),r=num(e.to&&e.to.rot,-720,720),x=num(e.to&&e.to.sx,0.05,10),y=num(e.to&&e.to.sy,0.05,10);",
-  "if(l!==null)to.left=l;if(t!==null)to.top=t;if(w!==null)to.width=w;if(o!==null)to.opacity=o;if(r!==null)to.rot=r;if(x!==null)to.sx=x;if(y!==null)to.sy=y;",
+  "var sl=num(e.to&&e.to.slen,5,100),sr=num(e.to&&e.to.sr,2,60),sw=num(e.to&&e.to.sw,5,100),sh=num(e.to&&e.to.sh,5,100);",
+  "if(l!==null)to.left=l;if(t!==null)to.top=t;if(w!==null)to.width=w;if(o!==null)to.opacity=o;if(r!==null)to.rot=r;if(x!==null)to.sx=x;if(y!==null)to.sy=y;if(sl!==null)to.slen=sl;if(sr!==null)to.sr=sr;if(sw!==null)to.sw=sw;if(sh!==null)to.sh=sh;",
   "if(!Object.keys(to).length)return null;",
   "return{group:group,trigger:e.trigger==='auto'?'auto':'click',dur:Math.max(50,Math.min(10000,parseInt(e.dur,10)||600)),delay:Math.max(0,Math.min(10000,parseInt(e.delay,10)||0)),mode:(e.mode==='accelerate'||e.mode==='accelDecel')?e.mode:'linear',maxSpeed:Math.max(0.1,Math.min(5,parseFloat(e.maxSpeed)||1.5)),accel:Math.max(0,Math.min(10,parseFloat(e.accel)||0)),minSpeed:Math.max(0,Math.min(2,parseFloat(e.minSpeed)||0)),decel:Math.max(0,Math.min(10,parseFloat(e.decel)||0)),to:to};}",
   "function parseAnimList(s){try{var v=JSON.parse(s);if(!Array.isArray(v))return[];return v.map(cleanAnimEntry).filter(function(e){return !!e;});}catch(e){return[];}}",
   "function kfEntries(sec){var out=[];Array.prototype.forEach.call(sec.querySelectorAll('[data-anim]'),function(n){parseAnimList(n.getAttribute('data-anim')).forEach(function(e){out.push({el:n,entry:e});});});return out;}",
   "function kfCollect(sec){var groups={};kfEntries(sec).forEach(function(x){(groups[x.entry.group]=groups[x.entry.group]||[]).push(x);});kfGroups=Object.keys(groups).map(Number).sort(function(a,b){return a-b;}).map(function(g){return{group:g,items:groups[g]};});kfGroupIdx=-1;}",
+  "function svgOf(el){if(!el)return null;if(el.tagName&&el.tagName.toLowerCase()==='svg')return el.hasAttribute('data-kind')?el:null;return el.querySelector?el.querySelector('svg[data-kind]'):null;}",
+  "function sAttr(k){return k==='slen'?'len':k==='sr'?'radius':k==='sw'?'width':'height';}",
+  "function r1p(n){return Math.round(n*10)/10;}",
+  "function sP(svg,kind){function gv(k,d,m){var v=parseFloat(svg.getAttribute('data-'+k));if(!isFinite(v))return d;return Math.max(m,v);}if(kind==='circle')return{radius:gv('radius',40,5)};if(kind==='square'||kind==='triangle')return{height:gv('height',72,10)};if(kind==='rectangle'||kind==='ellipse')return{width:gv('width',72,10),height:gv('height',48,10)};return{len:gv('len',kind==='line'?80:68,kind==='line'?10:(kind==='arrow-both'?40:30))};}",
+  "function arrowP(dir,L){var hx=10+L-22;function map(p){var x=p[0],y=p[1];if(dir==='left')return[100-x,100-y];if(dir==='up')return[y,100-x];if(dir==='down')return[100-y,x];return[x,y];}function pt(p){var q=map(p);return r1p(q[0])+','+r1p(q[1]);}function ln(a,b){var u=map(a),v=map(b);return '<line x1=\"'+r1p(u[0])+'\" y1=\"'+r1p(u[1])+'\" x2=\"'+r1p(v[0])+'\" y2=\"'+r1p(v[1])+'\"/>';}return ln([10,50],[hx,50])+'<polyline points=\"'+pt([hx,32])+' '+pt([10+L,50])+' '+pt([hx,68])+'\"/>';}",
+  "function paintShape(svg){var kind=svg.getAttribute('data-kind');var p=sP(svg,kind);var inner='';if(kind==='circle'){inner='<circle cx=\"50\" cy=\"50\" r=\"'+p.radius+'\"/>';}else if(kind==='square'){var x=r1p((100-p.height)/2);inner='<rect x=\"'+x+'\" y=\"'+x+'\" width=\"'+p.height+'\" height=\"'+p.height+'\" rx=\"6\"/>';}else if(kind==='triangle'){var y0=r1p(50-p.height/2),y1=r1p(50+p.height/2);inner='<polygon points=\"50,'+y0+' 90,'+y1+' 10,'+y1+'\"/>';}else if(kind==='rectangle'){var x2=r1p((100-p.width)/2),y2=r1p((100-p.height)/2);inner='<rect x=\"'+x2+'\" y=\"'+y2+'\" width=\"'+p.width+'\" height=\"'+p.height+'\" rx=\"6\"/>';}else if(kind==='ellipse'){inner='<ellipse cx=\"50\" cy=\"50\" rx=\"'+r1p(p.width/2)+'\" ry=\"'+r1p(p.height/2)+'\"/>';}else if(kind==='line'){inner='<line x1=\"10\" y1=\"50\" x2=\"'+r1p(10+p.len)+'\" y2=\"50\"/>';}else if(kind==='arrow-both'){var hx0=32,hx1=10+p.len-22;inner='<line x1=\"'+hx0+'\" y1=\"50\" x2=\"'+hx1+'\" y2=\"50\"/><polyline points=\"'+hx0+',36 '+(hx0-14)+',50 '+hx0+',64\"/><polyline points=\"'+hx1+',36 '+(hx1+14)+',50 '+hx1+',64\"/>';}else if(kind&&kind.indexOf('arrow')===0){inner=arrowP(kind.slice(6),p.len);}else{return;}svg.innerHTML=inner;}",
   "function kfCancel(){if(kfTimer){clearTimeout(kfTimer);kfTimer=0;}kfLive.forEach(function(el){try{if(el._kfRaf)cancelAnimationFrame(el._kfRaf);}catch(e){}el._kfRaf=0;});kfLive=[];}",
   "function kfReset(sec,reveal){kfCancel();kfCollect(sec);Array.prototype.forEach.call(sec.querySelectorAll('[data-hidden]'),function(n){n.style.visibility=reveal?'visible':'hidden';});if(reveal){kfGroups=[];kfGroupIdx=-1;}}",
-  "function kfCurrent(el,to){var from={};['left','top','width'].forEach(function(k){if(to[k]===undefined)return;var m=/^\\s*-?[\\d.]+\\s*%\\s*$/.exec(el.style[k]||'');from[k]=m?parseFloat(m[0]):to[k];});if(to.opacity!==undefined){var o=parseFloat(el.style.opacity);if(!isFinite(o)){try{o=parseFloat(getComputedStyle(el).opacity);}catch(e){}}from.opacity=isFinite(o)?o:1;}var cur=el._kfSty||{rot:0,sx:1,sy:1};if(to.rot!==undefined||to.sx!==undefined||to.sy!==undefined){from._t={rot:cur.rot,sx:cur.sx,sy:cur.sy};}return from;}",
-  "function kfWrite(el,from,to,p){function mix(a,b){return a+(b-a)*p;}['left','top','width'].forEach(function(k){if(to[k]!==undefined)el.style[k]=mix(from[k]!==undefined?from[k]:to[k],to[k])+'%';});if(to.opacity!==undefined)el.style.opacity=mix(from.opacity!==undefined?from.opacity:to.opacity,to.opacity);if(from._t){var r=mix(from._t.rot,to.rot!==undefined?to.rot:from._t.rot);var x=mix(from._t.sx,to.sx!==undefined?to.sx:from._t.sx);var y=mix(from._t.sy,to.sy!==undefined?to.sy:from._t.sy);el.style.transform='rotate('+r+'deg) scaleX('+x+') scaleY('+y+')';el._kfSty={rot:r,sx:x,sy:y};}}",
+  "function kfCurrent(el,to){var from={};['left','top','width'].forEach(function(k){if(to[k]===undefined)return;var m=/^\\s*-?[\\d.]+\\s*%\\s*$/.exec(el.style[k]||'');from[k]=m?parseFloat(m[0]):to[k];});if(to.opacity!==undefined){var o=parseFloat(el.style.opacity);if(!isFinite(o)){try{o=parseFloat(getComputedStyle(el).opacity);}catch(e){}}from.opacity=isFinite(o)?o:1;}var cur=el._kfSty||{rot:0,sx:1,sy:1};if(to.rot!==undefined||to.sx!==undefined||to.sy!==undefined){from._t={rot:cur.rot,sx:cur.sx,sy:cur.sy};}var fsvg=svgOf(el);if(fsvg){from.ss={};[['slen','len'],['sr','radius'],['sw','width'],['sh','height']].forEach(function(pr){if(to[pr[0]]===undefined)return;var v=parseFloat(fsvg.getAttribute('data-'+pr[1]));from.ss[pr[0]]=isFinite(v)?v:to[pr[0]];});}return from;}",
+  "function kfWrite(el,from,to,p){function mix(a,b){return a+(b-a)*p;}['left','top','width'].forEach(function(k){if(to[k]!==undefined)el.style[k]=mix(from[k]!==undefined?from[k]:to[k],to[k])+'%';});if(to.opacity!==undefined)el.style.opacity=mix(from.opacity!==undefined?from.opacity:to.opacity,to.opacity);if(from._t){var r=mix(from._t.rot,to.rot!==undefined?to.rot:from._t.rot);var x=mix(from._t.sx,to.sx!==undefined?to.sx:from._t.sx);var y=mix(from._t.sy,to.sy!==undefined?to.sy:from._t.sy);el.style.transform='rotate('+r+'deg) scaleX('+x+') scaleY('+y+')';el._kfSty={rot:r,sx:x,sy:y};}if(from.ss){var wsvg=svgOf(el),wch=false;Object.keys(from.ss).forEach(function(k){if(to[k]===undefined||!wsvg)return;wsvg.setAttribute('data-'+sAttr(k),String(Math.round(mix(from.ss[k],to[k])*10)/10));wch=true;});if(wch)paintShape(wsvg);}}",
   "function animateProps(el,to,durMs,easeFn,done){try{if(el._kfRaf)cancelAnimationFrame(el._kfRaf);}catch(e){}if(kfLive.indexOf(el)<0)kfLive.push(el);var from=kfCurrent(el,to);if(durMs<=50){kfWrite(el,to,to,1);el._kfRaf=0;done&&done();return;}var t0=null;function frame(ts){if(t0===null)t0=ts;var t=Math.min(1,(ts-t0)/Math.max(1,durMs));kfWrite(el,from,to,easeFn(t));if(t<1){try{el._kfRaf=requestAnimationFrame(frame);}catch(e){kfWrite(el,to,to,1);el._kfRaf=0;done&&done();}}else{el._kfRaf=0;done&&done();}}try{el._kfRaf=requestAnimationFrame(frame);}catch(e){kfWrite(el,to,to,1);el._kfRaf=0;done&&done();}}",
   "function chainAutos(){var nxt=kfGroups[kfGroupIdx+1];if(!nxt||!nxt.items.length)return;var auto=nxt.items.every(function(x){return x.entry.trigger==='auto';});if(!auto)return;var delay=Math.max.apply(null,nxt.items.map(function(x){return x.entry.delay||0;}));kfTimer=setTimeout(function(){kfTimer=0;kfPlayGroup(kfGroupIdx+1);},delay);}",
   "function ensureKfPos(el,sec){function ok(v){return /^\\s*-?[\\d.]+\\s*%\\s*$/.test(v||'');}if(ok(el.style.left)&&ok(el.style.top))return;var r=el.getBoundingClientRect(),s=sec.getBoundingClientRect();if(s.width>0){if(!ok(el.style.left))el.style.left=(Math.round((r.left-s.left)/s.width*1000)/10)+'%';if(!ok(el.style.top)&&s.height>0)el.style.top=(Math.round((r.top-s.top)/s.height*1000)/10)+'%';}var pos='';try{pos=getComputedStyle(el).position;}catch(e){}if(pos!=='absolute')el.style.position='absolute';}",
@@ -3266,6 +3401,8 @@ function bind(){
     e.target.value = App.model.settings.lineWidth;
     var svgs = selectedItems().map(selectedShapeSvg).filter(function(s){ return !!s; });
     if (svgs.length) {
+      if (stepEdit) exitStepEdit(); /* stroke is rest-only: never baked into a step preview */
+      selectedItems().forEach(function(el){ scrubForget(el); });
       svgs.forEach(function(svg){ svg.setAttribute('stroke-width', String(App.model.settings.lineWidth)); });
       persistSlide();
     } else { refreshDirty(); scheduleAutosave(); }
@@ -3276,13 +3413,13 @@ function bind(){
     e.target.value = App.model.settings.lineColor;
     var svgs = selectedItems().map(selectedShapeSvg).filter(function(s){ return !!s; });
     if (svgs.length) {
+      if (stepEdit) exitStepEdit(); /* stroke is rest-only: never baked into a step preview */
+      selectedItems().forEach(function(el){ scrubForget(el); });
       svgs.forEach(function(svg){ svg.setAttribute('stroke', App.model.settings.lineColor); });
       persistSlide();
     } else { refreshDirty(); scheduleAutosave(); }
   });
   $('#shape-rot').addEventListener('change', transformChanged);
-  $('#shape-sx').addEventListener('change', transformChanged);
-  $('#shape-sy').addEventListener('change', transformChanged);
   $('#anim-hidden').addEventListener('change', function(e){
     var el = selectedAnimTarget();
     if (!el) return;
