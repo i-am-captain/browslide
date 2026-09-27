@@ -12,7 +12,7 @@
 - [x] 15. Text color selection in text settings (format bar). Done: color input, span-wrap + pending + reflection via cssColorToHex.
 - [x] 16. Right toolbar cleanup/reorder: Slide menu, Presentation menu, notes bottom, textblock in Slide, Media & Sizes last with capital S. Done.
 - [x] 17. Keyframe scrub-editing: selecting a step previews its pose; geometry edits land in that step, rest pose preserved. Done.
-- [x] 18. Viewport auto-fit: when a dragged/selected element nears the slide border and handles would clip, scale the slide view down so all handles of the largest selection stay visible and clickable. Done: selection-bbox zoom in fitStage, refit on select/deselect/drag.
+- [x] 18. Viewport auto-fit: REVERTED (did not work reliably) — replaced by whole-item grab dragging. Rationale documented below.
 
 Conventions: commit per task, full suite (`cd tests && npm test`) green before each commit. No question tool while user is AFK — decide, document below, continue.
 
@@ -26,5 +26,7 @@ Conventions: commit per task, full suite (`cd tests && npm test`) green before e
 - jsdom Range objects track live DOM mutations (spec deviation found during testing) — app stores static node+offset snapshots instead. If jsdom ever fixes this, the snapshots keep working unchanged.
 - Nothing currently open: the earlier cut-off message ("the tex alignment buttons do …") turned out to be the alignment topic, now resolved as item 14.
 - Move drags follow the mouse in screen space even on rotated items (counter-rotated dragging felt wrong).
+- Viewport auto-fit reverted: zoom math never visibly triggered (likely refit timing vs. overlay measurement); replaced by grabbing the whole item, which solves the underlying reachability problem instead of working around it.
+- Whole-item drag uses point-on-text detection (caretRangeFromPoint + glyph proximity): text always edits/selects natively, everything else drags. Multi-select always drags as a group.
 - Keyframe `to` targets with no parseable position fall back to derived/current values; empty-`to` entries are dropped at play time, not at save.
 - A missing regex group in keyframe capture silently produced NaN targets (caught by tests before shipping) — position animation would have been a silent no-op. Lesson: numeric parsing helpers need direct unit tests, which they now have.

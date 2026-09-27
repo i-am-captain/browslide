@@ -1438,22 +1438,49 @@ const restList = JSON.parse(scBlks[1].getAttribute('data-anim'));
 check('deleted entry gone, element at rest', restList.length === 1 && restList[0].group === 2 &&
   scBlks[1].style.left === '8%' && WSC.stepEdit === null);
 
-// ---------- 34. viewport auto-fit zoom ----------
+// ---------- 34. whole-item drag (grab anywhere except text) ----------
 const domZB = makeDom(html);
 await wait(400);
 const WZB = domZB.window, DZB = WZB.document;
-check('zoomForBBox full-bleed shrinks', WZB.zoomForBBox(1, 1, 800, 600, 800, 600) === (600 - 96) / 600);
-check('zoomForBBox small selection stays 1', WZB.zoomForBBox(0.2, 0.2, 800, 600, 800, 600) === 1);
-check('zoomForBBox empty bbox stays 1', WZB.zoomForBBox(0, 0, 800, 600, 800, 600) === 1);
-check('zoomForBBox tall bbox height-bound', WZB.zoomForBBox(0.5, 2, 800, 600, 800, 600) === (600 - 96) / 1200);
-check('zoomForBBox floors', WZB.zoomForBBox(10, 10, 800, 600, 800, 600) === 0.15);
 WZB.gotoSlide(WZB.App.model.slideOrder[1]);
 await wait(100);
+Object.defineProperty(DZB.querySelector('#stage .slide'), 'clientWidth', { value: 800, configurable: true });
+Object.defineProperty(DZB.querySelector('#stage .slide'), 'clientHeight', { value: 600, configurable: true });
 const zbBlk = DZB.querySelector('#stage .blk');
-zbBlk.dispatchEvent(new WZB.MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-check('selectionBBox null without layout', WZB.selectionBBox() === null);
-WZB.fitStage();
-check('fitStage with selection keeps overlay', DZB.querySelector('#media-resizer').hidden === false);
+zbBlk.dispatchEvent(new WZB.MouseEvent('mousedown', { bubbles: true, cancelable: true, clientX: 0, clientY: 0 }));
+check('grab selects', WZB.resizer.el === zbBlk);
+DZB.defaultView.dispatchEvent(new WZB.MouseEvent('pointermove', { bubbles: true, clientX: 80, clientY: 0 }));
+DZB.defaultView.dispatchEvent(new WZB.MouseEvent('pointerup', { bubbles: true, clientX: 80, clientY: 0 }));
+await wait(100);
+check('drag moves whole selection', zbBlk.style.left === '18%');
+check('drag persists to model', /left:\s*18%/.test(WZB.App.model.slides.s2.html));
+check('drag keeps overlay', DZB.querySelector('#media-resizer').hidden === false);
+// caret path with stubbed caret API (jsdom has none built in)
+DZB.caretRangeFromPoint = function () {
+  const r = DZB.createRange();
+  const tx = DZB.querySelector('#stage .blk span') || DZB.querySelector('#stage .blk');
+  const tn = tx.firstChild || tx;
+  r.setStart(tn, 0);
+  r.collapse(true);
+  r.getBoundingClientRect = () => ({ left: 0, top: 0, right: 0, bottom: 0 });
+  return r;
+};
+const mdCaret = new WZB.MouseEvent('mousedown', { bubbles: true, cancelable: true, clientX: 3, clientY: 2 });
+zbBlk.dispatchEvent(mdCaret);
+check('press on text keeps native caret', mdCaret.defaultPrevented === false);
+const mb4 = JSON.stringify(WZB.App.model);
+DZB.defaultView.dispatchEvent(new WZB.MouseEvent('pointerup', { bubbles: true, clientX: 3, clientY: 2 }));
+await wait(50);
+check('clean click places caret, model untouched', DZB.getSelection().isCollapsed === true && JSON.stringify(WZB.App.model) === mb4);
+// multi drag moves all
+const zbBlks = DZB.querySelectorAll('#stage .blk');
+WZB.toggleSelection(zbBlks[1]);
+const m0l = zbBlks[0].style.left, m1l = zbBlks[1].style.left;
+zbBlks[0].dispatchEvent(new WZB.MouseEvent('mousedown', { bubbles: true, cancelable: true, clientX: 0, clientY: 0 }));
+DZB.defaultView.dispatchEvent(new WZB.MouseEvent('pointermove', { bubbles: true, clientX: 100, clientY: 0 }));
+DZB.defaultView.dispatchEvent(new WZB.MouseEvent('pointerup', { bubbles: true, clientX: 100, clientY: 0 }));
+await wait(100);
+check('group drag moves all', zbBlks[0].style.left !== m0l && zbBlks[1].style.left !== m1l);
 
 console.log(failures === 0 ? '\nALL TESTS PASSED' : `\n${failures} TEST(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);
