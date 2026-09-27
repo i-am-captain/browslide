@@ -313,6 +313,8 @@ function hash53(str){ /* cyrb53 content hash for media dedup (deck-scale; collis
   return (h2 >>> 0).toString(16) + (h1 >>> 0).toString(16);
 }
 var MIME_EXT = { 'image/png': '.png', 'image/jpeg': '.jpg', 'image/gif': '.gif', 'image/webp': '.webp', 'image/svg+xml': '.svg', 'image/bmp': '.bmp', 'video/mp4': '.mp4', 'video/webm': '.webm', 'video/ogg': '.ogv', 'audio/mpeg': '.mp3', 'audio/wav': '.wav', 'audio/ogg': '.ogg' };
+/* legacy <font size=N> (≈10,13,16,18,24,32,48px) -> em, for pasted/execCommand leftovers */
+var FONT_SIZE_MAP = { 1: '0.63em', 2: '0.8em', 3: '1em', 4: '1.13em', 5: '1.5em', 6: '2em', 7: '3em' };
 function parseDataUrl(dataURL){
   var m = /^data:([^;,]+)?(;base64)?,([\s\S]*)$/.exec(String(dataURL || ''));
   if (!m) return null;
@@ -341,6 +343,8 @@ function deckAR(){
 function sanitizeSlideHTML(html){
   var tpl = document.createElement('template');
   tpl.innerHTML = String(html || '');
+  /* safety net: legacy font tags can never reach saved HTML (see convertFontTags) */
+  Array.prototype.slice.call(tpl.content.querySelectorAll('font')).forEach(function(el){ replaceFontTag(el, false); });
   $all('script,iframe,object,embed,link,style', tpl.content).forEach(function(n){ n.remove(); });
   $all('*', tpl.content).forEach(function(el){
     Array.prototype.slice.call(el.attributes).forEach(function(a){
@@ -950,6 +954,19 @@ function trackSelection(){
     }
   } catch (e) {}
 }
+function refocusStage(){
+  /* applying via toolbar/selects drops focus; put the cursor back so typing continues */
+  var sec = $('#stage .slide');
+  if (!sec || !savedRange) return;
+  try {
+    var n = savedRange.startContainer;
+    if (!(n === sec || sec.contains(n))) return;
+    try { sec.focus({ preventScroll: true }); } catch (e) { sec.focus(); }
+    var sel = document.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(savedRange);
+  } catch (e) {}
+}
 function restoreSelection(){
   var sec = $('#stage .slide');
   if (!sec) return false;
@@ -969,6 +986,7 @@ function restoreSelection(){
 }
 function afterFormat(){
   syncStageToModel(); updateFilmstripLabel(); refreshDirty(); scheduleSize(); scheduleAutosave();
+  refocusStage();
   updateFormatUI();
 }
 function nearestStyleValue(node, names){
@@ -1043,15 +1061,31 @@ function applySpanStyle(prop, value){
   pendingSpanStyle = null;
   afterFormat();
 }
+function replaceFontTag(f, usePending){
+  /* <font> (execCommand/paste leftover) -> styled span, or unwrap if valueless */
+  var doc = f.ownerDocument;
+  var sz = f.getAttribute && f.getAttribute('size');
+  var mapped = sz ? FONT_SIZE_MAP[parseInt(sz, 10)] : null;
+  var sp = null;
+  if (usePending && pendingSpanStyle && (!sz || sz === '7')) {
+    sp = doc.createElement('span');
+    sp.style[pendingSpanStyle.prop] = pendingSpanStyle.value;
+  } else if (mapped) {
+    sp = doc.createElement('span');
+    sp.style.fontSize = mapped;
+  } else if (f.getAttribute && f.getAttribute('face')) {
+    sp = doc.createElement('span');
+    sp.style.fontFamily = f.getAttribute('face');
+  }
+  var parent = f.parentNode;
+  if (!parent) return;
+  if (sp) { while (f.firstChild) sp.appendChild(f.firstChild); parent.replaceChild(sp, f); }
+  else { while (f.firstChild) parent.insertBefore(f.firstChild, f); parent.removeChild(f); }
+}
 function convertFontTags(){
   var sec = $('#stage .slide');
-  if (!sec || !pendingSpanStyle) return;
-  Array.prototype.slice.call(sec.querySelectorAll('font[size="7"]')).forEach(function(f){
-    var sp = document.createElement('span');
-    sp.style[pendingSpanStyle.prop] = pendingSpanStyle.value;
-    while (f.firstChild) sp.appendChild(f.firstChild);
-    f.parentNode.replaceChild(sp, f);
-  });
+  if (!sec) return;
+  Array.prototype.slice.call(sec.querySelectorAll('font')).forEach(function(f){ replaceFontTag(f, true); });
 }
 function updateFormatUI(){
   var on = {};
@@ -1377,7 +1411,7 @@ function bind(){
   });
   $('#font-select').addEventListener('change', function(e){ applySpanStyle('fontFamily', e.target.value); });
   $('#size-select').addEventListener('change', function(e){ applySpanStyle('fontSize', e.target.value); });
-  document.addEventListener('selectionchange', scheduleFormatUI);
+  document.addEventListener('selectionchange', function(){ trackSelection(); scheduleFormatUI(); });
   $('#stage-wrap').addEventListener('keyup', scheduleFormatUI);
   $('#stage-wrap').addEventListener('click', scheduleFormatUI);
   $('#stage-wrap').addEventListener('input', scheduleFormatUI);

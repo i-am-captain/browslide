@@ -652,6 +652,24 @@ DR.getSelection().removeAllRanges();
 DR.getSelection().addRange(rng2);
 WR.updateFormatUI();
 check('plain text resets selects to slide default', DR.querySelector('#font-select').selectedIndex === 0 && DR.querySelector('#size-select').value === '1em');
+// ---------- 19. font leftovers impossible + selection robustness ----------
+WQ.pendingSpanStyle = null;
+secQ.innerHTML = '<p>a<font size="3">b</font>c<font>d</font>e<font face="Georgia">f</font></p>';
+WQ.convertFontTags();
+check('any font tag converts without pending style', secQ.querySelectorAll('font').length === 0 &&
+  /font-size:\s*1em/.test(secQ.innerHTML) && secQ.innerHTML.includes('Georgia') && secQ.textContent === 'abcdef');
+secQ.innerHTML = '<p>x<font size="7">s</font></p>';
+WQ.syncStageToModel();
+check('sync path safety-net converts font tags', /font-size:\s*3em/.test(WQ.activeSlide().html) && !WQ.activeSlide().html.includes('<font'));
+const trng = DR.createRange();
+trng.selectNodeContents(rSec.querySelector('p').firstChild);
+DR.getSelection().removeAllRanges();
+DR.getSelection().addRange(trng);
+DR.dispatchEvent(new WR.Event('selectionchange'));
+await wait(250);
+check('selectionchange tracks synchronously', WR.restoreSelection() === true);
+WR.refocusStage();
+check('refocus does not throw', WR.__alerts.length === 0);
 
 console.log(failures === 0 ? '\nALL TESTS PASSED' : `\n${failures} TEST(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);
