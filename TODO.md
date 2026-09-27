@@ -12,7 +12,7 @@
 - [x] 15. Text color selection in text settings (format bar). Done: color input, span-wrap + pending + reflection via cssColorToHex.
 - [x] 16. Right toolbar cleanup/reorder: Slide menu, Presentation menu, notes bottom, textblock in Slide, Media & Sizes last with capital S. Done.
 - [x] 17. Keyframe scrub-editing: selecting a step previews its pose; geometry edits land in that step, rest pose preserved. Done.
-- [ ] 18. Viewport auto-fit: when a dragged/selected element nears the slide border and handles would clip, scale the slide view down so all handles of the largest selection stay visible and clickable. Handles must never be unreachable.
+- [x] 18. Viewport auto-fit: when a dragged/selected element nears the slide border and handles would clip, scale the slide view down so all handles of the largest selection stay visible and clickable. Done: selection-bbox zoom in fitStage, refit on select/deselect/drag.
 
 Conventions: commit per task, full suite (`cd tests && npm test`) green before each commit. No question tool while user is AFK — decide, document below, continue.
 

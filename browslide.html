@@ -941,8 +941,42 @@ function fitSlideBox(sec, availW, availH){
 function fitStage(){
   var wrap = $('#stage-wrap'), sec = $('#stage .slide');
   if (!wrap || !sec || !App.model) return;
-  fitSlideBox(sec, Math.max(200, wrap.clientWidth - 36), Math.max(200, wrap.clientHeight - 36));
+  var aw = Math.max(200, wrap.clientWidth - 36), ah = Math.max(200, wrap.clientHeight - 36);
+  var ar = deckAR();
+  var w = Math.min(aw, ah * ar.w / ar.h);
+  var box = selectionBBox();
+  if (box) {
+    var z = zoomForBBox(box.x1 - box.x0, box.y1 - box.y0, aw, ah, w, w * ar.h / ar.w);
+    w = Math.max(50, Math.floor(w * z));
+  }
+  fitSlideBox(sec, w, w * ar.h / ar.w);
   positionResizer();
+}
+/* auto-zoom: shrink the slide just enough that every selected handle stays
+   inside the viewport (letterboxed around the selection bbox + handle pad) */
+function selectionBBox(){
+  var sec = $('#stage .slide');
+  if (!sec) return null;
+  var s = sec.getBoundingClientRect();
+  if (!(s.width > 0)) return null;
+  var items = selectedItems();
+  if (!items.length) return null;
+  var box = null;
+  items.forEach(function(el){
+    var r = el.getBoundingClientRect();
+    var b = { x0: (r.left - s.left) / s.width, y0: (r.top - s.top) / s.height,
+              x1: (r.right - s.left) / s.width, y1: (r.bottom - s.top) / s.height };
+    box = box ? { x0: Math.min(box.x0, b.x0), y0: Math.min(box.y0, b.y0),
+                  x1: Math.max(box.x1, b.x1), y1: Math.max(box.y1, b.y1) } : b;
+  });
+  return box;
+}
+function zoomForBBox(bw, bh, aw, ah, baseW, slideH){
+  var PAD = 48; /* handle overhang + breathing room, px at zoom 1 */
+  var z = 1;
+  if (bw > 0 && baseW > 0) z = Math.min(z, (aw - 2 * PAD) / (baseW * bw));
+  if (bh > 0 && slideH > 0) z = Math.min(z, (ah - 2 * PAD) / (slideH * bh));
+  return Math.max(0.15, Math.min(1, z));
 }
 function fitPresent(){
   var ov = $('#present-overlay'), sec = $('#present-slide .slide');
@@ -1852,7 +1886,7 @@ function setSingleSelection(el){
   resizer.el = el;
   resizer.extra = [];
   resizerOverlay();
-  positionResizer();
+  fitStage();
   refreshAnimUI();
   refreshShapesUI();
 }
@@ -1865,7 +1899,7 @@ function toggleSelection(el){
   resizer.extra = all.slice(0, -1);
   if (!resizer.el) { deselectMedia(); return; }
   resizerOverlay();
-  positionResizer();
+  fitStage();
   refreshAnimUI();
   refreshShapesUI();
 }
@@ -1876,6 +1910,7 @@ function clearSelection(){
   var ov = $('#media-resizer');
   if (ov) ov.hidden = true;
   Array.prototype.forEach.call(document.querySelectorAll('#stage-wrap .selextra'), function(n){ n.remove(); });
+  fitStage();
   refreshAnimUI();
   refreshShapesUI();
 }
@@ -1909,7 +1944,8 @@ function pasteClipboard(){
   resizer.el = added[added.length - 1];
   resizer.extra = added.slice(0, -1);
   persistSlide();
-  positionResizer();
+  resizerOverlay();
+  fitStage();
   refreshAnimUI();
   refreshShapesUI();
   return true;
@@ -2012,7 +2048,7 @@ function onRotateDown(e){
       s.el.setAttribute('data-rot', String(normDeg(s.start + (angleDeg(s.cx, s.cy, ev.clientX, ev.clientY) - s.grab))));
       applyTransform(s.el);
     });
-    positionResizer();
+    fitStage();
   };
   var onUp = function(){
     g.removeEventListener('pointermove', onMove);
@@ -2046,7 +2082,7 @@ function onHeightDown(e, dir){
       if (pct === null) return;
       s.el.style.height = pct + '%';
     });
-    positionResizer();
+    fitStage();
   };
   var onUp = function(){
     g.removeEventListener('pointermove', onMove);
@@ -2101,7 +2137,7 @@ function onGripDown(e){
   });
   var startX = e.clientX, startY = e.clientY;
   var onMove = function(ev){
-    if (moveItemsBy(starts, ev.clientX - startX, ev.clientY - startY, slideW, slideH)) positionResizer();
+    if (moveItemsBy(starts, ev.clientX - startX, ev.clientY - startY, slideW, slideH)) fitStage();
   };
   var onUp = function(){
     g.removeEventListener('pointermove', onMove);
@@ -2483,7 +2519,7 @@ function onHandleDown(e){
       el.style.width = Math.max(5, Math.min(100, Math.round(pct * 10) / 10)) + '%';
       el.style.height = 'auto';
     });
-    positionResizer();
+    fitStage();
   };
   var onUp = function(){
     h.removeEventListener('pointermove', onMove);

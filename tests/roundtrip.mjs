@@ -1438,5 +1438,22 @@ const restList = JSON.parse(scBlks[1].getAttribute('data-anim'));
 check('deleted entry gone, element at rest', restList.length === 1 && restList[0].group === 2 &&
   scBlks[1].style.left === '8%' && WSC.stepEdit === null);
 
+// ---------- 34. viewport auto-fit zoom ----------
+const domZB = makeDom(html);
+await wait(400);
+const WZB = domZB.window, DZB = WZB.document;
+check('zoomForBBox full-bleed shrinks', WZB.zoomForBBox(1, 1, 800, 600, 800, 600) === (600 - 96) / 600);
+check('zoomForBBox small selection stays 1', WZB.zoomForBBox(0.2, 0.2, 800, 600, 800, 600) === 1);
+check('zoomForBBox empty bbox stays 1', WZB.zoomForBBox(0, 0, 800, 600, 800, 600) === 1);
+check('zoomForBBox tall bbox height-bound', WZB.zoomForBBox(0.5, 2, 800, 600, 800, 600) === (600 - 96) / 1200);
+check('zoomForBBox floors', WZB.zoomForBBox(10, 10, 800, 600, 800, 600) === 0.15);
+WZB.gotoSlide(WZB.App.model.slideOrder[1]);
+await wait(100);
+const zbBlk = DZB.querySelector('#stage .blk');
+zbBlk.dispatchEvent(new WZB.MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+check('selectionBBox null without layout', WZB.selectionBBox() === null);
+WZB.fitStage();
+check('fitStage with selection keeps overlay', DZB.querySelector('#media-resizer').hidden === false);
+
 console.log(failures === 0 ? '\nALL TESTS PASSED' : `\n${failures} TEST(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);
