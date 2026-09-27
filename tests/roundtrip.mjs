@@ -703,5 +703,55 @@ WS.pendingFormat = { fontFamily: null, fontSize: '3em', cmds: {} };
 WS.refocusStage();
 check('refocus without editing API is safe', WS.pendingFormat.fontSize === '3em' && WS.__alerts.length === 0);
 
+// ---------- 21. span wrapping, block styles, pending capture ----------
+const domT = makeDom(html);
+await wait(400);
+const WT = domT.window, DT = WT.document;
+check('style select offers paragraph + headings', Array.prototype.map.call(DT.querySelectorAll('#style-select option'), (o) => o.value).join(',') === 'p,h1,h2,h3');
+const wSec = DT.querySelector('#stage .slide');
+wSec.innerHTML = '<p>hello world</p>';
+const wTxt = wSec.querySelector('p').firstChild;
+const wrng = DT.createRange();
+wrng.setStart(wTxt, 0);
+wrng.setEnd(wTxt, 5);
+DT.getSelection().removeAllRanges();
+DT.getSelection().addRange(wrng);
+check('wrapSelectionInSpan wraps with style', WT.wrapSelectionInSpan('fontSize', '2em') === true &&
+  wSec.querySelectorAll('font').length === 0 &&
+  wSec.querySelector('span').style.fontSize === '2em' &&
+  wSec.textContent === 'hello world');
+check('wrap keeps selection on the span', DT.getSelection().anchorNode === wSec.querySelector('span'));
+const crng = DT.createRange();
+crng.setStart(wTxt, 0);
+crng.collapse(true);
+DT.getSelection().removeAllRanges();
+DT.getSelection().addRange(crng);
+check('wrap refuses collapsed selection', WT.wrapSelectionInSpan('fontSize', '2em') === false);
+const orng = DT.createRange();
+orng.selectNodeContents(DT.querySelector('.brand'));
+DT.getSelection().removeAllRanges();
+DT.getSelection().addRange(orng);
+check('wrap refuses outside-stage selection', WT.wrapSelectionInSpan('fontSize', '2em') === false);
+check('emOfSize parses em/px', WT.emOfSize('1.5em') === 1.5 && WT.emOfSize('24px') === 1.5 && WT.emOfSize('bogus') === 0);
+check('sizeOptionForEm matches/snaps', WT.sizeOptionForEm(2) === 12 && WT.sizeOptionForEm(0.3) === -1);
+wSec.innerHTML = '<h2>Head <span style="font-family:Georgia,serif">g</span></h2><p>body</p>';
+check('nearestBlock finds h2/p/none', WT.nearestBlock(wSec.querySelector('span').firstChild) === 'h2' &&
+  WT.nearestBlock(wSec.querySelectorAll('p')[0].firstChild) === 'p' && WT.nearestBlock(wSec) === '');
+const grng = DT.createRange();
+grng.selectNodeContents(wSec.querySelector('span').firstChild);
+DT.getSelection().removeAllRanges();
+DT.getSelection().addRange(grng);
+WT.pendingFormat = { fontFamily: null, fontSize: null, block: null, cmds: {} };
+WT.capturePendingBase();
+check('capture inherits surrounding style', WT.pendingFormat.fontFamily.indexOf('Georgia') === 0 && WT.pendingFormat.block === 'h2');
+WT.pendingFormat = { fontFamily: null, fontSize: null, block: 'h3', cmds: {} };
+WT.paintPending();
+check('pending paints block select', DT.querySelector('#style-select').value === 'h3');
+WT.pendingFormat = null;
+WT.updateFormatUI();
+check('reflection shows h2 block', DT.querySelector('#style-select').value === 'h2');
+WT.applyBlock('h1');
+check('applyBlock without editing API is safe', WT.pendingFormat === null);
+
 console.log(failures === 0 ? '\nALL TESTS PASSED' : `\n${failures} TEST(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);

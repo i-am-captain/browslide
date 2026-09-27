@@ -173,6 +173,12 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 </header>
 
 <div id="formatbar" title="Text formatting (applies to the selected text)">
+  <select id="style-select" title="Paragraph style">
+    <option value="p" selected>Paragraph</option>
+    <option value="h1">Heading 1</option>
+    <option value="h2">Heading 2</option>
+    <option value="h3">Heading 3</option>
+  </select>
   <select id="font-select" title="Font — system fonts only, nothing downloaded">
     <option value="-apple-system,'Segoe UI',Roboto,Arial,sans-serif">System</option>
     <option value="Arial,Helvetica,sans-serif">Arial</option>
@@ -1014,6 +1020,35 @@ function nearestStyleValue(node, names){
 function primaryFamily(s){
   return String(s || '').split(',')[0].replace(/['"]/g, '').trim().toLowerCase();
 }
+function emOfSize(size){
+  var m = /^\s*([\d.]+)\s*em\s*$/i.exec(size || '');
+  if (m) return parseFloat(m[1]);
+  var p = /^\s*([\d.]+)\s*px\s*$/i.exec(size || '');
+  if (p) return parseFloat(p[1]) / 16;
+  return 0;
+}
+function sizeOptionForEm(em){
+  var ssel = $('#size-select');
+  if (!ssel || !(em > 0)) return -1;
+  var best = -1, bd = 1e9, j, d;
+  for (j = 0; j < ssel.options.length; j++) {
+    d = Math.abs(parseFloat(ssel.options[j].value) - em);
+    if (d < bd) { bd = d; best = j; }
+  }
+  return bd < 0.01 ? best : -1;
+}
+function nearestBlock(node){
+  var sec = $('#stage .slide');
+  var n = (node && node.nodeType === 3) ? node.parentNode : node;
+  while (n && n !== sec) {
+    if (n.nodeType === 1) {
+      var t = n.tagName;
+      if (t === 'H1' || t === 'H2' || t === 'H3' || t === 'P') return t.toLowerCase();
+    }
+    n = n.parentNode;
+  }
+  return '';
+}
 function syncFormatSelects(){
   /* show the font/size at the cursor (apply-controls otherwise go stale) */
   try {
@@ -1029,23 +1064,72 @@ function syncFormatSelects(){
         if (primaryFamily(fsel.options[i].value) === fam) { fsel.selectedIndex = i; break; }
       }
     } else fsel.selectedIndex = 0; /* unstyled text renders as the slide default */
-    var size = nearestStyleValue(anchor, ['fontSize']);
-    var em = 0, ssel = $('#size-select');
-    var m = /^\s*([\d.]+)\s*em\s*$/i.exec(size || '');
-    if (m) em = parseFloat(m[1]);
-    else { var p = /^\s*([\d.]+)\s*px\s*$/i.exec(size || ''); if (p) em = parseFloat(p[1]) / 16; }
+    var em = emOfSize(nearestStyleValue(anchor, ['fontSize']));
+    var ssel = $('#size-select');
     if (em > 0) {
-      var best = -1, bd = 1e9;
-      for (var j = 0; j < ssel.options.length; j++) {
-        var d = Math.abs(parseFloat(ssel.options[j].value) - em);
-        if (d < bd) { bd = d; best = j; }
-      }
-      if (best >= 0 && bd < 0.01) ssel.selectedIndex = best;
+      var bi = sizeOptionForEm(em);
+      if (bi >= 0) ssel.selectedIndex = bi;
     } else {
       for (var k = 0; k < ssel.options.length; k++) {
         if (ssel.options[k].value === '1em') { ssel.selectedIndex = k; break; }
       }
     }
+    var blk = nearestBlock(anchor);
+    var ysel = $('#style-select');
+    if (ysel && blk) {
+      for (var q = 0; q < ysel.options.length; q++) {
+        if (ysel.options[q].value === blk) { ysel.selectedIndex = q; break; }
+      }
+    }
+  } catch (e) {}
+}
+function wrapSelectionInSpan(prop, value){
+  /* deterministic size/font application: one span around the whole selection.
+     Unlike execCommand('fontSize') this can never emit legacy <font> tags. */
+  try {
+    var sel = document.getSelection();
+    if (!sel.rangeCount) return false;
+    var range = sel.getRangeAt(0);
+    var sec = $('#stage .slide');
+    if (!sec || range.collapsed || !sec.contains(range.commonAncestorContainer)) return false;
+    var span = document.createElement('span');
+    span.style[prop] = value;
+    span.appendChild(range.extractContents());
+    range.insertNode(span);
+    sel.removeAllRanges();
+    var r2 = document.createRange();
+    r2.selectNodeContents(span);
+    sel.addRange(r2);
+    savedRange = r2.cloneRange();
+    return true;
+  } catch (e) { return false; }
+}
+function capturePendingBase(){
+  /* inherit surrounding styles so pending display never lies about context */
+  if (!pendingFormat) pendingFormat = { fontFamily: null, fontSize: null, block: null, cmds: {} };
+  try {
+    var sel = document.getSelection();
+    var anchor = sel.rangeCount > 0 ? sel.anchorNode : null;
+    var sec = $('#stage .slide');
+    if (!sec || !(anchor === sec || sec.contains(anchor))) return;
+    if (!pendingFormat.fontFamily) {
+      var f = nearestStyleValue(anchor, ['fontFamily']);
+      if (f) pendingFormat.fontFamily = f;
+    }
+    if (!pendingFormat.fontSize) {
+      var bi = sizeOptionForEm(emOfSize(nearestStyleValue(anchor, ['fontSize'])));
+      if (bi >= 0) pendingFormat.fontSize = $('#size-select').options[bi].value;
+    }
+    if (!pendingFormat.block) {
+      var blk = nearestBlock(anchor);
+      if (blk) pendingFormat.block = blk;
+    }
+    var cmds = ['bold', 'italic', 'underline', 'strikeThrough', 'justifyLeft', 'justifyCenter', 'justifyRight', 'justifyFull'];
+    cmds.forEach(function(c){
+      if (!(c in pendingFormat.cmds)) {
+        try { pendingFormat.cmds[c] = !!document.queryCommandState(c); } catch (e) {}
+      }
+    });
   } catch (e) {}
 }
 function selectionCollapsed(){
@@ -1058,25 +1142,39 @@ function applyCmd(cmd){
   try { document.execCommand(cmd, false, null); } catch (e) { return; }
   if (collapsed) {
     /* bare caret: remember as typing attributes (pending format, see below) */
-    if (!pendingFormat) pendingFormat = { fontFamily: null, fontSize: null, cmds: {} };
+    capturePendingBase();
     try { pendingFormat.cmds[cmd] = !!document.queryCommandState(cmd); }
     catch (e2) { pendingFormat.cmds[cmd] = true; }
   } else pendingFormat = null;
   afterFormat();
 }
 function applySpanStyle(prop, value){
-  /* font/size via spans: wrap selection in a marker, then convert to a styled span.
-     em units keep text scaling with the fitted slide size. */
+  if (!restoreSelection()) return;
+  if (selectionCollapsed()) {
+    /* typing style only — no DOM touched, so no <font> tags possible */
+    pendingSpanStyle = { prop: prop, value: value };
+    try { document.execCommand('fontSize', false, '7'); } catch (e) {}
+    pendingSpanStyle = null;
+    capturePendingBase();
+    pendingFormat[prop] = value;
+  } else if (wrapSelectionInSpan(prop, value)) {
+    pendingFormat = null;
+  } else {
+    /* exotic range fallback: legacy path, converter + sanitizer clean it */
+    pendingSpanStyle = { prop: prop, value: value };
+    try { document.execCommand('fontSize', false, '7'); } catch (e) { pendingSpanStyle = null; return; }
+    convertFontTags();
+    pendingSpanStyle = null;
+    pendingFormat = null;
+  }
+  afterFormat();
+}
+function applyBlock(tag){
   if (!restoreSelection()) return;
   var collapsed = selectionCollapsed();
-  pendingSpanStyle = { prop: prop, value: value };
-  try { document.execCommand('fontSize', false, '7'); } catch (e) { pendingSpanStyle = null; return; }
-  convertFontTags();
-  pendingSpanStyle = null;
-  if (collapsed) {
-    if (!pendingFormat) pendingFormat = { fontFamily: null, fontSize: null, cmds: {} };
-    pendingFormat[prop] = value;
-  } else pendingFormat = null;
+  try { document.execCommand('formatBlock', false, '<' + tag + '>'); } catch (e) { return; }
+  if (collapsed) { capturePendingBase(); pendingFormat.block = tag; }
+  else pendingFormat = null;
   afterFormat();
 }
 function replaceFontTag(f, usePending){
@@ -1132,6 +1230,12 @@ function paintPending(){
     Array.prototype.forEach.call(document.querySelectorAll('#formatbar button[data-cmd]'), function(b){
       if (b.dataset.cmd !== 'clear') b.classList.toggle('active', !!pendingFormat.cmds[b.dataset.cmd]);
     });
+    var ysel = $('#style-select');
+    if (ysel && pendingFormat.block) {
+      for (var q = 0; q < ysel.options.length; q++) {
+        if (ysel.options[q].value === pendingFormat.block) { ysel.selectedIndex = q; break; }
+      }
+    }
   } catch (e) {}
 }
 function reapplyPending(){
@@ -1482,6 +1586,7 @@ function bind(){
   });
   $('#font-select').addEventListener('change', function(e){ applySpanStyle('fontFamily', e.target.value); });
   $('#size-select').addEventListener('change', function(e){ applySpanStyle('fontSize', e.target.value); });
+  $('#style-select').addEventListener('change', function(e){ applyBlock(e.target.value); });
   document.addEventListener('selectionchange', function(){ trackSelection(); scheduleFormatUI(); });
   $('#stage-wrap').addEventListener('keyup', function(){ pendingFormat = null; scheduleFormatUI(); });
   $('#stage-wrap').addEventListener('click', function(){ pendingFormat = null; scheduleFormatUI(); });

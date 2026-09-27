@@ -20,7 +20,7 @@ Repo file vs. saved copies: `browslide.html` in this repo is the maintained **te
 | ◀ ▶ | Previous / next slide |
 | Present | Fullscreen show (`Space`/`→` next, `←` prev, `Home`/`End`, `Esc` exit, click advances). Presentation settings (inspector): toolbar on/off, aesthetic border vs maximum fullscreen. |
 | Export viewer | Downloads a small standalone copy (`<title>-viewer.html`) for sharing: slides + player only, no editor code, no notes. Works from `file://` everywhere. |
-| Format bar | Font (system fonts only) and size, bold/italic/underline/strikethrough, alignment, bullet/numbered lists, clear formatting. Applies to the selected text. |
+| Format bar | Paragraph style (H1–H3), font (system fonts only) and size, bold/italic/underline/strikethrough, alignment, bullet/numbered lists, clear formatting. Applies to selected text — or set it first, then type. |
 | Open | Load another saved copy (picker or drag-drop) |
 | New | Fresh starter deck (asks first if you have unsaved changes) |
 | Save (or Ctrl+S) | Downloads the whole deck as one `.html` file. Note: browsers can't silently overwrite the file you opened, so each Save is a new download — replace the old file with it. |
