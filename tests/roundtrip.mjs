@@ -570,5 +570,28 @@ const NMT = WM.normalizeModel;
 const nsM = { app: 'browslide', version: 2, title: 'T', theme: 'dark', slideOrder: ['s1'], nextId: 2, slides: { s1: { title: 'T', layout: 'blank', transition: 'none', html: '<p>x</p>', notes: '' } } };
 check('tight defaults false in model', NMT(JSON.parse(JSON.stringify(nsM))).settings.tight === false);
 
+// ---------- 16. filmstrip add/delete buttons + settings placement ----------
+const domP = makeDom(html);
+await wait(400);
+const WP = domP.window, DP = WP.document;
+const liCount = () => DP.querySelectorAll('#filmstrip-list li').length;
+check('filmstrip add + per-slide delete buttons exist', !!DP.querySelector('#btn-add-end') && DP.querySelectorAll('#filmstrip-list li button.del').length === 3);
+DP.querySelector('#btn-add-end').click();
+await wait(100);
+check('plus appends at end and selects', liCount() === 4 && DP.querySelector('#pos-flag').textContent === '4 / 4' && WP.App.model.slideOrder[3] === WP.App.activeId);
+DP.querySelector('#filmstrip-list li:first-child button.del').click();
+await wait(100);
+check('row delete removes that slide', liCount() === 3 && WP.App.model.slideOrder[0] === 's2');
+DP.querySelector('#filmstrip-list li:first-child button.del').click();
+await wait(100);
+DP.querySelector('#filmstrip-list li:first-child button.del').click();
+await wait(100);
+DP.querySelector('#filmstrip-list li:first-child button.del').click();
+await wait(100);
+check('last slide cannot be row-deleted', liCount() === 1 && WP.__alerts.length > 0);
+check('compress lives in sizes menu', !!DP.querySelector('#sizes-wrap #opt-compress') && !!DP.querySelector('#sizes-wrap #compress-stats'));
+check('downscale lives in insert menu', !!DP.querySelector('#insert-wrap #opt-downscale') && !!DP.querySelector('#insert-wrap #opt-maxdim'));
+check('save-opts removed', !DP.querySelector('#save-opts'));
+
 console.log(failures === 0 ? '\nALL TESTS PASSED' : `\n${failures} TEST(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);

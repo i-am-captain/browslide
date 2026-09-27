@@ -81,8 +81,13 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 #main{display:grid;grid-template-columns:190px 1fr 230px;gap:10px;padding:10px;height:calc(100vh - 53px)}
 #filmstrip{background:var(--panel);border:1px solid var(--border);border-radius:8px;overflow:auto;padding:8px}
 #filmstrip-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
-#filmstrip-list button{display:block;width:100%;text-align:left;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--ink)}
-#filmstrip-list li.active button{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+#filmstrip-list li{display:flex;gap:4px}
+#filmstrip-list button.nav{flex:1;min-width:0;display:block;text-align:left;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--ink);cursor:pointer;font:inherit}
+#filmstrip-list button.nav:hover{border-color:var(--accent)}
+#filmstrip-list button.del{flex:0 0 auto;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--ink);cursor:pointer;font:inherit}
+#filmstrip-list button.del:hover{border-color:#b91c1c;color:#b91c1c}
+#filmstrip-list li.active button.nav{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+#btn-add-end{width:100%;margin-top:6px}
 #filmstrip-list .num{color:var(--muted);font-size:11px;margin-right:6px}
 #filmstrip-list li[draggable="true"]{cursor:grab}
 #filmstrip-list li.drop-before{box-shadow:0 -3px 0 var(--accent)}
@@ -98,10 +103,8 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 #sizes-body{font-size:12px}
 #sizes-body div{margin:2px 0}
 #sizes-body .unused{color:var(--muted)}
-#save-opts{font-size:12px;display:flex;flex-direction:column;gap:6px}
-#inspector #save-opts label{display:flex;flex-direction:row;align-items:center;gap:6px}
-#save-opts select{width:auto;padding:2px 4px}
-#compress-stats{color:var(--muted)}
+#inspector label.row select{width:auto;padding:2px 4px}
+#compress-stats{color:var(--muted);font-size:12px}
 #sizes-body button{padding:2px 8px;font-size:11px}
 #aspect-custom{display:flex;gap:8px}
 #aspect-custom label{flex-direction:row;align-items:center}
@@ -157,7 +160,7 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 </header>
 
 <div id="main">
-  <aside id="filmstrip"><ol id="filmstrip-list"></ol></aside>
+  <aside id="filmstrip"><ol id="filmstrip-list"></ol><button id="btn-add-end" title="Add slide at the end">+ Add slide</button></aside>
   <main id="stage-wrap"><div id="stage"></div></main>
   <aside id="inspector">
     <label>Layout
@@ -202,19 +205,17 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
       <textarea id="notes" rows="6" placeholder="Notes for this slide (not shown on stage)"></textarea>
     </label>
     <div id="size-meter">Est. save size: —</div>
-    <div id="save-opts">
-      <label><input type="checkbox" id="opt-compress"> Compress media on save (lossless)</label>
-      <label><input type="checkbox" id="opt-downscale"> Downscale photos on insert (max <select id="opt-maxdim"><option value="1280">1280</option><option value="1920" selected>1920</option><option value="2560">2560</option></select> px)</label>
-      <div id="compress-stats"></div>
-    </div>
     <details id="sizes-wrap">
       <summary>Media &amp; sizes</summary>
       <div id="sizes-body"></div>
+      <label class="row"><input type="checkbox" id="opt-compress"> Compress media on save (lossless)</label>
+      <div id="compress-stats"></div>
       <p><button id="btn-clean-media">Remove unused media</button></p>
     </details>
-    <details>
+    <details id="insert-wrap">
       <summary>Insert media</summary>
       <p><button id="btn-img">Image…</button> <button id="btn-video">Video…</button></p>
+      <label class="row"><input type="checkbox" id="opt-downscale"> Downscale photos on insert (max <select id="opt-maxdim"><option value="1280">1280</option><option value="1920" selected>1920</option><option value="2560">2560</option></select> px)</label>
     </details>
   </aside>
 </div>
@@ -680,12 +681,20 @@ function renderFilmstrip(){
     li.addEventListener('drop', onSlideDrop);
     li.addEventListener('dragend', onSlideDragEnd);
     var b = document.createElement('button');
+    b.className = 'nav';
     b.dataset.id = id;
     var num = document.createElement('span'); num.className = 'num'; num.textContent = (i + 1);
     var lbl = document.createElement('span'); lbl.className = 'lbl'; lbl.textContent = s.title;
     b.appendChild(num); b.appendChild(lbl);
     b.addEventListener('click', function(){ gotoSlide(id); });
     li.appendChild(b);
+    var del = document.createElement('button');
+    del.className = 'del';
+    del.textContent = '🗑';
+    del.title = 'Delete slide ' + (i + 1);
+    del.setAttribute('aria-label', 'Delete slide ' + (i + 1));
+    del.addEventListener('click', (function(sid){ return function(e){ e.stopPropagation(); deleteSlideById(sid); }; })(id));
+    li.appendChild(del);
     ol.appendChild(li);
   });
   $('#pos-flag').textContent = (activeIndex() + 1) + ' / ' + App.model.slideOrder.length;
@@ -791,11 +800,12 @@ function gotoSlide(id){
   renderFilmstrip(); renderStage(); renderInspector();
   refreshDirty(); scheduleAutosave();
 }
-function addSlide(){
+function addSlide(at){
   syncStageToModel();
   var id = 's' + (App.model.nextId++);
   App.model.slides[id] = { title: 'New slide', layout: 'title-body', transition: 'fade', html: skeletonFor('title-body'), notes: '' };
-  App.model.slideOrder.splice(activeIndex() + 1, 0, id);
+  var pos = (typeof at === 'number') ? Math.max(0, Math.min(at, App.model.slideOrder.length)) : activeIndex() + 1;
+  App.model.slideOrder.splice(pos, 0, id);
   App.activeId = id;
   renderAll(); scheduleAutosave();
 }
@@ -816,6 +826,11 @@ function deleteSlide(){
   App.model.slideOrder.splice(i, 1);
   App.activeId = App.model.slideOrder[Math.max(0, i - 1)];
   renderAll(); scheduleAutosave();
+}
+function deleteSlideById(id){
+  if (!App.model.slides[id]) return;
+  if (id !== App.activeId) { syncStageToModel(); App.activeId = id; }
+  deleteSlide();
 }
 function step(d){ var i = activeIndex() + d; if (i >= 0 && i < App.model.slideOrder.length) gotoSlide(App.model.slideOrder[i]); }
 function isEditingFocus(){
@@ -1143,7 +1158,8 @@ var scheduleSize = debounce(updateSize, 1200);
 
 /* ================= EVENTS + BOOT ================= */
 function bind(){
-  $('#btn-add').addEventListener('click', addSlide);
+  $('#btn-add').addEventListener('click', function(){ addSlide(); });
+  $('#btn-add-end').addEventListener('click', function(){ addSlide(App.model.slideOrder.length); });
   $('#btn-duplicate').addEventListener('click', duplicateSlide);
   $('#btn-delete').addEventListener('click', deleteSlide);
   $('#btn-prev').addEventListener('click', function(){ step(-1); });
