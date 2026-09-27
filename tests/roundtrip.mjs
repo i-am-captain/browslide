@@ -1091,5 +1091,31 @@ DB.dispatchEvent(new WB.KeyboardEvent('keydown', { key: 'ArrowRight' }));
 await wait(100);
 check('viewer advance reveals', vAnims[0].style.visibility === 'visible' && DB.querySelector('#count').textContent.includes('1/2'));
 
+// ---------- 29. shape presets ----------
+const domS3 = makeDom(html);
+await wait(400);
+const WS3 = domS3.window, DS3 = WS3.document;
+check('shape defaults', WS3.App.model.settings.lineWidth === 8 && WS3.App.model.settings.lineColor === '#2563eb');
+check('shape controls live in shapes menu', !!DS3.querySelector('#shapes-wrap #shape-select') && !!DS3.querySelector('#shapes-wrap #btn-shape') &&
+  !!DS3.querySelector('#shapes-wrap #shape-width') && !!DS3.querySelector('#shapes-wrap #shape-color'));
+DS3.querySelector('#shape-width').value = '12';
+DS3.querySelector('#shape-width').dispatchEvent(new WS3.Event('change', { bubbles: true }));
+DS3.querySelector('#shape-color').value = '#ff0000';
+DS3.querySelector('#shape-color').dispatchEvent(new WS3.Event('change', { bubbles: true }));
+DS3.querySelector('#btn-shape').click();
+await wait(100);
+const shSvg = DS3.querySelector('#stage .blk svg');
+check('new shape uses presets', !!shSvg && shSvg.getAttribute('stroke-width') === '12' && shSvg.getAttribute('stroke') === '#ff0000');
+DS3.querySelector('#btn-save').click();
+await wait(300);
+const tS3 = await blobToText(WS3.__savedBlob, WS3);
+const sjS3 = JSON.parse(new JSDOM(tS3).window.document.querySelector('#slider-data').textContent);
+check('presets persist in save', sjS3.settings.lineWidth === 12 && sjS3.settings.lineColor === '#ff0000');
+const badS = { app: 'browslide', version: 2, title: 'T', theme: 'dark', slideOrder: ['s1'], nextId: 2, nextResId: 1,
+  settings: { lineWidth: 99, lineColor: 'bogus' }, aspect: { w: 16, h: 9 },
+  resources: {}, slides: { s1: { title: 'T', layout: 'blank', transition: 'none', notes: '', html: '<p>x</p>' } } };
+const fixS = WS3.normalizeModel(JSON.parse(JSON.stringify(badS)));
+check('bad presets fall back', fixS.settings.lineWidth === 8 && fixS.settings.lineColor === '#2563eb');
+
 console.log(failures === 0 ? '\nALL TESTS PASSED' : `\n${failures} TEST(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);
