@@ -592,6 +592,8 @@ check('last slide cannot be row-deleted', liCount() === 1 && WP.__alerts.length 
 check('compress lives in sizes menu', !!DP.querySelector('#sizes-wrap #opt-compress') && !!DP.querySelector('#sizes-wrap #compress-stats'));
 check('downscale lives in insert menu', !!DP.querySelector('#insert-wrap #opt-downscale') && !!DP.querySelector('#insert-wrap #opt-maxdim'));
 check('save-opts removed', !DP.querySelector('#save-opts'));
+const repoA = DP.querySelector('#repo-link a');
+check('repo link with icon at inspector bottom', !!repoA && repoA.href === 'https://github.com/i-am-captain/browslide' && !!repoA.querySelector('svg') && DP.querySelector('#inspector').lastElementChild.id === 'repo-link');
 
 console.log(failures === 0 ? '\nALL TESTS PASSED' : `\n${failures} TEST(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);
