@@ -15,12 +15,16 @@ function check(name, cond, extra = '') {
 // (a literal </script> inside app JS would terminate the script block in a real browser)
 check('no stray closing-script literals in source', (html.match(/<\/script/gi) || []).length === 2);
 // ---------- 0b. agent-map anchors resolve (each: map line + target) ----------
-['<title>Browslide</title>', '/* ================= CSS', '<header id="toolbar">',
+['<title>Browslide</title>', '/* ================= CSS ================= */', '<header id="toolbar">',
  '<div id="main">', 'id="present-overlay"', 'id="open-file"', 'id="slider-data"',
- 'UTIL =================', 'MODEL =================', 'optional lossless compression',
- 'resources table: slides store', 'STORE (IndexedDB', 'RENDER =================',
- 'EDIT =================', 'PRESENT =================', 'EXPORT VIEWER',
- 'SAVE / OPEN / NEW', 'SIZE METER', 'EVENTS + BOOT', 'function boot(){'
+ '/* ================= UTIL ================= */', '/* ================= MODEL ================= */',
+ '/* ---- optional lossless compression (Phase 5): native deflate, zero dependencies ----',
+ '/* ---- resources table: slides store res://id refs, binaries live once in model.resources ---- */',
+ '/* ================= STORE (IndexedDB autosave) ================= */', '/* ================= RENDER ================= */',
+ '/* ================= EDIT ================= */', '/* ================= PRESENT ================= */',
+ '/* ================= EXPORT VIEWER =================', '/* ================= SAVE / OPEN / NEW ================= */',
+ '/* ================= SIZE METER ================= */', '/* ================= EVENTS + BOOT ================= */',
+ 'function boot(){'
 ].forEach((a) => {
   const n = html.split('\n').filter((l) => l.includes(a)).length;
   check(`anchor resolves: ${a}`, n === 2, `${n} hit(s)`);

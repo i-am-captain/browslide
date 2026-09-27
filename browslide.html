@@ -22,28 +22,28 @@
      data: URIs for editing only; saves/exports store single copies.
   5. Deck state on disk = the JSON data block only. Never hand-edit app
      code in a saved copy; change the data block (or use the app UI).
-  AREAS — anchors (copy-paste into grep -nF; take the later hit):
-  doctype ...................... line 1
-  html/head .................... <title>Browslide</title>
-  CSS .......................... /* ================= CSS
-  toolbar ...................... <header id="toolbar">
-  editor columns ............... <div id="main">
-  present overlay .............. id="present-overlay"
-  hidden file inputs ........... id="open-file"
-  deck JSON data block ......... id="slider-data"
-  UTIL ......................... UTIL =================
-  MODEL ........................ MODEL =================
-  COMPRESSION+CODEC ............ optional lossless compression
-  RESOURCES TABLE .............. resources table: slides store
-  STORE (autosave) ............. STORE (IndexedDB
-  RENDER ....................... RENDER =================
-  EDIT ......................... EDIT =================
-  PRESENT ...................... PRESENT =================
-  EXPORT VIEWER ................ EXPORT VIEWER
-  SAVE/OPEN/NEW ................ SAVE / OPEN / NEW
-  SIZES PANEL .................. SIZE METER
-  EVENTS+BOOT .................. EVENTS + BOOT
-  boot() ....................... function boot(){
+  AREAS — one anchor per line (copy-paste into grep -nF; take the later hit):
+  - doctype: line 1
+  - html/head: <title>Browslide</title>
+  - CSS styles: /* ================= CSS ================= */
+  - toolbar: <header id="toolbar">
+  - editor columns: <div id="main">
+  - present overlay: id="present-overlay"
+  - hidden file inputs: id="open-file"
+  - deck JSON data block: id="slider-data"
+  - utilities: /* ================= UTIL ================= */
+  - data model: /* ================= MODEL ================= */
+  - compression/codec: /* ---- optional lossless compression (Phase 5): native deflate, zero dependencies ----
+  - resources table: /* ---- resources table: slides store res://id refs, binaries live once in model.resources ---- */
+  - autosave store: /* ================= STORE (IndexedDB autosave) ================= */
+  - rendering: /* ================= RENDER ================= */
+  - editing: /* ================= EDIT ================= */
+  - presenter: /* ================= PRESENT ================= */
+  - viewer export: /* ================= EXPORT VIEWER =================
+  - save/open/new: /* ================= SAVE / OPEN / NEW ================= */
+  - sizes panel: /* ================= SIZE METER ================= */
+  - events/boot: /* ================= EVENTS + BOOT ================= */
+  - boot(): function boot(){
   SLIDE OBJECT: {title,layout,transition,html,notes}; layouts: title,
   title-body, two-col, image-full, blank. Slide html uses res://rN refs
   for media; new media must go into model.resources (see RESOURCES TABLE).
