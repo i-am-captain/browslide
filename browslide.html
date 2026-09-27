@@ -770,6 +770,7 @@ function updateFilmstripLabel(){
 function renderStage(){
   var wrap = $('#stage');
   wrap.innerHTML = '';
+  pendingFormat = null; /* stage nodes are rebuilt; any held typing attributes die with them */
   var s = activeSlide();
   var sec = document.createElement('section');
   sec.className = 'slide layout-' + s.layout;
@@ -965,6 +966,7 @@ function refocusStage(){
     var sel = document.getSelection();
     sel.removeAllRanges();
     sel.addRange(savedRange);
+    reapplyPending();
   } catch (e) {}
 }
 function restoreSelection(){
@@ -1046,19 +1048,35 @@ function syncFormatSelects(){
     }
   } catch (e) {}
 }
+function selectionCollapsed(){
+  try { var sel = document.getSelection(); return sel.rangeCount > 0 && !!sel.isCollapsed; }
+  catch (e) { return false; }
+}
 function applyCmd(cmd){
   if (!restoreSelection()) return;
+  var collapsed = selectionCollapsed();
   try { document.execCommand(cmd, false, null); } catch (e) { return; }
+  if (collapsed) {
+    /* bare caret: remember as typing attributes (pending format, see below) */
+    if (!pendingFormat) pendingFormat = { fontFamily: null, fontSize: null, cmds: {} };
+    try { pendingFormat.cmds[cmd] = !!document.queryCommandState(cmd); }
+    catch (e2) { pendingFormat.cmds[cmd] = true; }
+  } else pendingFormat = null;
   afterFormat();
 }
 function applySpanStyle(prop, value){
   /* font/size via spans: wrap selection in a marker, then convert to a styled span.
      em units keep text scaling with the fitted slide size. */
   if (!restoreSelection()) return;
+  var collapsed = selectionCollapsed();
   pendingSpanStyle = { prop: prop, value: value };
   try { document.execCommand('fontSize', false, '7'); } catch (e) { pendingSpanStyle = null; return; }
   convertFontTags();
   pendingSpanStyle = null;
+  if (collapsed) {
+    if (!pendingFormat) pendingFormat = { fontFamily: null, fontSize: null, cmds: {} };
+    pendingFormat[prop] = value;
+  } else pendingFormat = null;
   afterFormat();
 }
 function replaceFontTag(f, usePending){
@@ -1087,7 +1105,59 @@ function convertFontTags(){
   if (!sec) return;
   Array.prototype.slice.call(sec.querySelectorAll('font')).forEach(function(f){ replaceFontTag(f, true); });
 }
+/* Pending format: typing attributes configured at a bare caret (no selection).
+   The toolbar keeps showing them (threshold: one cursor placement) while you
+   type; the next caret move elsewhere clears them and re-syncs from the DOM.
+   Typing style and display agree because a caret move clears both. */
+var pendingFormat = null;
+function paintPending(){
+  if (!pendingFormat) return;
+  try {
+    var fsel = $('#font-select');
+    if (pendingFormat.fontFamily) {
+      for (var i = 0; i < fsel.options.length; i++) {
+        if (primaryFamily(fsel.options[i].value) === primaryFamily(pendingFormat.fontFamily)) { fsel.selectedIndex = i; break; }
+      }
+    } else fsel.selectedIndex = 0;
+    var ssel = $('#size-select');
+    if (pendingFormat.fontSize) {
+      for (var j = 0; j < ssel.options.length; j++) {
+        if (ssel.options[j].value === pendingFormat.fontSize) { ssel.selectedIndex = j; break; }
+      }
+    } else {
+      for (var k = 0; k < ssel.options.length; k++) {
+        if (ssel.options[k].value === '1em') { ssel.selectedIndex = k; break; }
+      }
+    }
+    Array.prototype.forEach.call(document.querySelectorAll('#formatbar button[data-cmd]'), function(b){
+      if (b.dataset.cmd !== 'clear') b.classList.toggle('active', !!pendingFormat.cmds[b.dataset.cmd]);
+    });
+  } catch (e) {}
+}
+function reapplyPending(){
+  /* re-establish typing attributes after a focus round-trip (selects steal focus) */
+  if (!pendingFormat || !selectionCollapsed()) return;
+  try {
+    if (pendingFormat.fontFamily) {
+      pendingSpanStyle = { prop: 'fontFamily', value: pendingFormat.fontFamily };
+      try { document.execCommand('fontSize', false, '7'); } catch (e) {}
+      convertFontTags();
+      pendingSpanStyle = null;
+    }
+    if (pendingFormat.fontSize) {
+      pendingSpanStyle = { prop: 'fontSize', value: pendingFormat.fontSize };
+      try { document.execCommand('fontSize', false, '7'); } catch (e) {}
+      convertFontTags();
+      pendingSpanStyle = null;
+    }
+    Object.keys(pendingFormat.cmds || {}).forEach(function(cmd){
+      try { if (!!document.queryCommandState(cmd) !== !!pendingFormat.cmds[cmd]) document.execCommand(cmd, false, null); }
+      catch (e) {}
+    });
+  } catch (e) {}
+}
 function updateFormatUI(){
+  if (pendingFormat) { paintPending(); return; }
   var on = {};
   try {
     var sel = document.getSelection();
@@ -1406,14 +1476,15 @@ function bind(){
     if (b.dataset.cmd === 'clear') {
       if (!restoreSelection()) return;
       try { document.execCommand('removeFormat', false, null); } catch (err) {}
+      pendingFormat = null;
       afterFormat();
     } else applyCmd(b.dataset.cmd);
   });
   $('#font-select').addEventListener('change', function(e){ applySpanStyle('fontFamily', e.target.value); });
   $('#size-select').addEventListener('change', function(e){ applySpanStyle('fontSize', e.target.value); });
   document.addEventListener('selectionchange', function(){ trackSelection(); scheduleFormatUI(); });
-  $('#stage-wrap').addEventListener('keyup', scheduleFormatUI);
-  $('#stage-wrap').addEventListener('click', scheduleFormatUI);
+  $('#stage-wrap').addEventListener('keyup', function(){ pendingFormat = null; scheduleFormatUI(); });
+  $('#stage-wrap').addEventListener('click', function(){ pendingFormat = null; scheduleFormatUI(); });
   $('#stage-wrap').addEventListener('input', scheduleFormatUI);
   $('#opt-compress').addEventListener('change', function(e){ App.model.settings.compress = !!e.target.checked; refreshDirty(); scheduleAutosave(); });
   $('#opt-downscale').addEventListener('change', function(e){ App.model.settings.downscale = !!e.target.checked; refreshDirty(); scheduleAutosave(); });

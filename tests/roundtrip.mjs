@@ -671,5 +671,37 @@ check('selectionchange tracks synchronously', WR.restoreSelection() === true);
 WR.refocusStage();
 check('refocus does not throw', WR.__alerts.length === 0);
 
+// ---------- 20. pending type-ahead format ----------
+const domS = makeDom(html);
+await wait(400);
+const WS = domS.window, DS = WS.document;
+check('no pending initially', WS.pendingFormat === null);
+DS.querySelector('#formatbar button[data-cmd="bold"]').click();
+await wait(100);
+check('failed apply leaves no pending', WS.pendingFormat === null);
+WS.pendingFormat = { fontFamily: 'Georgia,serif', fontSize: '2em', cmds: { bold: true } };
+WS.updateFormatUI();
+check('pending paints controls', DS.querySelector('#font-select').value.indexOf('Georgia') === 0 &&
+  DS.querySelector('#size-select').value === '2em' &&
+  DS.querySelector('#formatbar button[data-cmd="bold"]').classList.contains('active'));
+DS.getSelection().removeAllRanges();
+DS.dispatchEvent(new WS.Event('selectionchange'));
+await wait(250);
+check('pending survives selection churn', DS.querySelector('#size-select').value === '2em');
+DS.querySelector('#stage-wrap').dispatchEvent(new WS.MouseEvent('click', { bubbles: true }));
+check('placement click clears pending', WS.pendingFormat === null);
+WS.pendingFormat = { fontFamily: null, fontSize: null, cmds: {} };
+WS.gotoSlide(WS.App.model.slideOrder[1]);
+check('navigation clears pending', WS.pendingFormat === null);
+const prng = DS.createRange();
+prng.selectNodeContents(DS.querySelector('#stage .slide'));
+DS.getSelection().removeAllRanges();
+DS.getSelection().addRange(prng);
+DS.dispatchEvent(new WS.Event('selectionchange'));
+await wait(100);
+WS.pendingFormat = { fontFamily: null, fontSize: '3em', cmds: {} };
+WS.refocusStage();
+check('refocus without editing API is safe', WS.pendingFormat.fontSize === '3em' && WS.__alerts.length === 0);
+
 console.log(failures === 0 ? '\nALL TESTS PASSED' : `\n${failures} TEST(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);
