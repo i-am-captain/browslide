@@ -873,5 +873,49 @@ DW.getSelection().addRange(elsewhere);
 WW.updateFormatUI();
 check('abandoned empty span pruned', !DW.contains(fresh) && WW.pendingFormat === null);
 
+// ---------- 25. size spans split into siblings, never nest/compound ----------
+const domX = makeDom(html);
+await wait(400);
+const WX = domX.window, DX = WX.document;
+const xSec = DX.querySelector('#stage .slide');
+function firstText(el) { let n = el; while (n && n.nodeType !== 3) n = n.firstChild; return n; }
+function pickSize(from, to) {
+  const tx = firstText(xSec.querySelector('p'));
+  const r = DX.createRange();
+  r.setStart(tx, from);
+  r.setEnd(tx, to);
+  DX.getSelection().removeAllRanges();
+  DX.getSelection().addRange(r);
+  WX.applySpanStyle('fontSize', '2em');
+}
+function cleanAbove(span, stopEl) {
+  let n = span.parentNode, ok = true;
+  while (n && n !== stopEl) { if (n.tagName === 'SPAN' && n.style.fontSize) ok = false; n = n.parentNode; }
+  return ok;
+}
+xSec.innerHTML = '<p><span style="font-size:1.5em">hello</span></p>';
+pickSize(1, 4);
+const kids = xSec.querySelector('p').childNodes;
+check('middle selection splits into three siblings',
+  kids.length === 3 && kids[0].tagName === 'SPAN' && kids[0].textContent === 'h' &&
+  kids[1].tagName === 'SPAN' && kids[1].style.fontSize === '2em' && kids[1].textContent === 'ell' &&
+  kids[2].tagName === 'SPAN' && kids[2].textContent === 'o',
+  Array.prototype.map.call(kids, (k) => k.tagName + ':' + k.textContent).join('|'));
+check('no nested size spans', DX.querySelectorAll('#stage .slide span span').length === 0);
+check('order preserved', xSec.querySelector('p').textContent === 'hello');
+check('model stores siblings', ((WX.activeSlide().html.match(/<span/g) || []).length) === 3);
+xSec.innerHTML = '<p><span style="font-size:1.5em">hello</span></p>';
+pickSize(0, 2);
+check('start selection makes two, no empties', xSec.querySelector('p').childNodes.length === 2 &&
+  xSec.querySelector('p').childNodes[0].style.fontSize === '2em');
+xSec.innerHTML = '<p><span style="font-size:1.5em">hello</span></p>';
+pickSize(3, 5);
+check('end selection makes two, no empties', xSec.querySelector('p').childNodes.length === 2 &&
+  xSec.querySelector('p').childNodes[1].style.fontSize === '2em');
+xSec.innerHTML = '<p><span style="font-size:1.5em"><span style="font-size:2em">hello</span></span></p>';
+pickSize(1, 4);
+const nestedNew = Array.prototype.find.call(xSec.querySelectorAll('#stage .slide span'), (s) => s.style.fontSize === '2em' && s.textContent === 'ell');
+check('pre-nested pick lifts out clean', !!nestedNew && cleanAbove(nestedNew, xSec.querySelector('p')) && xSec.textContent.includes('hello'));
+
 console.log(failures === 0 ? '\nALL TESTS PASSED' : `\n${failures} TEST(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);

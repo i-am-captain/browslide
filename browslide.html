@@ -1128,8 +1128,49 @@ function syncFormatSelects(){
     }
   } catch (e) {}
 }
+function dropEmpties(root){
+  /* zero-width leftovers of splits/extracts (empty texts, husk spans) seed
+     empty clones — always safe to drop; caret is reselected right after */
+  if (!root || !root.ownerDocument) return;
+  try {
+    var i, changed = true;
+    for (i = 0; i < 5 && changed; i++) {
+      changed = false;
+      var walker = root.ownerDocument.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+      var dead = [], n;
+      while ((n = walker.nextNode())) { if (!n.length) dead.push(n); }
+      dead.forEach(function(t){ if (t.parentNode) { t.parentNode.removeChild(t); changed = true; } });
+      var spans = root.querySelectorAll ? root.querySelectorAll('span') : [];
+      Array.prototype.slice.call(spans).forEach(function(sp){
+        if (!sp.firstChild && sp.parentNode) { sp.parentNode.removeChild(sp); changed = true; }
+      });
+    }
+  } catch (e) {}
+}
+function liftOutOfSpans(node, sec){
+  /* flatten styled-span ancestry so em sizes never compound: split every
+     ancestor span around the node -> [before][node][after] siblings.
+     Empty sides are never created; emptied ancestors are removed. */
+  var cur = node;
+  var par = cur.parentNode;
+  while (par && par !== sec && par.tagName === 'SPAN') {
+    var grand = par.parentNode;
+    if (!grand) return;
+    var i = Array.prototype.indexOf.call(par.childNodes, cur);
+    if (i > 0) {
+      var left = par.cloneNode(false);
+      for (var k = 0; k < i; k++) left.appendChild(par.firstChild);
+      grand.insertBefore(left, par);
+    }
+    grand.insertBefore(cur, par);
+    if (!par.firstChild) grand.removeChild(par);
+    par = cur.parentNode;
+  }
+}
 function wrapSelectionInSpan(prop, value){
-  /* deterministic size/font application: one span around the whole selection.
+  /* deterministic size/font application: split text boundaries so the range
+     aligns to node edges, wrap exactly the selected nodes in one span, then
+     lift it to sibling level so sizes never nest and compound.
      Unlike execCommand('fontSize') this can never emit legacy <font> tags. */
   try {
     var sel = document.getSelection();
@@ -1137,10 +1178,30 @@ function wrapSelectionInSpan(prop, value){
     var range = sel.getRangeAt(0);
     var sec = $('#stage .slide');
     if (!sec || range.collapsed || !sec.contains(range.commonAncestorContainer)) return false;
+    var sc = range.startContainer, so = range.startOffset;
+    var ec = range.endContainer, eo = range.endOffset;
+    if (sc === ec && sc.nodeType === 3 && so < eo) {
+      var mid = (so > 0) ? sc.splitText(so) : sc;
+      var selLen = eo - so;
+      if (selLen < mid.length) mid.splitText(selLen);
+      range.setStart(mid, 0);
+      range.setEnd(mid, selLen);
+    } else {
+      if (ec.nodeType === 3 && eo > 0 && eo < ec.length) {
+        ec.splitText(eo);
+        range.setEnd(ec, ec.length);
+      }
+      if (sc.nodeType === 3 && so > 0 && so < sc.length) {
+        var right = sc.splitText(so);
+        range.setStart(right, 0);
+      }
+    }
     var span = document.createElement('span');
     span.style[prop] = value;
     span.appendChild(range.extractContents());
     range.insertNode(span);
+    liftOutOfSpans(span, sec);
+    dropEmpties(span.parentNode || sec);
     sel.removeAllRanges();
     var r2 = document.createRange();
     r2.selectNodeContents(span);
