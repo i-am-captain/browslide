@@ -601,7 +601,7 @@ await wait(400);
 const WQ = domQ.window, DQ = WQ.document;
 check('font select lists system fonts only', DQ.querySelectorAll('#font-select option').length === 9 &&
   Array.prototype.every.call(DQ.querySelectorAll('#font-select option'), (o) => !/google|http/i.test(o.value) && !/google|http/i.test(o.textContent)));
-check('size select offers em steps', DQ.querySelectorAll('#size-select option').length === 11 &&
+check('size select offers em steps', DQ.querySelectorAll('#size-select option').length === 16 &&
   DQ.querySelector('#size-select').value === '1em');
 const cmds = Array.prototype.map.call(DQ.querySelectorAll('#formatbar button[data-cmd]'), (b) => b.dataset.cmd);
 check('format buttons cover style/align/lists/clear', ['bold', 'italic', 'underline', 'strikeThrough', 'justifyLeft', 'justifyCenter', 'justifyRight', 'justifyFull', 'insertUnorderedList', 'insertOrderedList', 'clear'].every((c) => cmds.includes(c)));
@@ -627,6 +627,31 @@ const fmtM = { app: 'browslide', version: 2, title: 'T', theme: 'dark', slideOrd
 const fmtH = WQ.normalizeModel(JSON.parse(JSON.stringify(fmtM))).slides.s1.html;
 check('formatting tags survive sanitize', /<b>B<\/b>/.test(fmtH) && /<i>I<\/i>/.test(fmtH) && /<u>U<\/u>/.test(fmtH) &&
   /<s>S<\/s>/.test(fmtH) && /font-size:2em/.test(fmtH) && /<ul>/.test(fmtH));
+
+// ---------- 18. format reflection + tiny sizes ----------
+const domR = makeDom(html);
+await wait(400);
+const WR = domR.window, DR = WR.document;
+check('size select goes down to 2px', DR.querySelectorAll('#size-select option').length === 16 &&
+  DR.querySelector('#size-select option').value === '0.125em' && DR.querySelector('#size-select option').textContent === '2');
+const rSec = DR.querySelector('#stage .slide');
+rSec.innerHTML = '<p>plain <span style="font-family:Georgia,serif;font-size:2em">fancy</span> tail</p>';
+const fancy = rSec.querySelector('span').firstChild;
+const rng = DR.createRange();
+rng.selectNodeContents(fancy);
+DR.getSelection().addRange(rng);
+WR.updateFormatUI();
+check('font select follows cursor', DR.querySelector('#font-select').value.indexOf('Georgia') === 0, DR.querySelector('#font-select').value);
+check('size select follows cursor', DR.querySelector('#size-select').value === '2em');
+check('nearestStyleValue walks up', WR.nearestStyleValue(fancy, ['fontFamily']).indexOf('Georgia') === 0 &&
+  WR.nearestStyleValue(fancy, ['fontSize']) === '2em' && WR.nearestStyleValue(rSec, ['fontSize']) === '');
+check('primaryFamily normalizes', WR.primaryFamily('\'Times New Roman\', Times, serif') === 'times new roman' && WR.primaryFamily('Arial') === 'arial');
+const rng2 = DR.createRange();
+rng2.selectNodeContents(rSec.querySelector('p').firstChild);
+DR.getSelection().removeAllRanges();
+DR.getSelection().addRange(rng2);
+WR.updateFormatUI();
+check('plain text resets selects to slide default', DR.querySelector('#font-select').selectedIndex === 0 && DR.querySelector('#size-select').value === '1em');
 
 console.log(failures === 0 ? '\nALL TESTS PASSED' : `\n${failures} TEST(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);

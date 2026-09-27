@@ -185,6 +185,11 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
     <option value="'Comic Sans MS','Comic Sans',cursive">Comic Sans</option>
   </select>
   <select id="size-select" title="Text size">
+    <option value="0.125em">2</option>
+    <option value="0.25em">4</option>
+    <option value="0.375em">6</option>
+    <option value="0.5em">8</option>
+    <option value="0.625em">10</option>
     <option value="0.75em">12</option>
     <option value="0.875em">14</option>
     <option value="1em" selected>16</option>
@@ -964,6 +969,64 @@ function restoreSelection(){
 }
 function afterFormat(){
   syncStageToModel(); updateFilmstripLabel(); refreshDirty(); scheduleSize(); scheduleAutosave();
+  updateFormatUI();
+}
+function nearestStyleValue(node, names){
+  /* walk up from the cursor to the slide, returning the nearest inline
+     fontFamily/fontSize (or legacy font tag attrs) */
+  var sec = $('#stage .slide');
+  var n = (node && node.nodeType === 3) ? node.parentNode : node;
+  while (n && n !== sec) {
+    if (n.nodeType === 1) {
+      for (var i = 0; i < names.length; i++) {
+        var v = n.style && n.style[names[i]];
+        if (v) return v;
+      }
+      if (n.tagName === 'FONT') {
+        if (names[0] === 'fontFamily' && n.getAttribute('face')) return n.getAttribute('face');
+        if (names[0] === 'fontSize' && n.getAttribute('size')) return n.getAttribute('size');
+      }
+    }
+    n = n.parentNode;
+  }
+  return '';
+}
+function primaryFamily(s){
+  return String(s || '').split(',')[0].replace(/['"]/g, '').trim().toLowerCase();
+}
+function syncFormatSelects(){
+  /* show the font/size at the cursor (apply-controls otherwise go stale) */
+  try {
+    var sel = document.getSelection();
+    if (!(sel.rangeCount > 0)) return;
+    var sec = $('#stage .slide');
+    var anchor = sel.anchorNode;
+    if (!sec || !(anchor === sec || sec.contains(anchor))) return;
+    var fam = primaryFamily(nearestStyleValue(anchor, ['fontFamily']));
+    var fsel = $('#font-select');
+    if (fam) {
+      for (var i = 0; i < fsel.options.length; i++) {
+        if (primaryFamily(fsel.options[i].value) === fam) { fsel.selectedIndex = i; break; }
+      }
+    } else fsel.selectedIndex = 0; /* unstyled text renders as the slide default */
+    var size = nearestStyleValue(anchor, ['fontSize']);
+    var em = 0, ssel = $('#size-select');
+    var m = /^\s*([\d.]+)\s*em\s*$/i.exec(size || '');
+    if (m) em = parseFloat(m[1]);
+    else { var p = /^\s*([\d.]+)\s*px\s*$/i.exec(size || ''); if (p) em = parseFloat(p[1]) / 16; }
+    if (em > 0) {
+      var best = -1, bd = 1e9;
+      for (var j = 0; j < ssel.options.length; j++) {
+        var d = Math.abs(parseFloat(ssel.options[j].value) - em);
+        if (d < bd) { bd = d; best = j; }
+      }
+      if (best >= 0 && bd < 0.01) ssel.selectedIndex = best;
+    } else {
+      for (var k = 0; k < ssel.options.length; k++) {
+        if (ssel.options[k].value === '1em') { ssel.selectedIndex = k; break; }
+      }
+    }
+  } catch (e) {}
 }
 function applyCmd(cmd){
   if (!restoreSelection()) return;
@@ -1002,6 +1065,7 @@ function updateFormatUI(){
   Array.prototype.forEach.call(document.querySelectorAll('#formatbar button[data-cmd]'), function(b){
     if (b.dataset.cmd !== 'clear') b.classList.toggle('active', !!on[b.dataset.cmd]);
   });
+  syncFormatSelects();
 }
 var scheduleFormatUI = debounce(function(){ trackSelection(); updateFormatUI(); }, 150);
 function insertFile(file, kind){
@@ -1314,6 +1378,9 @@ function bind(){
   $('#font-select').addEventListener('change', function(e){ applySpanStyle('fontFamily', e.target.value); });
   $('#size-select').addEventListener('change', function(e){ applySpanStyle('fontSize', e.target.value); });
   document.addEventListener('selectionchange', scheduleFormatUI);
+  $('#stage-wrap').addEventListener('keyup', scheduleFormatUI);
+  $('#stage-wrap').addEventListener('click', scheduleFormatUI);
+  $('#stage-wrap').addEventListener('input', scheduleFormatUI);
   $('#opt-compress').addEventListener('change', function(e){ App.model.settings.compress = !!e.target.checked; refreshDirty(); scheduleAutosave(); });
   $('#opt-downscale').addEventListener('change', function(e){ App.model.settings.downscale = !!e.target.checked; refreshDirty(); scheduleAutosave(); });
   $('#opt-maxdim').addEventListener('change', function(e){
