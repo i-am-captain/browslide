@@ -4,14 +4,21 @@ Conventions: commit per task, full suite (`cd tests && npm test`) green before e
 Single file, zero dependencies, `file://`-compatible. No question tool while user is AFK —
 decide, document below, continue.
 
-- [ ] 1. Animation settings layout: every label sits left of its field on one row; widen sidebar as needed.
-- [ ] 2. Default line width 3 for all items (template default, code fallbacks, presets).
-- [ ] 3. Step delete refresh: deleting a step rebuilds the rows even when the ✕ button has focus.
+- [x] 1. Animation settings layout: every label sits left of its field on one row; widen sidebar as needed. Done.
+- [x] 2. Default line width 3 for all items (template default, code fallbacks, presets). Done.
+- [x] 3. Step delete refresh: deleting a step rebuilds the rows even when the ✕ button has focus. Done.
 - [x] 4. Bottom stage scrub slider: global per-slide animation-stage preview with click/auto indication. Done.
 - [x] 5. Size handles edit geometry values instead of literal scaling; rectangle/ellipse get 3 handles (corner = both, right = width, bottom = height). Done.
 - [x] 6. Tight selection boxes: per-shape tight viewBoxes so the overlay hugs the icon. Done.
 - [x] 7. Shape sizes participate in keyframes (capture/apply/play/scrub/present/viewer), so handle drags record into steps. Done.
 - [x] 8. Docs (README) + full suite green + commits. Done: 402 checks pass.
+
+# Round 4 (user report: thinning handles + rest/step fighting)
+
+- [ ] 9. Fix thinning: fixed `0 0 100 100` viewBox (size params change rendered size); overlay hugs via geometry→screen mapping instead.
+- [ ] 10. Initial-step model: every item carries undeletable `initial:true` step 1 (auto) mirroring rest; initial group = appear stage (presenter hides earlier); slider min is 1.
+- [ ] 11. Step-UI cleanup: per-kind field filtering; line width/color + geometry + rotate live in step rows (initial row owns rest-only stroke); Shapes panel keeps select + insert only.
+- [ ] 12. Docs (README) + full suite green + commits.
 
 # Decisions (round 3)
 
