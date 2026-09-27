@@ -948,5 +948,41 @@ await wait(300);
 const tY = await blobToText(WY.__savedBlob, WY);
 check('saved clone hides resizer overlay', new JSDOM(tY).window.document.querySelector('#media-resizer').hasAttribute('hidden'));
 
+// ---------- 27. free-position blocks ----------
+const domZ = makeDom(html);
+await wait(400);
+const WZ = domZ.window, DZ = WZ.document;
+DZ.querySelector('#btn-add').click();
+await wait(100);
+const blkHtml = WZ.activeSlide().html;
+check('new slides use positioned blocks', /class="blk"/.test(blkHtml) && /left:\s*[\d.]+%/.test(blkHtml) && /top:\s*[\d.]+%/.test(blkHtml) && /width:\s*[\d.]+%/.test(blkHtml), blkHtml.slice(0, 120));
+check('starter slides use blocks', WZ.App.model.slideOrder.every((id) => /class="blk"/.test(WZ.App.model.slides[id].html)));
+check('move math', WZ.shiftPos(10, 80, 800) === 20 && WZ.shiftPos(10, -80, 800) === 0 && WZ.shiftPos(5, 0, 0) === null);
+const zBlk = DZ.querySelector('#stage .blk');
+const mdDown = new WZ.MouseEvent('mousedown', { bubbles: true, cancelable: true });
+zBlk.dispatchEvent(mdDown);
+check('first click selects block, no caret', mdDown.defaultPrevented === true && WZ.resizer.el === zBlk &&
+  DZ.querySelector('#media-resizer').hidden === false && DZ.querySelector('#media-resizer').classList.contains('formove'));
+zBlk.dispatchEvent(new WZ.MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+check('overlay shows move grip for blocks', !!DZ.querySelector('#media-resizer .mmove'));
+WZ.moveTargetTo(20, 30);
+check('move writes % coords', zBlk.style.left === '20%' && zBlk.style.top === '30%');
+WZ.deselectMedia();
+const lone = DZ.createElement('img');
+lone.src = 'data:image/png;base64,AAA=';
+DZ.querySelector('#stage .slide').appendChild(lone);
+WZ.selectMedia(lone);
+check('lone media has no move grip', WZ.resizer.el === lone && !DZ.querySelector('#media-resizer').classList.contains('formove'));
+DZ.querySelector('#btn-save').click();
+await wait(300);
+const tZ = await blobToText(WZ.__savedBlob, WZ);
+check('save keeps block coords', /class="blk"/.test(tZ) && /left:\s*[\d.]+%/.test(tZ));
+const classic = { app: 'browslide', version: 2, title: 'C', theme: 'dark', slideOrder: ['s1'], nextId: 2, nextResId: 1,
+  settings: { compress: true, downscale: false, maxDim: 1920, showBar: true, tight: false }, aspect: { w: 16, h: 9 },
+  resources: {}, slides: { s1: { title: 'C', layout: 'title-body', transition: 'fade', notes: '', html: '<h1>C</h1><ul><li>x</li></ul>' } } };
+WZ.loadModel(WZ.normalizeModel(JSON.parse(JSON.stringify(classic))));
+await wait(100);
+check('classic flow content still renders', !!DZ.querySelector('#stage ul li'));
+
 console.log(failures === 0 ? '\nALL TESTS PASSED' : `\n${failures} TEST(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);

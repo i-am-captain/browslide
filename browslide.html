@@ -125,11 +125,14 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 #media-resizer{position:absolute;border:2px solid var(--accent);border-radius:4px;pointer-events:none;z-index:5}
 #media-resizer .mhandle{position:absolute;right:-10px;bottom:-10px;width:20px;height:20px;background:var(--accent);border:2px solid #fff;border-radius:50%;cursor:nwse-resize;pointer-events:auto;touch-action:none}
 #media-resizer .mbadge{position:absolute;top:-26px;right:-2px;background:var(--accent);color:#fff;font-size:11px;padding:1px 7px;border-radius:10px;white-space:nowrap}
+#media-resizer .mmove{position:absolute;left:-10px;top:-10px;width:20px;height:20px;line-height:16px;text-align:center;background:var(--accent);color:#fff;border:2px solid #fff;border-radius:50%;cursor:move;pointer-events:auto;touch-action:none;display:none;font-size:11px}
+#media-resizer.formove .mmove{display:block}
+.slide .blk{position:absolute;box-sizing:border-box;min-width:8%;min-height:1.2em}
 #inspector label.row{display:flex;flex-direction:row;align-items:center}
 #present-settings{display:flex;flex-direction:column;gap:6px}
 #present-settings summary{cursor:pointer;color:var(--muted);font-size:12px}
 /* ---- slides ---- */
-.slide{width:100%;margin:auto;aspect-ratio:16/9;overflow:auto;background:var(--slide-bg);color:var(--slide-ink);
+.slide{width:100%;margin:auto;aspect-ratio:16/9;overflow:auto;position:relative;background:var(--slide-bg);color:var(--slide-ink);
   border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.12);
   padding:44px 52px;font-size:16px;outline:none}
 .slide:focus{border-color:var(--accent)}
@@ -303,7 +306,7 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 <input type="file" id="insert-video" accept="video/*" hidden>
 
 <script type="application/json" id="slider-data">
-{"app":"browslide","version":2,"title":"My Talk","theme":"dark","slideOrder":["s1","s2","s3"],"nextId":4,"slides":{"s1":{"title":"My Talk","layout":"title","transition":"fade","html":"<h1>My Talk</h1><p>A presentation made with Browslide — one file, no server.</p>","notes":""},"s2":{"title":"How to use","layout":"title-body","transition":"fade","html":"<h1>How to use</h1><ul><li>Click the slide and type — everything saves into this one file.</li><li><b>Save</b> downloads an updated copy (also Ctrl+S). <b>Open</b> loads another copy. <b>Present</b> starts the show.</li><li>Drag slides in the left list to reorder. Right panel: layout, transition, theme, notes.</li><li>Media is deduplicated and compressed on save; Media & sizes shows per-slide usage.</li><li>Keys: ↑/↓ in the slide list, PageUp/PageDown outside the slide, Space/→ while presenting.</li></ul>","notes":""},"s3":{"title":"Thanks","layout":"title","transition":"fade","html":"<h1>Thanks</h1><p>Questions?</p>","notes":""}},"resources":{},"nextResId":1,"settings":{"compress":true,"downscale":false,"maxDim":1920,"showBar":true,"tight":false},"aspect":{"w":16,"h":9}}
+{"app":"browslide","version":2,"title":"My Talk","theme":"dark","slideOrder":["s1","s2","s3"],"nextId":4,"slides":{"s1":{"title":"My Talk","layout":"title","transition":"fade","html":"<div class=\"blk\" style=\"left:10%;top:30%;width:80%;text-align:center\"><h1>My Talk</h1><p>A presentation made with Browslide — one file, no server.</p></div>","notes":""},"s2":{"title":"How to use","layout":"title-body","transition":"fade","html":"<div class=\"blk\" style=\"left:8%;top:5%;width:84%\"><h1>How to use</h1></div><div class=\"blk\" style=\"left:8%;top:26%;width:84%\"><ul><li>Click the slide and type — everything saves into this one file.</li><li><b>Save</b> downloads an updated copy (also Ctrl+S). <b>Open</b> loads another copy. <b>Present</b> starts the show.</li><li>Drag slides in the left list to reorder. Right panel: layout, transition, theme, notes.</li><li>Click a text block to select it, drag its grip to move it. Click images to resize them.</li><li>Media is deduplicated and compressed on save; Media & sizes shows per-slide usage.</li><li>Keys: ↑/↓ in the slide list, PageUp/PageDown outside the slide, Space/→ while presenting.</li></ul></div>","notes":""},"s3":{"title":"Thanks","layout":"title","transition":"fade","html":"<div class=\"blk\" style=\"left:10%;top:34%;width:80%;text-align:center\"><h1>Thanks</h1><p>Questions?</p></div>","notes":""}},"resources":{},"nextResId":1,"settings":{"compress":true,"downscale":false,"maxDim":1920,"showBar":true,"tight":false},"aspect":{"w":16,"h":9}}
 </script>
 
 <script>
@@ -767,11 +770,11 @@ var scheduleAutosave = debounce(autosaveNow, 1000);
 /* ================= RENDER ================= */
 function skeletonFor(layout){
   switch (layout) {
-    case 'title': return '<h1>New title</h1><p>Subtitle or presenter name</p>';
-    case 'two-col': return '<h1>Heading</h1><div class="cols"><div><p>Left</p></div><div><p>Right</p></div></div>';
-    case 'image-full': return '<h1>Media slide</h1><p>Use Insert &gt; Image below to add a picture.</p>';
-    case 'blank': return '<p>Blank — start typing.</p>';
-    default: return '<h1>Heading</h1><ul><li>First point</li><li>Second point</li></ul>';
+    case 'title': return '<div class="blk" style="left:10%;top:28%;width:80%;text-align:center"><h1>New title</h1><p>Subtitle or presenter name</p></div>';
+    case 'two-col': return '<div class="blk" style="left:8%;top:6%;width:84%"><h1>Heading</h1></div><div class="blk" style="left:8%;top:30%;width:38%"><p>Left</p></div><div class="blk" style="left:54%;top:30%;width:38%"><p>Right</p></div>';
+    case 'image-full': return '<div class="blk" style="left:8%;top:6%;width:84%"><h1>Media slide</h1><p>Use the Insert menu below to add a picture.</p></div>';
+    case 'blank': return '<div class="blk" style="left:8%;top:8%;width:84%"><p>Blank — start typing.</p></div>';
+    default: return '<div class="blk" style="left:8%;top:6%;width:84%"><h1>Heading</h1></div><div class="blk" style="left:8%;top:28%;width:84%"><ul><li>First point</li><li>Second point</li></ul></div>';
   }
 }
 function renderFilmstrip(){
@@ -1438,15 +1441,26 @@ function insertFile(file, kind){
   r.readAsDataURL(file);
 }
 function appendDataMedia(url, file, kind){
+  var sec = $('#stage .slide');
+  var wrap = document.createElement('div');
+  wrap.className = 'blk';
+  wrap.style.left = '10%';
+  wrap.style.top = '20%';
+  wrap.style.width = '60%';
   if (kind === 'video') {
     var v = document.createElement('video');
     v.controls = true; v.preload = 'metadata'; v.src = url;
-    appendMedia(v);
+    v.style.width = '100%';
+    wrap.appendChild(v);
   } else {
     var img = document.createElement('img');
     img.alt = file.name; img.src = url;
-    appendMedia(img);
+    img.style.width = '100%';
+    wrap.appendChild(img);
   }
+  if (sec) sec.appendChild(wrap);
+  else appendMedia(kind === 'video' ? wrap.firstChild : wrap.firstChild);
+  syncStageToModel(); refreshDirty(); scheduleSize(); scheduleAutosave();
 }
 /* ---- media select + resize (drag handle, width stored as % of slide) ---- */
 var resizer = { el: null, startPx: 0, startX: 0, slidePx: 0 };
@@ -1455,15 +1469,71 @@ function shiftPct(startPx, dxPx, slidePx){
   var pct = (startPx + dxPx) / slidePx * 100;
   return Math.max(5, Math.min(100, Math.round(pct * 10) / 10));
 }
+function shiftPos(startPct, dPx, slidePx){
+  if (!(slidePx > 0) || !isFinite(startPct)) return null;
+  return Math.round((startPct + dPx / slidePx * 100) * 10) / 10;
+}
+function ensureBlockPos(el){
+  /* blocks always carry % coords; derive them once for legacy content */
+  var sec = $('#stage .slide');
+  var ok = function(v){ return /^\s*-?[\d.]+\s*%\s*$/.test(v || ''); };
+  if (!ok(el.style.left)) {
+    var p = posInWrap(el);
+    el.style.left = (sec && sec.clientWidth > 0) ? (Math.round(p.x / sec.clientWidth * 1000) / 10 + '%') : '10%';
+  }
+  if (!ok(el.style.top)) {
+    var q = posInWrap(el);
+    el.style.top = (sec && sec.clientHeight > 0) ? (Math.round(q.y / sec.clientHeight * 1000) / 10 + '%') : '10%';
+  }
+}
+function moveTargetTo(leftPct, topPct){
+  var el = resizer.el;
+  if (!el) return false;
+  el.style.left = leftPct + '%';
+  el.style.top = topPct + '%';
+  positionResizer();
+  return true;
+}
+function onGripDown(e){
+  if (!resizer.el) return;
+  e.preventDefault();
+  e.stopPropagation();
+  var sec = $('#stage .slide');
+  if (!sec) return;
+  ensureBlockPos(resizer.el);
+  var g = e.currentTarget;
+  try { g.setPointerCapture(e.pointerId); } catch (err) {}
+  var startL = parseFloat(resizer.el.style.left) || 0;
+  var startT = parseFloat(resizer.el.style.top) || 0;
+  var startX = e.clientX, startY = e.clientY;
+  var slideW = sec.clientWidth || 0, slideH = sec.clientHeight || 0;
+  var onMove = function(ev){
+    var l = shiftPos(startL, ev.clientX - startX, slideW);
+    var t = shiftPos(startT, ev.clientY - startY, slideH);
+    if (l === null || t === null || !resizer.el) return;
+    moveTargetTo(l, t);
+  };
+  var onUp = function(){
+    g.removeEventListener('pointermove', onMove);
+    g.removeEventListener('pointerup', onUp);
+    g.removeEventListener('pointercancel', onUp);
+    if (!resizer.el) return;
+    syncStageToModel(); refreshDirty(); scheduleSize(); scheduleAutosave();
+  };
+  g.addEventListener('pointermove', onMove);
+  g.addEventListener('pointerup', onUp);
+  g.addEventListener('pointercancel', onUp);
+}
 function resizerOverlay(){
   var ov = $('#media-resizer');
   if (ov) return ov;
   ov = document.createElement('div');
   ov.id = 'media-resizer';
   ov.hidden = true;
-  ov.innerHTML = '<span class="mbadge"></span><span class="mhandle" title="Drag to resize"></span>';
+  ov.innerHTML = '<span class="mbadge"></span><span class="mmove" title="Drag to move">⋮⋮</span><span class="mhandle" title="Drag to resize"></span>';
   $('#stage-wrap').appendChild(ov);
   ov.querySelector('.mhandle').addEventListener('pointerdown', onHandleDown);
+  ov.querySelector('.mmove').addEventListener('pointerdown', onGripDown);
   return ov;
 }
 function posInWrap(el){
@@ -1491,6 +1561,7 @@ function positionResizer(){
   if (!ov) return;
   var p = posInWrap(resizer.el);
   ov.hidden = false;
+  ov.classList.toggle('formove', !!(resizer.el.classList && resizer.el.classList.contains('blk')));
   ov.style.left = p.x + 'px';
   ov.style.top = p.y + 'px';
   ov.style.width = p.w + 'px';
@@ -1501,7 +1572,8 @@ function positionResizer(){
 function selectMedia(el){
   var sec = $('#stage .slide');
   if (!el || !sec || !sec.contains(el)) return false;
-  resizer.el = el;
+  var blk = el.closest ? el.closest('.blk') : null;
+  resizer.el = (blk && sec.contains(blk)) ? blk : el;
   resizerOverlay();
   positionResizer();
   return true;
@@ -1870,7 +1942,13 @@ function bind(){
   });
   $('#notes').addEventListener('input', debounce(function(e){ activeSlide().notes = e.target.value; refreshDirty(); scheduleAutosave(); }, 300));
   $('#stage').addEventListener('mousedown', function(e){
-    var m = e.target && e.target.closest ? e.target.closest('img,video') : null;
+    var t = e.target;
+    var blk = t && t.closest ? t.closest('.blk') : null;
+    if (blk && $('#stage').contains(blk)) {
+      if (resizer.el !== blk) { e.preventDefault(); selectMedia(blk); }
+      return; /* already selected: let the browser place the caret for editing */
+    }
+    var m = t && t.closest ? t.closest('img,video') : null;
     if (m && $('#stage').contains(m)) selectMedia(m);
     else deselectMedia();
   });
