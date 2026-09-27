@@ -753,5 +753,44 @@ check('reflection shows h2 block', DT.querySelector('#style-select').value === '
 WT.applyBlock('h1');
 check('applyBlock without editing API is safe', WT.pendingFormat === null);
 
+// ---------- 22. selections never touch execCommand; paste cleanup ----------
+const domU = makeDom(html);
+await wait(400);
+const WU = domU.window, DU = WU.document;
+const execCalls = [];
+DU.execCommand = function (cmd, ui, val) { execCalls.push([cmd, val]); return true; };
+const uSec = DU.querySelector('#stage .slide');
+uSec.innerHTML = '<p>hello world</p>';
+const urng = DU.createRange();
+urng.setStart(uSec.querySelector('p').firstChild, 0);
+urng.setEnd(uSec.querySelector('p').firstChild, 5);
+DU.getSelection().removeAllRanges();
+DU.getSelection().addRange(urng);
+WU.applySpanStyle('fontSize', '2em');
+check('selection path never touches execCommand', execCalls.length === 0 && uSec.querySelectorAll('font').length === 0);
+check('selection wrapped in sized span', !!uSec.querySelector('span') && uSec.querySelector('span').style.fontSize === '2em');
+const srng = DU.createRange();
+srng.setStart(uSec.querySelector('p').firstChild, 0);
+srng.setEnd(DU.querySelector('.brand').firstChild, 1);
+DU.getSelection().removeAllRanges();
+DU.getSelection().addRange(srng);
+WU.applySpanStyle('fontSize', '2em');
+check('spanning selection does nothing harmful', execCalls.length === 0 && uSec.querySelectorAll('font').length === 0 && WU.pendingFormat === null);
+execCalls.length = 0;
+const crngU = DU.createRange();
+crngU.setStart(uSec.querySelector('p').firstChild, 0);
+crngU.collapse(true);
+DU.getSelection().removeAllRanges();
+DU.getSelection().addRange(crngU);
+DU.dispatchEvent(new WU.Event('selectionchange'));
+WU.applySpanStyle('fontSize', '2em');
+check('collapsed path uses typing style only', execCalls.length === 2 && execCalls.every((c) => c[0] === 'fontSize') && uSec.querySelectorAll('font').length === 0,
+  execCalls.length + ' exec call(s)');
+uSec.innerHTML = '<p>past<font size="7">ed</font></p>';
+uSec.dispatchEvent(new WU.Event('paste', { bubbles: true }));
+await wait(150);
+check('paste cleans font tags live', uSec.querySelectorAll('font').length === 0 && /font-size:\s*3em/.test(uSec.innerHTML));
+check('paste cleanup reaches model', !WU.activeSlide().html.includes('<font'));
+
 console.log(failures === 0 ? '\nALL TESTS PASSED' : `\n${failures} TEST(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);

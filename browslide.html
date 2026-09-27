@@ -783,6 +783,16 @@ function renderStage(){
   sec.contentEditable = 'true';
   sec.innerHTML = expandHtml(s.html, App.model.resources);
   sec.addEventListener('input', onStageInput);
+  sec.addEventListener('paste', function(){
+    /* pasted content (e.g. from older decks) may carry legacy <font> tags;
+       clean them live — sync only writes the model, never the stage back */
+    setTimeout(function(){
+      var s2 = $('#stage .slide');
+      if (!s2 || !s2.querySelectorAll('font').length) return;
+      Array.prototype.slice.call(s2.querySelectorAll('font')).forEach(function(f){ replaceFontTag(f, false); });
+      syncStageToModel(); updateFilmstripLabel(); refreshDirty(); scheduleSize(); scheduleAutosave(); updateFormatUI();
+    }, 0);
+  });
   wrap.appendChild(sec);
   fitStage();
 }
@@ -1151,22 +1161,19 @@ function applyCmd(cmd){
 function applySpanStyle(prop, value){
   if (!restoreSelection()) return;
   if (selectionCollapsed()) {
-    /* typing style only — no DOM touched, so no <font> tags possible */
+    /* typing style only — collapsed selections cannot create elements */
     pendingSpanStyle = { prop: prop, value: value };
     try { document.execCommand('fontSize', false, '7'); } catch (e) {}
+    convertFontTags();
     pendingSpanStyle = null;
     capturePendingBase();
     pendingFormat[prop] = value;
   } else if (wrapSelectionInSpan(prop, value)) {
     pendingFormat = null;
-  } else {
-    /* exotic range fallback: legacy path, converter + sanitizer clean it */
-    pendingSpanStyle = { prop: prop, value: value };
-    try { document.execCommand('fontSize', false, '7'); } catch (e) { pendingSpanStyle = null; return; }
-    convertFontTags();
-    pendingSpanStyle = null;
-    pendingFormat = null;
   }
+  /* wrap failed (e.g. selection spanning outside the slide): do nothing.
+     The old execCommand fallback is deliberately gone — it could emit
+     legacy <font> tags, which is worse than skipping exotic ranges. */
   afterFormat();
 }
 function applyBlock(tag){
