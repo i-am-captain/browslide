@@ -1975,8 +1975,7 @@ function startItemDrag(e){
       return; /* plain click: selection already set, model untouched */
     }
     if (!selectedItems().length) return;
-    selectedItems().forEach(commitStepGeometry);
-    persistSlide();
+    commitStepGeometries();
   }
   window.addEventListener('pointermove', onMove);
   window.addEventListener('pointerup', onUp);
@@ -2022,8 +2021,7 @@ function onRotateDown(e){
     g.removeEventListener('pointerup', onUp);
     g.removeEventListener('pointercancel', onUp);
     if (!selectedItems().length) return;
-    selectedItems().forEach(commitStepGeometry);
-    persistSlide();
+    commitStepGeometries();
   };
   g.addEventListener('pointermove', onMove);
   g.addEventListener('pointerup', onUp);
@@ -2155,8 +2153,7 @@ function onSizeDown(e, mode){
     g.removeEventListener('pointercancel', onUp);
     if (!selectedItems().length) return;
     try { g.releasePointerCapture(e.pointerId); } catch (err) {}
-    selectedItems().forEach(commitStepGeometry);
-    persistSlide();
+    commitStepGeometries();
   };
   g.addEventListener('pointermove', onMove);
   g.addEventListener('pointerup', onUp);
@@ -2213,8 +2210,7 @@ function onGripDown(e){
     g.removeEventListener('pointerup', onUp);
     g.removeEventListener('pointercancel', onUp);
     if (!selectedItems().length) return;
-    selectedItems().forEach(commitStepGeometry);
-    persistSlide();
+    commitStepGeometries();
   };
   g.addEventListener('pointermove', onMove);
   g.addEventListener('pointerup', onUp);
@@ -2509,26 +2505,48 @@ function exitStepEdit(){
   scrubApply();
   positionResizer();
 }
-function commitStepGeometry(el){
-  /* geometry drags (or transform inputs) while a step is being edited:
-     capture the live pose into that step, save rest, then keep showing
-     the edited step (never strand the canvas at rest mid-edit) */
+function captureStepGeometry(el){
+  /* capture the live pose into the edited step (or mirror rest into the
+     initial step); restores rest, but never persists — the caller saves once */
   var se = stepEdit;
-  if (!se || se.el !== el) { syncInitialStep(el); scrubDrop(el); return false; }
+  if (!se || se.el !== el) { syncInitialStep(el); scrubDrop(el); return null; }
   var list = animListOf(el);
   var entry = list[se.idx];
-  if (!entry) { exitStepEdit(); return false; }
+  if (!entry) { exitStepEdit(); return null; }
   var cur = captureKeyframe(el);
   ['left', 'top', 'width', 'rot', 'sx', 'sy', 'slen', 'sr', 'sw', 'sh'].forEach(function(k){
     if (cur[k] !== undefined) entry.to[k] = cur[k];
   });
   writeAnimList(el, list);
   restoreStepState(el, se.rest);
-  persistSlide(); /* saves rest; rebuilds scrub (skips this element: step preview wins) */
+  return entry;
+}
+function commitStepGeometry(el){
+  /* single-item drop: capture, save rest once, then keep showing the edited
+     step (the scrub layer skips step-edited items, so without the re-apply
+     the canvas would strand at rest mid-edit) */
+  var entry = captureStepGeometry(el);
+  if (!entry) return false;
+  persistSlide();
   applyKeyframeState(el, entry.to);
   positionResizer();
   refreshAnimUI();
   return true;
+}
+function commitStepGeometries(){
+  /* multi-item drop: exactly one save for the whole set, then re-show every
+     edited step (a second save would restore rest over the re-applied poses) */
+  var done = [];
+  selectedItems().forEach(function(el){
+    var entry = captureStepGeometry(el);
+    if (entry) done.push({ el: el, to: entry.to });
+  });
+  persistSlide();
+  done.forEach(function(d){
+    if (d.el && document.contains(d.el)) applyKeyframeState(d.el, d.to);
+  });
+  positionResizer();
+  refreshAnimUI();
 }
 function captureKeyframe(el){
   var sec = $('#stage .slide');
@@ -2929,6 +2947,7 @@ function buildAnimRows(el){
           if (itS) renderShape(isvg);
         }
         try { delete el._kfSty; } catch (e) {}
+        if (stepEdit && stepEdit.el === el) stepEdit.rest = snapStepState(el); /* rest moved: the sync inside persist must save it, not the stale snapshot */
       }
       persistSlide();
       lab.textContent = stepSummary(next[idx]);

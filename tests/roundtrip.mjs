@@ -1477,6 +1477,13 @@ const scList2 = JSON.parse(scBlks[0].getAttribute('data-anim'));
 const scEntry2 = scList2[scList2.length - 1];
 check('second drop without reselect works', scEntry2.to.left === 80 && scBlks[0].style.left === '80%' &&
   /left:\s*8%/.test(WSC.App.model.slides.s2.html) && !/left:\s*80%/.test(WSC.App.model.slides.s2.html));
+// the real handle-drop path (single save for the set): pose must survive it
+scBlks[0].style.left = '90%';
+WSC.commitStepGeometries();
+const scList3 = JSON.parse(scBlks[0].getAttribute('data-anim'));
+check('batch drop keeps showing the step', scList3[scList3.length - 1].to.left === 90 && scBlks[0].style.left === '90%' &&
+  /left:\s*8%/.test(WSC.App.model.slides.s2.html) && !/left:\s*90%/.test(WSC.App.model.slides.s2.html) &&
+  WSC.stepEdit !== null && WSC.stepEdit.el === scBlks[0]);
 // sync guard: preview pose never persists
 scBlks[0].style.left = '70%';
 WSC.syncStageToModel();
@@ -1758,6 +1765,16 @@ leftRow.querySelector('input').dispatchEvent(new WIN.Event('change', { bubbles: 
 const afterCommit = JSON.parse(inBlk.getAttribute('data-anim'));
 check('initial commit keeps flag + applies rest', afterCommit.length === 1 && afterCommit[0].initial === true &&
   afterCommit[0].to.left === 44 && inBlk.style.left === '44%');
+// same edit with the initial preview active: rest itself moves, nothing forks
+WIN.setSingleSelection(inBlk);
+DIN.querySelectorAll('#anim-rows details.astep')[0].dispatchEvent(new WIN.MouseEvent('click', { bubbles: true }));
+const leftRow2 = Array.prototype.find.call(DIN.querySelectorAll('#anim-rows details.astep')[0].querySelectorAll('.aline'), (l) => l.firstChild.textContent === 'Left %');
+leftRow2.querySelector('input').value = '55';
+leftRow2.querySelector('input').dispatchEvent(new WIN.Event('change', { bubbles: true }));
+const afterPrev = JSON.parse(inBlk.getAttribute('data-anim'));
+check('preview-active initial edit moves rest', afterPrev.length === 1 && afterPrev[0].initial === true &&
+  afterPrev[0].to.left === 55 && inBlk.style.left === '55%' && /left:\s*55%/.test(WIN.App.model.slides[WIN.App.activeId].html));
+WIN.exitStepEdit();
 afterCommit[0].group = 5;
 inBlk.setAttribute('data-anim', JSON.stringify(afterCommit));
 const hideSec = DIN.createElement('section');

@@ -22,7 +22,7 @@ decide, document below, continue.
 
 # Round 5 (drop jump-back fix)
 
-- [x] 13. Step-edit drops keep showing the edited step (canvas no longer strands at rest; consecutive edits work without deselect). Done: 425 checks pass.
+- [x] 13. Step-edit drops keep showing the edited step (canvas no longer strands at rest; consecutive edits work without deselect). Done: 427 checks pass.
 
 # Decisions (round 5)
 
@@ -31,6 +31,13 @@ decide, document below, continue.
   re-apply the canvas sat at rest while the step stayed active, and the next drag
   started from the wrong pose. Overlay follows via `positionResizer` in commit,
   step enter/exit, and `scrubApply`.
+- Follow-up (jump-back persisted in real browsers, jsdom-green): every handle `onUp`
+  saved TWICE — once inside the commit, once right after — and the second save
+  restored rest over the re-applied pose. Drops now go through `commitStepGeometries`
+  (split `captureStepGeometry` + exactly one `persistSlide`, then re-show all edited
+  steps). Same class of bug in initial-row field edits with an active preview: the
+  sync saved the stale `stepEdit.rest` snapshot, so the row now refreshes `stepEdit.rest`
+  after applying the fields.
 
 # Decisions (round 3)
 
