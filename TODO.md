@@ -16,7 +16,7 @@ decide, document below, continue.
 # Round 4 (user report: thinning handles + rest/step fighting)
 
 - [x] 9. Fix thinning: fixed `0 0 100 100` viewBox (size params change rendered size); overlay hugs via geometry→screen mapping instead. Done.
-- [ ] 10. Initial-step model: every item carries undeletable `initial:true` step 1 (auto) mirroring rest; initial group = appear stage (presenter hides earlier); slider min is 1.
+- [x] 10. Initial-step model: every item carries undeletable `initial:true` step 1 (auto) mirroring rest; initial group = appear stage (presenter hides earlier); slider min is 1. Done.
 - [ ] 11. Step-UI cleanup: per-kind field filtering; line width/color + geometry + rotate live in step rows (initial row owns rest-only stroke); Shapes panel keeps select + insert only.
 - [ ] 12. Docs (README) + full suite green + commits.
 

@@ -1067,11 +1067,13 @@ aBlk.dispatchEvent(new WA.MouseEvent('mousedown', { bubbles: true, cancelable: t
 check('anim panel activates on block select', DA.querySelector('#anim-hint').hidden === true && DA.querySelector('#anim-controls').hidden === false);
 DA.querySelector('#btn-anim-add').click();
 await wait(50);
-check('add step captures row', DA.querySelectorAll('#anim-rows details.astep').length === 1 &&
-  JSON.parse(aBlk.getAttribute('data-anim')).length === 1 &&
-  JSON.parse(aBlk.getAttribute('data-anim'))[0].group === 1);
-check('new step opens expanded with summary', DA.querySelector('#anim-rows details.astep').open === true &&
-  DA.querySelector('#anim-rows details.astep summary').textContent.includes('Step 1'));
+check('add step captures row', DA.querySelectorAll('#anim-rows details.astep').length === 2 &&
+  JSON.parse(aBlk.getAttribute('data-anim')).length === 2 &&
+  JSON.parse(aBlk.getAttribute('data-anim'))[0].initial === true &&
+  JSON.parse(aBlk.getAttribute('data-anim'))[1].group === 2);
+const lastRow = DA.querySelectorAll('#anim-rows details.astep');
+check('new step opens expanded with summary', lastRow[lastRow.length - 1].open === true &&
+  lastRow[lastRow.length - 1].querySelector('summary').textContent.includes('Step 2'));
 const capEntry = JSON.parse(aBlk.getAttribute('data-anim'))[0];
 check('capture reads explicit coords', capEntry.to.left === 10 && capEntry.to.top === 30 && capEntry.to.width === 80);
 check('unpositioned elements get coords at play', (function(){
@@ -1080,19 +1082,28 @@ check('unpositioned elements get coords at play', (function(){
   WA.ensurePositioned(u);
   return u.style.left === '10%' && u.style.top === '10%' && u.style.position === 'absolute';
 })());
-const gInput = DA.querySelector('#anim-rows details.astep input');
-gInput.value = '2';
+const rowsA = () => DA.querySelectorAll('#anim-rows details.astep');
+check('initial row first + locked', rowsA().length === 2 &&
+  rowsA()[0].querySelector('summary').textContent.includes('Initial state') &&
+  !rowsA()[0].querySelector('.adel'));
+const gInput = rowsA()[1].querySelector('input');
+gInput.value = '3';
 gInput.dispatchEvent(new WA.Event('change', { bubbles: true }));
-check('row edit writes back', JSON.parse(aBlk.getAttribute('data-anim'))[0].group === 2);
-DA.querySelector('#anim-rows .adel').click();
-check('row delete clears', DA.querySelectorAll('#anim-rows details.astep').length === 0 && !aBlk.hasAttribute('data-anim'));
+check('row edit writes back', JSON.parse(aBlk.getAttribute('data-anim'))[1].group === 3);
+rowsA()[1].querySelector('.adel').click();
+check('row delete clears', rowsA().length === 1 && (function(){
+  const l = JSON.parse(aBlk.getAttribute('data-anim'));
+  return l.length === 1 && l[0].initial === true;
+})());
 // real browsers focus the button on mousedown: delete must still rebuild rows
 DA.querySelector('#btn-anim-add').click();
 await wait(50);
-check('re-add after delete', DA.querySelectorAll('#anim-rows details.astep').length === 1);
-DA.querySelector('#anim-rows .adel').focus();
-DA.querySelector('#anim-rows .adel').click();
-check('focused delete rebuilds rows', DA.querySelectorAll('#anim-rows details.astep').length === 0 && !aBlk.hasAttribute('data-anim'));
+check('re-add after delete', rowsA().length === 2);
+const delA = rowsA()[1].querySelector('.adel');
+delA.focus();
+delA.click();
+check('focused delete rebuilds rows', rowsA().length === 1 &&
+  JSON.parse(aBlk.getAttribute('data-anim'))[0].initial === true);
 DA.querySelector('#anim-hidden').checked = true;
 DA.querySelector('#anim-hidden').dispatchEvent(new WA.Event('change', { bubbles: true }));
 check('hidden checkbox sets attr', aBlk.hasAttribute('data-hidden'));
@@ -1283,9 +1294,13 @@ const mBlksF = DT2.querySelectorAll('#stage .blk');
 WT2.toggleSelection(mBlksF[0]);
 WT2.toggleSelection(mBlksF[1]);
 DT2.querySelector('#btn-anim-add').click();
-check('anim add targets primary', mBlksF[1].hasAttribute('data-anim') && !mBlksF[0].hasAttribute('data-anim'));
+check('anim add targets primary', (function(){
+  const a = JSON.parse(mBlksF[1].getAttribute('data-anim')).filter((e) => !e.initial).length;
+  const b = JSON.parse(mBlksF[0].getAttribute('data-anim')).filter((e) => !e.initial).length;
+  return a === 1 && b === 0;
+})());
 DT2.querySelector('#anim-rows .adel').click();
-check('anim row delete clears', !mBlksF[1].hasAttribute('data-anim'));
+check('anim row delete clears', JSON.parse(mBlksF[1].getAttribute('data-anim')).filter((e) => !e.initial).length === 0);
 // copy/paste
 WT2.setSingleSelection(mBlks[0]);
 const beforePaste = DT2.querySelectorAll('#stage .blk').length;
@@ -1381,17 +1396,22 @@ const abBlks = DAB.querySelectorAll('#stage .blk');
 abBlks[0].dispatchEvent(new WAB.MouseEvent('mousedown', { bubbles: true, cancelable: true }));
 DAB.querySelector('#btn-anim-add').click();
 await wait(50);
-check('step added on A', DAB.querySelectorAll('#anim-rows details.astep').length === 1);
-DAB.querySelector('#anim-rows details.astep input').focus();
+const rowsAB = () => DAB.querySelectorAll('#anim-rows details.astep');
+check('step added on A', rowsAB().length === 2 &&
+  JSON.parse(abBlks[0].getAttribute('data-anim')).length === 2);
+rowsAB()[0].querySelector('input').focus();
 abBlks[1].dispatchEvent(new WAB.MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-check('rows rebuild for B despite focused input', DAB.querySelectorAll('#anim-rows details.astep').length === 0);
+check('rows rebuild for B despite focused input', rowsAB().length === 1 &&
+  rowsAB()[0].querySelector('summary').textContent.includes('Initial state') &&
+  WAB.selectedAnimTarget() === abBlks[1]);
 DAB.querySelector('#btn-anim-add').click();
 await wait(50);
-check('step added on B', DAB.querySelectorAll('#anim-rows details.astep').length === 1 &&
-  JSON.parse(abBlks[1].getAttribute('data-anim')).length === 1);
-DAB.querySelector('#anim-rows .adel').click();
-check('delete hits current selection', DAB.querySelectorAll('#anim-rows details.astep').length === 0 &&
-  !abBlks[1].hasAttribute('data-anim') && abBlks[0].hasAttribute('data-anim'));
+check('step added on B', rowsAB().length === 2 &&
+  JSON.parse(abBlks[1].getAttribute('data-anim')).length === 2);
+rowsAB()[1].querySelector('.adel').click();
+check('delete hits current selection', rowsAB().length === 1 &&
+  JSON.parse(abBlks[1].getAttribute('data-anim')).length === 1 &&
+  JSON.parse(abBlks[0].getAttribute('data-anim')).length === 2);
 WAB.gotoSlide(WAB.App.model.slideOrder[0]);
 check('navigation clears selection', WAB.resizer.el === null && DAB.querySelector('#anim-hint').hidden === false);
 // same staleness class for shape geometry rows
@@ -1425,29 +1445,33 @@ check('add enters step-edit mode', !!WSC.stepEdit && WSC.stepEdit.el === scBlks[
 // simulate a drag result, then drop-capture like onUp does
 scBlks[0].style.left = '70%';
 WSC.commitStepGeometry(scBlks[0]);
-const scEntry = JSON.parse(scBlks[0].getAttribute('data-anim'))[0];
-check('drop captures pose, restores rest', scEntry.to.left === 70 && scBlks[0].style.left === '8%');
-check('model keeps rest pose', WSC.App.model.slides.s2.html.includes('left:8%') && !WSC.App.model.slides.s2.html.includes('left:70%'));
+const scList = JSON.parse(scBlks[0].getAttribute('data-anim'));
+const scEntry = scList[scList.length - 1];
+check('drop captures pose, step preview shows', scEntry.to.left === 70 && scBlks[0].style.left === '8%');
+check('model keeps rest pose', /left:\s*8%/.test(WSC.App.model.slides.s2.html) && !/left:\s*70%/.test(WSC.App.model.slides.s2.html));
 // sync guard: preview pose never persists
 scBlks[0].style.left = '70%';
 WSC.syncStageToModel();
-check('sync restores rest pose', scBlks[0].style.left === '8%' && WSC.App.model.slides.s2.html.includes('left:8%'));
+check('sync restores rest pose', scBlks[0].style.left === '8%' && /left:\s*8%/.test(WSC.App.model.slides.s2.html));
 WSC.exitStepEdit();
 check('exit clears mode', WSC.stepEdit === null);
-// row click enters with preview + highlight (two-entry element)
+// row click enters the second (non-initial) entry
 scBlks[1].setAttribute('data-anim', JSON.stringify([
   { group: 1, trigger: 'click', dur: 600, delay: 200, mode: 'linear', maxSpeed: 1.5, accel: 2, minSpeed: 0, decel: 2, to: { left: 20 } },
   { group: 2, trigger: 'click', dur: 600, delay: 200, mode: 'linear', maxSpeed: 1.5, accel: 2, minSpeed: 0, decel: 2, to: { left: 40 } }
 ]));
 WSC.syncStageToModel();
 scBlks[1].dispatchEvent(new WSC.MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+DSC.defaultView.dispatchEvent(new WSC.MouseEvent('pointerup', { bubbles: true }));
 await wait(50);
-DSC.querySelectorAll('#anim-rows details.astep')[0].dispatchEvent(new WSC.MouseEvent('click', { bubbles: true }));
-check('row click previews entry pose', WSC.stepEdit && WSC.stepEdit.el === scBlks[1] && WSC.stepEdit.idx === 0 &&
-  scBlks[1].style.left === '20%' && DSC.querySelector('#anim-rows details.astep.editing') !== null);
-DSC.querySelectorAll('#anim-rows details.astep')[0].querySelector('.adel').dispatchEvent(new WSC.MouseEvent('click', { bubbles: true }));
+const scRows = () => DSC.querySelectorAll('#anim-rows details.astep');
+check('initial row prepended + locked', scRows().length === 3 && !scRows()[0].querySelector('.adel'));
+scRows()[1].dispatchEvent(new WSC.MouseEvent('click', { bubbles: true }));
+check('row click previews entry pose', WSC.stepEdit && WSC.stepEdit.el === scBlks[1] && WSC.stepEdit.idx === 1 &&
+  scBlks[1].style.left === '20%' && scRows()[1].classList.contains('editing'));
+scRows()[1].querySelector('.adel').dispatchEvent(new WSC.MouseEvent('click', { bubbles: true }));
 const restList = JSON.parse(scBlks[1].getAttribute('data-anim'));
-check('deleted entry gone, element at rest', restList.length === 1 && restList[0].group === 2 &&
+check('deleted entry gone, element at rest', restList.length === 2 && restList[0].initial === true && restList[1].group === 2 &&
   scBlks[1].style.left === '8%' && WSC.stepEdit === null);
 
 // ---------- 34. whole-item drag (grab anywhere except text) ----------
@@ -1500,18 +1524,20 @@ await wait(400);
 const WSB = domSB.window, DSB = WSB.document;
 WSB.gotoSlide(WSB.App.model.slideOrder[1]);
 await wait(100);
-check('scrub footer idle without stages', !!DSB.querySelector('#scrub-range') &&
-  DSB.querySelector('#scrub-range').disabled === true &&
-  DSB.querySelector('#scrub-label').textContent.includes('No animation'));
+check('scrub starts at initial stage', !!DSB.querySelector('#scrub-range') &&
+  DSB.querySelector('#scrub-range').disabled === false &&
+  DSB.querySelector('#scrub-range').value === '1' &&
+  DSB.querySelector('#scrub-label').textContent === 'Stage 1 / 1');
 const sbBlks = DSB.querySelectorAll('#stage .blk');
 const step = (group, trigger, left) => ({ group, trigger, dur: 600, delay: 200, mode: 'linear', maxSpeed: 1.5, accel: 2, minSpeed: 0, decel: 2, to: { left } });
-sbBlks[0].setAttribute('data-anim', JSON.stringify([step(1, 'click', 20), step(3, 'auto', 60)]));
-sbBlks[1].setAttribute('data-anim', JSON.stringify([step(2, 'auto', 40)]));
+const istep = (group, trigger, left) => Object.assign({ initial: true }, step(group, trigger, left));
+sbBlks[0].setAttribute('data-anim', JSON.stringify([istep(1, 'click', 20), step(3, 'auto', 60)]));
+sbBlks[1].setAttribute('data-anim', JSON.stringify([istep(1, 'auto', 8), step(2, 'auto', 40)]));
 WSB.syncStageToModel();
 WSB.rebuildScrub();
 const sRange = DSB.querySelector('#scrub-range');
-check('slider spans slide groups', sRange.disabled === false && sRange.max === '3' && sRange.value === '0' &&
-  WSB.slideGroups().join(',') === '1,3,2'.split(',').sort().join(','));
+check('slider spans slide groups', sRange.disabled === false && sRange.max === '3' && sRange.value === '1' &&
+  WSB.slideGroups().join(',') === '1,2,3');
 check('any-click makes a click stage', WSB.groupTrigger(1) === 'click' && WSB.groupTrigger(2) === 'auto' && WSB.groupTrigger(3) === 'auto');
 check('scrub never dirties the deck', (function(){
   const before = JSON.stringify(WSB.App.model);
@@ -1527,7 +1553,7 @@ check('sync restores rest pose', sbBlks[0].style.left === '8%' && sbBlks[1].styl
   /left:\s*8%/.test(WSB.App.model.slides[WSB.App.activeId].html));
 sRange.dispatchEvent(new WSB.Event('input', { bubbles: true }));
 check('re-scrub reapplies poses', sbBlks[0].style.left === '20%' && sbBlks[1].style.left === '40%');
-// selecting a step drives slider + global state to that stage
+// selecting the initial step drives slider + global state to its stage
 sbBlks[0].dispatchEvent(new WSB.MouseEvent('mousedown', { bubbles: true, cancelable: true }));
 DSB.defaultView.dispatchEvent(new WSB.MouseEvent('pointerup', { bubbles: true }));
 await wait(50);
@@ -1535,7 +1561,7 @@ DSB.querySelectorAll('#anim-rows details.astep')[0].dispatchEvent(new WSB.MouseE
 check('step select drives slider', WSB.scrubGroup === 1 && sRange.value === '1' && sbBlks[1].style.left === '8%');
 check('click stage indicated', DSB.querySelector('#scrub-kind').textContent.includes('click') &&
   DSB.querySelector('#scrub-kind').className === 'click');
-// editing the group number drives global state to the new stage
+// editing the initial group number drives global state to the new stage
 const grpInput = DSB.querySelector('#anim-rows details.astep input');
 grpInput.value = '3';
 grpInput.dispatchEvent(new WSB.Event('change', { bubbles: true }));
@@ -1552,7 +1578,7 @@ check('mixed group is a click stage (no auto-chain)', WSB.kfTimer === 0);
 WSB.kfGroups = []; WSB.kfGroupIdx = -1;
 WSB.gotoSlide(WSB.App.model.slideOrder[0]);
 await wait(100);
-check('slide change resets scrub', WSB.scrubGroup === 0 && DSB.querySelector('#scrub-range').disabled === true);
+check('slide change resets scrub', WSB.scrubGroup === 1 && DSB.querySelector('#scrub-range').value === '1');
 
 // ---------- 36. size handles edit values + shape keyframes ----------
 const domHZ = makeDom(html);
@@ -1595,8 +1621,8 @@ check('capture reads shape size', WHZ.captureKeyframe(hzArrowBlk).slen === 78);
 WHZ.applyKeyframeState(hzArrowBlk, { slen: 40 });
 check('apply writes shape size', hzSvg.getAttribute('data-len') === '40' && hzSvg.innerHTML.includes('x2="28"'));
 check('clean keeps shape keys', (function(){
-  const list = WHZ.parseAnimList(JSON.stringify([{ group: 1, trigger: 'click', dur: 600, delay: 200, mode: 'linear', maxSpeed: 1.5, accel: 2, minSpeed: 0, decel: 2, to: { slen: 50, sr: 99, sw: 'x' } }]));
-  return list.length === 1 && list[0].to.slen === 50 && list[0].to.sr === 60 && list[0].to.sw === undefined;
+  const list = WHZ.parseAnimList(JSON.stringify([{ group: 1, trigger: 'click', dur: 600, delay: 200, mode: 'linear', maxSpeed: 1.5, accel: 2, minSpeed: 0, decel: 2, to: { slen: 50, sr: 999, sw: 'x' } }]));
+  return list.length === 1 && list[0].to.slen === 50 && list[0].to.sr === 250 && list[0].to.sw === undefined;
 })());
 WHZ.insertShape('rectangle');
 const rBlks = DHZ.querySelectorAll('#stage .blk');
@@ -1637,14 +1663,14 @@ WHZ.syncStageToModel();
 check('sync restores shape size', rSvg.getAttribute('data-width') !== '90');
 WHZ.setSingleSelection(rBlkEl);
 check('step rows have shape fields', DHZ.querySelector('#anim-rows').textContent.includes('Shape width'));
-const swRow = Array.prototype.find.call(DHZ.querySelectorAll('#anim-rows .aline'), (l) => l.firstChild.textContent === 'Shape width');
+const swRow = Array.prototype.find.call(DHZ.querySelectorAll('#anim-rows details.astep')[1].querySelectorAll('.aline'), (l) => l.firstChild.textContent === 'Shape width');
 swRow.querySelector('input').value = '95';
 swRow.querySelector('input').dispatchEvent(new WHZ.Event('change', { bubbles: true }));
-check('shape field commits to step', JSON.parse(rBlkEl.getAttribute('data-anim'))[0].to.sw === 95);
+check('shape field commits to step', JSON.parse(rBlkEl.getAttribute('data-anim')).filter((e) => !e.initial)[0].to.sw === 95);
 dragHandle('#media-resizer .mhandle', 'both', -5000, -5000);
 await wait(50);
 check('shape drags clamp to min in the step', (function(){
-  const to = JSON.parse(rBlkEl.getAttribute('data-anim'))[0].to;
+  const to = JSON.parse(rBlkEl.getAttribute('data-anim')).filter((e) => !e.initial)[0].to;
   return to.sw === 10 && to.sh === 10;
 })());
 
@@ -1680,6 +1706,37 @@ check('overlay falls back without CTM', (function(){
   WTB.positionResizer();
   return DTB.querySelector('#media-resizer').hidden === false;
 })());
+
+// ---------- 38. initial-step model units ----------
+const domIN = makeDom(html);
+await wait(400);
+const WIN = domIN.window, DIN = WIN.document;
+WIN.gotoSlide(WIN.App.model.slideOrder[1]);
+await wait(100);
+check('slider minimum is stage 1', DIN.querySelector('#scrub-range').min === '1');
+const inBlk = DIN.querySelector('#stage .blk');
+inBlk.removeAttribute('data-anim');
+check('ensure prepends initial once', WIN.ensureInitialStep(inBlk) === true &&
+  JSON.parse(inBlk.getAttribute('data-anim'))[0].initial === true &&
+  WIN.ensureInitialStep(inBlk) === false &&
+  JSON.parse(inBlk.getAttribute('data-anim')).length === 1);
+inBlk.style.left = '33%';
+WIN.syncInitialStep(inBlk);
+check('sync mirrors rest', JSON.parse(inBlk.getAttribute('data-anim'))[0].to.left === 33);
+WIN.setSingleSelection(inBlk);
+const leftRow = Array.prototype.find.call(DIN.querySelectorAll('#anim-rows details.astep')[0].querySelectorAll('.aline'), (l) => l.firstChild.textContent === 'Left %');
+leftRow.querySelector('input').value = '44';
+leftRow.querySelector('input').dispatchEvent(new WIN.Event('change', { bubbles: true }));
+const afterCommit = JSON.parse(inBlk.getAttribute('data-anim'));
+check('initial commit keeps flag + applies rest', afterCommit.length === 1 && afterCommit[0].initial === true &&
+  afterCommit[0].to.left === 44 && inBlk.style.left === '44%');
+afterCommit[0].group = 5;
+inBlk.setAttribute('data-anim', JSON.stringify(afterCommit));
+const hideSec = DIN.createElement('section');
+hideSec.appendChild(inBlk.cloneNode(true));
+WIN.kfReset(hideSec, false);
+check('appear-later starts hidden', hideSec.querySelector('.blk').style.visibility === 'hidden');
+WIN.kfGroups = []; WIN.kfGroupIdx = -1;
 
 console.log(failures === 0 ? '\nALL TESTS PASSED' : `\n${failures} TEST(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);
