@@ -1468,8 +1468,15 @@ scBlks[0].style.left = '70%';
 WSC.commitStepGeometry(scBlks[0]);
 const scList = JSON.parse(scBlks[0].getAttribute('data-anim'));
 const scEntry = scList[scList.length - 1];
-check('drop captures pose, step preview shows', scEntry.to.left === 70 && scBlks[0].style.left === '8%');
+check('drop captures pose and keeps showing the step', scEntry.to.left === 70 && scBlks[0].style.left === '70%');
 check('model keeps rest pose', /left:\s*8%/.test(WSC.App.model.slides.s2.html) && !/left:\s*70%/.test(WSC.App.model.slides.s2.html));
+// consecutive edit without deselect: starts from the shown step pose
+scBlks[0].style.left = '80%';
+WSC.commitStepGeometry(scBlks[0]);
+const scList2 = JSON.parse(scBlks[0].getAttribute('data-anim'));
+const scEntry2 = scList2[scList2.length - 1];
+check('second drop without reselect works', scEntry2.to.left === 80 && scBlks[0].style.left === '80%' &&
+  /left:\s*8%/.test(WSC.App.model.slides.s2.html) && !/left:\s*80%/.test(WSC.App.model.slides.s2.html));
 // sync guard: preview pose never persists
 scBlks[0].style.left = '70%';
 WSC.syncStageToModel();

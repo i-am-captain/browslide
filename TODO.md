@@ -20,6 +20,18 @@ decide, document below, continue.
 - [x] 11. Step-UI cleanup: per-kind field filtering; line width/color + geometry + rotate live in step rows (initial row owns rest-only stroke); Shapes panel keeps select + insert only. Done.
 - [x] 12. Docs (README) + full suite green + commits. Done: 424 checks pass.
 
+# Round 5 (drop jump-back fix)
+
+- [x] 13. Step-edit drops keep showing the edited step (canvas no longer strands at rest; consecutive edits work without deselect). Done: 425 checks pass.
+
+# Decisions (round 5)
+
+- `commitStepGeometry` re-applies the written step pose after saving rest, because the
+  scrub layer deliberately skips step-edited elements (step preview wins) — without the
+  re-apply the canvas sat at rest while the step stayed active, and the next drag
+  started from the wrong pose. Overlay follows via `positionResizer` in commit,
+  step enter/exit, and `scrubApply`.
+
 # Decisions (round 3)
 
 - Scrub slider range is 0..maxGroup, 0 = rest pose (default on slide change). An item with no

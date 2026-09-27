@@ -2498,6 +2498,7 @@ function enterStepEdit(el, idx){
   if (list[idx].group !== scrubGroup) scrubGroup = list[idx].group; /* step select drives the slider */
   refreshScrubUI();
   scrubApply();
+  positionResizer();
   return true;
 }
 function exitStepEdit(){
@@ -2506,10 +2507,12 @@ function exitStepEdit(){
   stepEdit = null;
   if (se.el && document.contains(se.el)) restoreStepState(se.el, se.rest);
   scrubApply();
+  positionResizer();
 }
 function commitStepGeometry(el){
   /* geometry drags (or transform inputs) while a step is being edited:
-     capture the live pose into that step, then restore the rest pose */
+     capture the live pose into that step, save rest, then keep showing
+     the edited step (never strand the canvas at rest mid-edit) */
   var se = stepEdit;
   if (!se || se.el !== el) { syncInitialStep(el); scrubDrop(el); return false; }
   var list = animListOf(el);
@@ -2521,9 +2524,10 @@ function commitStepGeometry(el){
   });
   writeAnimList(el, list);
   restoreStepState(el, se.rest);
-  persistSlide();
+  persistSlide(); /* saves rest; rebuilds scrub (skips this element: step preview wins) */
+  applyKeyframeState(el, entry.to);
+  positionResizer();
   refreshAnimUI();
-  scrubApply();
   return true;
 }
 function captureKeyframe(el){
@@ -2612,6 +2616,7 @@ function scrubApply(){
     scrubSnaps.push({ el: el, snap: snapStepState(el) });
     applyKeyframeState(el, t.entry.to);
   });
+  positionResizer();
 }
 function refreshScrubUI(){
   var range = $('#scrub-range'), lab = $('#scrub-label'), kind = $('#scrub-kind'), ticks = $('#scrub-ticks');
