@@ -1192,16 +1192,29 @@ const domS3 = makeDom(html);
 await wait(400);
 const WS3 = domS3.window, DS3 = WS3.document;
 check('shape defaults', WS3.App.model.settings.lineWidth === 3 && WS3.App.model.settings.lineColor === '#2563eb');
-check('shape controls live in shapes menu', !!DS3.querySelector('#shapes-wrap #shape-select') && !!DS3.querySelector('#shapes-wrap #btn-shape') &&
-  !!DS3.querySelector('#shapes-wrap #shape-width') && !!DS3.querySelector('#shapes-wrap #shape-color'));
-DS3.querySelector('#shape-width').value = '12';
-DS3.querySelector('#shape-width').dispatchEvent(new WS3.Event('change', { bubbles: true }));
-DS3.querySelector('#shape-color').value = '#ff0000';
-DS3.querySelector('#shape-color').dispatchEvent(new WS3.Event('change', { bubbles: true }));
+check('shapes menu keeps select+insert only', !!DS3.querySelector('#shapes-wrap #shape-select') && !!DS3.querySelector('#shapes-wrap #btn-shape') &&
+  !DS3.querySelector('#shapes-wrap #shape-width') && !DS3.querySelector('#shapes-wrap #shape-color') &&
+  !DS3.querySelector('#shapes-wrap #shape-rot') && !DS3.querySelector('#shapes-wrap #shape-params'));
 DS3.querySelector('#btn-shape').click();
 await wait(100);
-const shSvg = DS3.querySelector('#stage .blk svg');
-check('new shape uses presets', !!shSvg && shSvg.getAttribute('stroke-width') === '12' && shSvg.getAttribute('stroke') === '#ff0000');
+const shSvg0 = DS3.querySelector('#stage .blk svg');
+check('new shape uses presets', !!shSvg0 && shSvg0.getAttribute('stroke-width') === '3' && shSvg0.getAttribute('stroke') === '#2563eb');
+// stroke settings live in the initial step row now (source of truth)
+const shBlks0 = DS3.querySelectorAll('#stage .blk');
+WS3.setSingleSelection(shBlks0[shBlks0.length - 1]);
+const shRow0 = () => DS3.querySelectorAll('#anim-rows details.astep')[0];
+const shField = (label) => Array.prototype.find.call(shRow0().querySelectorAll('.aline'), (l) => l.firstChild.textContent === label).querySelector('input');
+check('initial row owns stroke settings', !!shField('Line width') && !!shField('Line color'));
+shField('Line width').value = '12';
+shField('Line width').dispatchEvent(new WS3.Event('change', { bubbles: true }));
+shField('Line color').value = '#ff0000';
+shField('Line color').dispatchEvent(new WS3.Event('change', { bubbles: true }));
+check('stroke edit applies live + presets', shSvg0.getAttribute('stroke-width') === '12' && shSvg0.getAttribute('stroke') === '#ff0000' &&
+  WS3.App.model.settings.lineWidth === 12 && WS3.App.model.settings.lineColor === '#ff0000');
+DS3.querySelector('#btn-shape').click();
+await wait(100);
+const shSvg = DS3.querySelectorAll('#stage .blk svg')[1];
+check('next shape uses updated presets', !!shSvg && shSvg.getAttribute('stroke-width') === '12' && shSvg.getAttribute('stroke') === '#ff0000');
 DS3.querySelector('#btn-save').click();
 await wait(300);
 const tS3 = await blobToText(WS3.__savedBlob, WS3);
@@ -1272,21 +1285,27 @@ WT2.toggleSelection(mBlks[1]);
 DT2.dispatchEvent(new WT2.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 check('Escape clears whole set', WT2.resizer.el === null && WT2.resizer.extra.length === 0 &&
   DT2.querySelectorAll('#stage-wrap .selextra').length === 0);
-// transform inputs: disabled empty, live on selection
-check('transform inputs disabled without selection', DT2.querySelector('#shape-rot').disabled === true);
+// rotate + stroke live in the initial step row now (single source of truth)
 WT2.setSingleSelection(mBlks[0]);
-check('transform inputs enable on selection', DT2.querySelector('#shape-rot').disabled === false);
-DT2.querySelector('#shape-rot').value = '45';
-DT2.querySelector('#shape-rot').dispatchEvent(new WT2.Event('change', { bubbles: true }));
+const tRows = () => DT2.querySelectorAll('#anim-rows details.astep');
+const tField = (label) => Array.prototype.find.call(tRows()[0].querySelectorAll('.aline'), (l) => l.firstChild.textContent === label).querySelector('input,select');
+check('initial row owns rotate', !!tField('Rotation °'));
+tField('Rotation °').value = '45';
+tField('Rotation °').dispatchEvent(new WT2.Event('change', { bubbles: true }));
 check('rotate applies to selection', mBlks[0].getAttribute('data-rot') === '45' && mBlks[0].style.transform.includes('rotate(45deg)'));
-check('literal scale inputs removed', !DT2.querySelector('#shape-sx') && !DT2.querySelector('#shape-sy'));
+check('panel scale inputs removed', !DT2.querySelector('#shape-sx') && !DT2.querySelector('#shape-sy') && !DT2.querySelector('#shape-rot'));
 check('transform persists in model', WT2.activeSlide().html.includes('data-rot="45"'));
-// width/color live-apply on selected shape
+// stroke live-applies on selected shape via its initial row
 WT2.insertShape('circle');
 const shBlk = DT2.querySelectorAll('#stage .blk');
 WT2.setSingleSelection(shBlk[shBlk.length - 1]);
-DT2.querySelector('#shape-width').value = '14';
-DT2.querySelector('#shape-width').dispatchEvent(new WT2.Event('change', { bubbles: true }));
+check('shape rows hide scale, show geometry', (function(){
+  const labels = Array.prototype.map.call(DT2.querySelectorAll('#anim-rows details.astep')[0].querySelectorAll('.aline'), (l) => l.firstChild.textContent);
+  return labels.indexOf('Scale X') < 0 && labels.indexOf('Radius') >= 0;
+})());
+const wField = Array.prototype.find.call(DT2.querySelectorAll('#anim-rows details.astep')[0].querySelectorAll('.aline'), (l) => l.firstChild.textContent === 'Line width').querySelector('input');
+wField.value = '14';
+wField.dispatchEvent(new WT2.Event('change', { bubbles: true }));
 check('width live-applies to shape', DT2.querySelector('#stage .blk svg').getAttribute('stroke-width') === '14' ||
   Array.prototype.some.call(DT2.querySelectorAll('#stage .blk svg'), (s) => s.getAttribute('stroke-width') === '14'));
 // anim add targets primary selection (fresh nodes: present round-trip rebuilt the stage)
@@ -1422,12 +1441,14 @@ WAB.insertShape('circle');
 await wait(100);
 const shWraps = Array.prototype.filter.call(DAB.querySelectorAll('#stage .blk'), (b) => b.querySelector('svg'));
 WAB.setSingleSelection(shWraps[0]);
-let lenInput = DAB.querySelector('#shape-params input');
+const radRow0 = DAB.querySelectorAll('#anim-rows details.astep')[0];
+const radField = (row) => Array.prototype.find.call(row.querySelectorAll('.aline'), (l) => l.firstChild.textContent === 'Radius').querySelector('input');
+let lenInput = radField(radRow0);
 lenInput.value = '20';
 lenInput.dispatchEvent(new WAB.Event('change', { bubbles: true }));
 lenInput.focus();
 shWraps[1].dispatchEvent(new WAB.MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-check('shape rows follow selection', DAB.querySelector('#shape-params input').value === '40');
+check('shape rows follow selection', radField(DAB.querySelectorAll('#anim-rows details.astep')[0]).value === '40');
 check('first shape untouched', shWraps[0].querySelector('svg').getAttribute('data-radius') === '20');
 
 // ---------- 33. step scrub-editing ----------
@@ -1662,8 +1683,8 @@ check('scrub applies shape size', rSvg.getAttribute('data-width') === '90' && rS
 WHZ.syncStageToModel();
 check('sync restores shape size', rSvg.getAttribute('data-width') !== '90');
 WHZ.setSingleSelection(rBlkEl);
-check('step rows have shape fields', DHZ.querySelector('#anim-rows').textContent.includes('Shape width'));
-const swRow = Array.prototype.find.call(DHZ.querySelectorAll('#anim-rows details.astep')[1].querySelectorAll('.aline'), (l) => l.firstChild.textContent === 'Shape width');
+check('step rows have shape fields', DHZ.querySelector('#anim-rows').textContent.includes('Width'));
+const swRow = Array.prototype.find.call(DHZ.querySelectorAll('#anim-rows details.astep')[1].querySelectorAll('.aline'), (l) => l.firstChild.textContent === 'Width');
 swRow.querySelector('input').value = '95';
 swRow.querySelector('input').dispatchEvent(new WHZ.Event('change', { bubbles: true }));
 check('shape field commits to step', JSON.parse(rBlkEl.getAttribute('data-anim')).filter((e) => !e.initial)[0].to.sw === 95);
@@ -1737,6 +1758,48 @@ hideSec.appendChild(inBlk.cloneNode(true));
 WIN.kfReset(hideSec, false);
 check('appear-later starts hidden', hideSec.querySelector('.blk').style.visibility === 'hidden');
 WIN.kfGroups = []; WIN.kfGroupIdx = -1;
+
+// ---------- 39. step rows filter fields per kind, stroke on initial only ----------
+const domFF = makeDom(html);
+await wait(400);
+const WFF = domFF.window, DFF = WFF.document;
+WFF.gotoSlide(WFF.App.model.slideOrder[1]);
+await wait(100);
+const labelsOf = (idx) => Array.prototype.map.call(DFF.querySelectorAll('#anim-rows details.astep')[idx].querySelectorAll('.aline'), (l) => l.firstChild.textContent);
+WFF.insertShape('arrow-right');
+WFF.insertShape('circle');
+WFF.insertShape('rectangle');
+WFF.insertShape('star');
+await wait(100);
+const ffBlks = Array.prototype.filter.call(DFF.querySelectorAll('#stage .blk'), (b) => b.querySelector('svg'));
+WFF.setSingleSelection(ffBlks[0]);
+let L = labelsOf(0);
+check('arrow row: Length only', L.indexOf('Length') >= 0 && L.indexOf('Radius') < 0 && L.indexOf('Width') < 0 && L.indexOf('Height') < 0 &&
+  L.indexOf('Scale X') < 0 && L.indexOf('Rotation °') >= 0);
+check('arrow initial owns stroke', L.indexOf('Line width') >= 0 && L.indexOf('Line color') >= 0);
+WFF.setSingleSelection(ffBlks[1]);
+L = labelsOf(0);
+check('circle row: Radius only', L.indexOf('Radius') >= 0 && L.indexOf('Length') < 0 && L.indexOf('Width') < 0 && L.indexOf('Scale X') < 0);
+WFF.setSingleSelection(ffBlks[2]);
+L = labelsOf(0);
+check('rectangle row: Width+Height', L.indexOf('Width') >= 0 && L.indexOf('Height') >= 0 && L.indexOf('Length') < 0 && L.indexOf('Scale X') < 0);
+WFF.setSingleSelection(ffBlks[3]);
+L = labelsOf(0);
+check('star row: no geometry, keeps rotate', L.indexOf('Length') < 0 && L.indexOf('Radius') < 0 && L.indexOf('Width') < 0 &&
+  L.indexOf('Height') < 0 && L.indexOf('Rotation °') >= 0);
+// plain text block: scale back, no shape geometry, no stroke rows
+const ffPlain = Array.prototype.filter.call(DFF.querySelectorAll('#stage .blk'), (b) => !b.querySelector('svg'))[0];
+WFF.setSingleSelection(ffPlain);
+L = labelsOf(0);
+check('plain row: scale, no geometry/stroke', L.indexOf('Scale X') >= 0 && L.indexOf('Scale Y') >= 0 &&
+  L.indexOf('Length') < 0 && L.indexOf('Radius') < 0 && L.indexOf('Line width') < 0);
+// non-initial shape row: geometry yes, stroke no
+WFF.setSingleSelection(ffBlks[1]);
+DFF.querySelector('#btn-anim-add').click();
+await wait(50);
+const ffRows = DFF.querySelectorAll('#anim-rows details.astep');
+const L2 = Array.prototype.map.call(ffRows[1].querySelectorAll('.aline'), (l) => l.firstChild.textContent);
+check('follow-up row: geometry without stroke', L2.indexOf('Radius') >= 0 && L2.indexOf('Line width') < 0 && L2.indexOf('Line color') < 0);
 
 console.log(failures === 0 ? '\nALL TESTS PASSED' : `\n${failures} TEST(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);

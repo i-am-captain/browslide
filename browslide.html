@@ -335,10 +335,6 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
         <option value="check">Check ✓</option>
         <option value="cross">Cross ✕</option>
       </select></div>
-      <div class="srow"><span>Line width</span><input id="shape-width" type="number" min="1" max="32" title="Stroke width: preset for new shapes, live for the selected shape"></div>
-      <div class="srow"><span>Line color</span><input id="shape-color" type="color" value="#2563eb" title="Stroke color: preset for new shapes, live for the selected shape"></div>
-      <div id="shape-params"></div>
-      <div class="srow"><span>Rotate °</span><input id="shape-rot" type="number" min="-180" max="180" step="1" title="Rotate the selected item (degrees)"></div>
       <div class="srow"><span></span><button id="btn-shape">Add shape</button></div>
     </details>
     <div id="size-meter">Est. save size: —</div>
@@ -1012,97 +1008,10 @@ function renderAll(){
   $('#opt-maxdim').value = String(App.model.settings.maxDim);
   $('#opt-showbar').checked = !!App.model.settings.showBar;
   $('#opt-tight').checked = !!App.model.settings.tight;
-  refreshShapesUI();
 }
 function persistSlide(){
   syncStageToModel(); refreshDirty(); scheduleSize(); scheduleAutosave();
   rebuildScrub();
-}
-function refreshShapesUI(){
-  /* presets, or the selected shape's live values when one is selected */
-  var wInput = $('#shape-width');
-  if (!wInput) return;
-  var svg = selectedShapeSvg();
-  if (svg) {
-    var sw = parseFloat(svg.getAttribute('stroke-width'));
-    wInput.value = (sw >= 1 && sw <= 32) ? Math.round(sw) : App.model.settings.lineWidth;
-    var sc = svg.getAttribute('stroke') || '';
-    $('#shape-color').value = (/^#[0-9a-f]{6}$/i.test(sc) ? sc : App.model.settings.lineColor);
-  } else {
-    if (document.activeElement !== wInput) wInput.value = App.model.settings.lineWidth;
-    $('#shape-color').value = App.model.settings.lineColor;
-  }
-  var hasSel = !!(resizer.el && document.contains(resizer.el));
-  var t = hasSel ? transformOf(resizer.el) : { rot: 0, sx: 1, sy: 1 };
-  var rInput = $('#shape-rot');
-  if (document.activeElement !== rInput) rInput.value = t.rot;
-  rInput.disabled = !hasSel;
-  renderShapeParams();
-}
-var shapeRowsFor = null;
-function renderShapeParams(){
-  /* geometry fields for the selected shape kind (rebuilt on selection change) */
-  var host = $('#shape-params');
-  if (!host) return;
-  var el = selectedAnimTarget();
-  if (shapeRowsFor === el && host.firstChild && host.contains(document.activeElement)) return; /* same shape mid-edit: keep caret */
-  shapeRowsFor = el;
-  host.innerHTML = '';
-  var svg = selectedShapeSvg();
-  if (!svg) return;
-  var sp = shapeParams(svg);
-  if (!sp || !sp.def.params.length) return;
-  sp.def.params.forEach(function(pd){
-    var row = document.createElement('div');
-    row.className = 'srow';
-    var lab = document.createElement('span');
-    lab.textContent = pd.label;
-    var inp = document.createElement('input');
-    inp.type = 'number';
-    inp.min = pd.min;
-    if (pd.max !== undefined && pd.max !== null) inp.max = pd.max;
-    inp.step = 1;
-    inp.value = sp.vals[pd.key];
-    inp.title = pd.label + ' of this ' + (svg.getAttribute('data-kind') || 'shape');
-    (function(key, min, max){
-      inp.addEventListener('change', function(e){
-        var v = parseFloat(e.target.value);
-        if (!isFinite(v)) return;
-        v = Math.max(min, v);
-        if (max !== undefined && max !== null) v = Math.min(max, v);
-        var blk = (svg.closest && svg.closest('.blk')) || null;
-        if (blk) maybeAutoStepEdit([blk]); /* geometry edits land in the displayed step */
-        if (blk) forgetScrubbedRest([blk]);
-        svg.setAttribute('data-' + key, String(v));
-        renderShape(svg);
-        if (blk) commitStepGeometry(blk);
-        persistSlide();
-        refreshShapesUI();
-      });
-    })(pd.key, pd.min, pd.max);
-    row.appendChild(lab);
-    row.appendChild(inp);
-    host.appendChild(row);
-  });
-}
-function readTransformInputs(){
-  var r = parseFloat($('#shape-rot').value);
-  return { rot: isFinite(r) ? Math.max(-180, Math.min(180, r)) : 0 };
-}
-function transformChanged(){
-  var els = selectedItems();
-  if (!els.length) return;
-  maybeAutoStepEdit(els);
-  forgetScrubbedRest(els);
-  var t = readTransformInputs();
-  els.forEach(function(el){
-    if (t.rot) el.setAttribute('data-rot', String(t.rot));
-    else el.removeAttribute('data-rot');
-    applyTransform(el);
-  });
-  els.forEach(commitStepGeometry);
-  persistSlide();
-  refreshShapesUI();
 }
 var onStageInput = debounce(function(){
   syncStageToModel();
@@ -1874,7 +1783,6 @@ function setSingleSelection(el){
   resizerOverlay();
   positionResizer();
   refreshAnimUI();
-  refreshShapesUI();
 }
 function toggleSelection(el){
   var all = selectedItems();
@@ -1887,7 +1795,6 @@ function toggleSelection(el){
   resizerOverlay();
   positionResizer();
   refreshAnimUI();
-  refreshShapesUI();
 }
 function clearSelection(){
   exitStepEdit();
@@ -1898,7 +1805,6 @@ function clearSelection(){
   Array.prototype.forEach.call(document.querySelectorAll('#stage-wrap .selextra'), function(n){ n.remove(); });
   positionResizer();
   refreshAnimUI();
-  refreshShapesUI();
 }
 /* ---- internal block clipboard (Ctrl+C / Ctrl+V on selected blocks) ---- */
 var clipItems = [];
@@ -1934,7 +1840,6 @@ function pasteClipboard(){
   resizerOverlay();
   positionResizer();
   refreshAnimUI();
-  refreshShapesUI();
   return true;
 }
 function caretInStageText(){
@@ -2886,12 +2791,38 @@ function buildAnimRows(el){
     var fW = line('Width %', animNum(entry.to.width, 1, 300, 1, 'Target width in percent'));
     var fO = line('Opacity', animNum(entry.to.opacity, 0, 1, 0.05, 'Target opacity 0-1'));
     var fR = line('Rotation °', animNum(entry.to.rot, -720, 720, 1, 'Target rotation in degrees'));
-    var fX = line('Scale X', animNum(entry.to.sx, 0.05, 10, 0.1, 'Target horizontal scale'));
-    var fY = line('Scale Y', animNum(entry.to.sy, 0.05, 10, 0.1, 'Target vertical scale'));
-    var fSL = line('Shape len', animNum(entry.to.slen, 5, 500, 1, 'Arrow/line length target'));
-    var fSR = line('Shape radius', animNum(entry.to.sr, 2, 250, 1, 'Circle radius target'));
-    var fSW = line('Shape width', animNum(entry.to.sw, 5, 500, 1, 'Rectangle/ellipse width target'));
-    var fSH = line('Shape height', animNum(entry.to.sh, 5, 500, 1, 'Shape height target'));
+    /* kind-filtered values: shapes show only their own geometry, never scale;
+       plain items show scale instead. Rest-only stroke settings live once,
+       on the initial row (source of truth for the initial state). */
+    var rowSvg = shapeSvgOf(el);
+    var rowKind = rowSvg ? rowSvg.getAttribute('data-kind') : null;
+    var rowDef = (rowKind && SHAPE_DEFS[rowKind]) || null;
+    var fX = null, fY = null;
+    if (!rowSvg) {
+      fX = line('Scale X', animNum(entry.to.sx, 0.05, 10, 0.1, 'Target horizontal scale'));
+      fY = line('Scale Y', animNum(entry.to.sy, 0.05, 10, 0.1, 'Target vertical scale'));
+    }
+    var shapeFields = [];
+    if (rowDef) {
+      rowDef.params.forEach(function(pd){
+        var sk = shapeSkeyFor(rowKind, pd.key);
+        if (!sk) return;
+        var lim = shapeKeyLimits(sk);
+        var inp = line(pd.label, animNum(entry.to[sk], pd.min, pd.max || lim[1], 1, pd.label + ' target'));
+        shapeFields.push({ inp: inp, skey: sk, min: pd.min, max: pd.max || lim[1] });
+      });
+    }
+    var fLW = null, fLC = null;
+    if (entry.initial && rowSvg) {
+      fLW = animNum(parseFloat(rowSvg.getAttribute('stroke-width')), 1, 32, 1, 'Stroke width (initial state)');
+      line('Line width', fLW);
+      fLC = document.createElement('input');
+      fLC.type = 'color';
+      var curC = rowSvg.getAttribute('stroke') || '';
+      fLC.value = (/^#[0-9a-f]{6}$/i.test(curC) ? curC : '#2563eb');
+      fLC.title = 'Stroke color (initial state)';
+      line('Line color', fLC);
+    }
     function rv(inp, min, max, fb){
       var v = parseFloat(inp.value);
       return isFinite(v) ? Math.max(min, Math.min(max, v)) : fb;
@@ -2904,9 +2835,28 @@ function buildAnimRows(el){
       var t = rowTarget(det);
       if (!t) { refreshAnimUI(); return; }
       var next = t.list, idx = t.idx, el = t.el;
+      var wasInitial = !!next[idx].initial;
+      /* rest-only stroke settings (initial row): apply to the shape + presets first */
+      var svgAlive = (wasInitial && fLW) ? shapeSvgOf(el) : null;
+      if (svgAlive && document.contains(svgAlive)) {
+        if (stepEdit && stepEdit.el === el) exitStepEdit();
+        scrubForget(el);
+        var lw = parseInt(fLW.value, 10);
+        if (lw >= 1 && lw <= 32) {
+          App.model.settings.lineWidth = lw;
+          svgAlive.setAttribute('stroke-width', String(lw));
+        }
+        if (fLC) {
+          var lc = String(fLC.value || '');
+          if (/^#[0-9a-f]{6}$/i.test(lc)) {
+            App.model.settings.lineColor = lc;
+            svgAlive.setAttribute('stroke', lc);
+          }
+        }
+      }
       var to = {};
-      var L = opt(fL), T = opt(fT), Wd = opt(fW), O = opt(fO), R = opt(fR), X = opt(fX), Y = opt(fY);
-      var SL = opt(fSL), SR = opt(fSR), SW = opt(fSW), SH = opt(fSH);
+      var L = opt(fL), T = opt(fT), Wd = opt(fW), O = opt(fO), R = opt(fR);
+      var X = fX ? opt(fX) : undefined, Y = fY ? opt(fY) : undefined;
       if (L !== undefined) to.left = Math.max(-100, Math.min(300, L));
       if (T !== undefined) to.top = Math.max(-100, Math.min(300, T));
       if (Wd !== undefined && Wd >= 1) to.width = Math.max(1, Math.min(300, Wd));
@@ -2914,10 +2864,10 @@ function buildAnimRows(el){
       if (R !== undefined) to.rot = Math.max(-720, Math.min(720, R));
       if (X !== undefined && X > 0) to.sx = Math.max(0.05, Math.min(10, X));
       if (Y !== undefined && Y > 0) to.sy = Math.max(0.05, Math.min(10, Y));
-      if (SL !== undefined) to.slen = Math.max(5, Math.min(500, SL));
-      if (SR !== undefined) to.sr = Math.max(2, Math.min(250, SR));
-      if (SW !== undefined) to.sw = Math.max(5, Math.min(500, SW));
-      if (SH !== undefined) to.sh = Math.max(5, Math.min(500, SH));
+      shapeFields.forEach(function(sf){
+        var v = opt(sf.inp);
+        if (v !== undefined) to[sf.skey] = Math.max(sf.min, Math.min(sf.max, v));
+      });
       var ng = Math.max(1, Math.min(99, parseInt(fGroup.value, 10) || next[idx].group));
       var wasInitial = !!next[idx].initial;
       next[idx] = {
@@ -2953,13 +2903,38 @@ function buildAnimRows(el){
         return;
       }
       writeAnimList(el, next);
-      if (wasInitial) applyKeyframeState(el, next[idx].to); /* initial edits are rest edits: the DOM follows the fields */
+      if (wasInitial) {
+        /* initial edits are rest edits: the DOM follows the fields, totally
+           (fields were built from rest, so untouched values carry through) */
+        var it = next[idx].to;
+        if (it.left !== undefined) el.style.left = it.left + '%';
+        if (it.top !== undefined) el.style.top = it.top + '%';
+        if (it.width !== undefined) el.style.width = it.width + '%';
+        if (it.opacity !== undefined) el.style.opacity = it.opacity;
+        el.setAttribute('data-rot', String(it.rot !== undefined ? it.rot : 0));
+        el.setAttribute('data-sx', String(it.sx !== undefined ? it.sx : 1));
+        el.setAttribute('data-sy', String(it.sy !== undefined ? it.sy : 1));
+        applyTransform(el);
+        var isvg = shapeSvgOf(el);
+        if (isvg) {
+          var itS = false;
+          [['slen', 'len'], ['sr', 'radius'], ['sw', 'width'], ['sh', 'height']].forEach(function(pr){
+            if (it[pr[0]] !== undefined) { isvg.setAttribute('data-' + pr[1], String(it[pr[0]])); itS = true; }
+          });
+          if (itS) renderShape(isvg);
+        }
+        try { delete el._kfSty; } catch (e) {}
+      }
       persistSlide();
       lab.textContent = stepSummary(next[idx]);
       if (stepEdit && stepEdit.el === el && stepEdit.idx === idx) applyKeyframeState(el, next[idx].to);
       if (ng !== scrubGroup) { scrubGroup = ng; rebuildScrub(); } /* group edit drives the slider */
     }
-    [fGroup, fTrig, fDur, fDelay, fMode, fMax, fAcc, fMin, fDec, fL, fT, fW, fO, fR, fX, fY, fSL, fSR, fSW, fSH].forEach(function(inp){
+    var fieldInputs = [fGroup, fTrig, fDur, fDelay, fMode, fMax, fAcc, fMin, fDec, fL, fT, fW, fO, fR];
+    if (fX) fieldInputs.push(fX, fY);
+    shapeFields.forEach(function(sf){ fieldInputs.push(sf.inp); });
+    if (fLW) fieldInputs.push(fLW, fLC);
+    fieldInputs.forEach(function(inp){
       inp.addEventListener('change', commit);
     });
     host.appendChild(det);
@@ -3577,31 +3552,6 @@ function bind(){
   $('#btn-clean-media').addEventListener('click', removeUnusedMedia);
   $('#btn-shape').addEventListener('click', function(){ insertShape($('#shape-select').value); });
   $('#btn-block').addEventListener('click', addTextBlock);
-  $('#shape-width').addEventListener('change', function(e){
-    var v = parseInt(e.target.value, 10);
-    App.model.settings.lineWidth = (v >= 1 && v <= 32) ? v : 3;
-    e.target.value = App.model.settings.lineWidth;
-    var svgs = selectedItems().map(selectedShapeSvg).filter(function(s){ return !!s; });
-    if (svgs.length) {
-      if (stepEdit) exitStepEdit(); /* stroke is rest-only: never baked into a step preview */
-      selectedItems().forEach(function(el){ scrubForget(el); });
-      svgs.forEach(function(svg){ svg.setAttribute('stroke-width', String(App.model.settings.lineWidth)); });
-      persistSlide();
-    } else { refreshDirty(); scheduleAutosave(); }
-  });
-  $('#shape-color').addEventListener('change', function(e){
-    var v = String(e.target.value || '');
-    App.model.settings.lineColor = (/^#[0-9a-f]{6}$/i.test(v) ? v : '#2563eb');
-    e.target.value = App.model.settings.lineColor;
-    var svgs = selectedItems().map(selectedShapeSvg).filter(function(s){ return !!s; });
-    if (svgs.length) {
-      if (stepEdit) exitStepEdit(); /* stroke is rest-only: never baked into a step preview */
-      selectedItems().forEach(function(el){ scrubForget(el); });
-      svgs.forEach(function(svg){ svg.setAttribute('stroke', App.model.settings.lineColor); });
-      persistSlide();
-    } else { refreshDirty(); scheduleAutosave(); }
-  });
-  $('#shape-rot').addEventListener('change', transformChanged);
   $('#anim-hidden').addEventListener('change', function(e){
     var el = selectedAnimTarget();
     if (!el) return;

@@ -17,8 +17,8 @@ decide, document below, continue.
 
 - [x] 9. Fix thinning: fixed `0 0 100 100` viewBox (size params change rendered size); overlay hugs via geometry→screen mapping instead. Done.
 - [x] 10. Initial-step model: every item carries undeletable `initial:true` step 1 (auto) mirroring rest; initial group = appear stage (presenter hides earlier); slider min is 1. Done.
-- [ ] 11. Step-UI cleanup: per-kind field filtering; line width/color + geometry + rotate live in step rows (initial row owns rest-only stroke); Shapes panel keeps select + insert only.
-- [ ] 12. Docs (README) + full suite green + commits.
+- [x] 11. Step-UI cleanup: per-kind field filtering; line width/color + geometry + rotate live in step rows (initial row owns rest-only stroke); Shapes panel keeps select + insert only. Done.
+- [x] 12. Docs (README) + full suite green + commits. Done: 424 checks pass.
 
 # Decisions (round 3)
 
@@ -40,5 +40,23 @@ decide, document below, continue.
   render, so older decks tighten on open. SVG `overflow:visible` already prevents clipping.
 - Stroke width/color edits are rest-only: they leave step-edit mode and drop scrub previews
   before applying, so a step preview can never leak into the saved rest pose.
+- Fixed frame: viewBox stays `0 0 100 100` so size params change rendered size instead of
+  rescaling content (the old tight viewBox re-fit the drawing and thinned strokes).
+  The selection overlay hugs via `svgContentBox` (geometry bounds in local units) mapped
+  through the live `getScreenCTM` (`mapBoxClient`), stroke-aware pad, falling back to the
+  element box when no CTM exists (e.g. jsdom).
+- Initial-step model: `initial:true` entries are rest mirrors. They are prepended on render
+  (live DOM) and before every model sync, so old decks gain them without dirtying the
+  template data block. Rest edits outside step-edit re-mirror via `syncInitialStep`;
+  `commitStepGeometry` on a non-step drag does the same and drops the stale scrub
+  snapshot. Scrubbed drags auto-enter the displayed non-initial step; initial rows are
+  never auto-entered, and rest is restored on first real movement so a clean click never
+  disturbs the scrubbed canvas. Presenter + viewer skip no-op stages per click, and the
+  initial entry never fights a real move on the same element in one group.
+- Step rows are kind-filtered: shapes show only their own geometry params (via
+  `shapeSkeyFor`), plain blocks show scale instead; rotate everywhere. The initial shape
+  row additionally owns Line width/Line color (presets follow: new shapes inherit the
+  last-used stroke). The Shapes panel keeps kind select + insert only.
+- Shape keyframe limits widened to the uncapped range (`slen/sw/sh` ≤ 500, `sr` ≤ 250).
 - Viewer export player-size guard raised 12000 → 16000 chars (shape geo + keyframes are
   legit player code; the no-editor-code regex is the real guard).
