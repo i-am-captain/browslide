@@ -149,6 +149,10 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 #insert-wrap .srow{display:flex;align-items:center;gap:6px;margin:5px 0}
 #insert-wrap .srow>span:first-child{flex:1;color:var(--muted);font-size:12px}
 #insert-wrap .srow input[type="number"]{width:52px}
+#slide-menu .srow{display:flex;align-items:center;gap:6px;margin:5px 0}
+#slide-menu .srow>span:first-child{color:var(--muted);font-size:12px}
+#slide-menu .srow input[type="text"]{flex:1;min-width:0;padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit}
+#slide-menu .srow select{flex:1;min-width:0}
 .slide table.btable{border-collapse:collapse;width:100%;margin:.4em 0}
 .slide table.btable td,.slide table.btable th{border:1px solid currentColor;padding:.35em .6em;min-width:2em}
 .slide table.btable th{background:rgba(127,127,127,.18)}
@@ -309,6 +313,8 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
     </label>
       <label class="row"><input type="checkbox" id="opt-shrink"> Shrink text to fit blocks</label>
       <p><button id="btn-block" title="Add a free text block to this slide">+ Text block</button></p>
+      <div class="srow"><span>Template</span><input id="tpl-name" type="text" maxlength="40" placeholder="Name this layout…" title="Template name"><button id="btn-tpl-save" title="Save current slide as a reusable template">Save</button></div>
+      <div class="srow"><span></span><select id="tpl-select" title="Saved layout template"></select><button id="btn-tpl-apply" title="Apply template (keeps geometry, styles and steps; resets text)">Apply</button><button id="btn-tpl-del" title="Delete template">Del</button></div>
     </details>
     <details id="present-settings">
       <summary>Presentation</summary>
@@ -562,6 +568,14 @@ function normalizeModel(raw){
   Object.keys(m.slides).forEach(function(id){ if (m.slideOrder.indexOf(id) < 0) m.slideOrder.push(id); });
   if (!m.slideOrder.length) return null;
   if (raw.nextId && raw.nextId >= m.nextId) m.nextId = raw.nextId;
+  m.templates = {};
+  if (raw.templates && typeof raw.templates === 'object' && !Array.isArray(raw.templates)) {
+    Object.keys(raw.templates).forEach(function(name){
+      if (typeof raw.templates[name] === 'string' && name.length <= 40) {
+        m.templates[name.slice(0, 40)] = sanitizeSlideHTML(raw.templates[name]);
+      }
+    });
+  }
   var st = (raw.settings && typeof raw.settings === 'object') ? raw.settings : {};
   var rc = Array.isArray(st.recentColors) ? st.recentColors.filter(function(c){ return /^#[0-9a-f]{6}$/i.test(String(c || '')); }).map(function(c){ return String(c).toLowerCase(); }).filter(function(c, i, a){ return a.indexOf(c) === i; }) : [];
   m.settings = { compress: st.compress !== false, downscale: !!st.downscale,
@@ -1048,8 +1062,92 @@ function renderInspector(){
   $('#transition-select').value = s.transition;
   $('#theme-select').value = App.model.theme;
   $('#opt-shrink').checked = !!s.shrinkText;
+  refreshTplSelect();
   syncAspectUI();
   if (document.activeElement !== $('#notes')) $('#notes').value = s.notes;
+}
+/* ---- slide masters: named block arrangements (geometry+styles+steps, text reset) ---- */
+function refreshTplSelect(){
+  var sel = $('#tpl-select');
+  if (!sel || !App.model) return;
+  var names = Object.keys(App.model.templates || {});
+  sel.innerHTML = '';
+  if (!names.length) {
+    var o = document.createElement('option');
+    o.value = '';
+    o.textContent = '(no templates)';
+    sel.appendChild(o);
+    sel.disabled = true;
+    return;
+  }
+  sel.disabled = false;
+  names.forEach(function(name){
+    var o = document.createElement('option');
+    o.value = name;
+    o.textContent = name;
+    sel.appendChild(o);
+  });
+}
+function saveTemplate(){
+  syncStageToModel();
+  var inp = $('#tpl-name');
+  var name = String((inp && inp.value) || '').trim().slice(0, 40);
+  if (!name) { alert('Name the template first.'); return false; }
+  if (App.model.templates[name] && !confirm('Overwrite template "' + name + '"?')) return false;
+  App.model.templates[name] = activeSlide().html;
+  if (inp) inp.value = '';
+  refreshTplSelect();
+  var sel = $('#tpl-select');
+  if (sel) sel.value = name;
+  refreshDirty(); scheduleAutosave();
+  return true;
+}
+function resetTemplateText(html){
+  /* geometry, styles and steps survive; text becomes placeholders */
+  var tpl = document.createElement('template');
+  tpl.innerHTML = String(html || '');
+  var walker = document.createTreeWalker(tpl.content, NodeFilter.SHOW_TEXT, null);
+  var nodes = [], n;
+  while ((n = walker.nextNode())) nodes.push(n);
+  nodes.forEach(function(t){
+    if (!/\S/.test(t.nodeValue)) return;
+    var word = 'Text';
+    try {
+      var el = t.parentNode;
+      if (el && el.closest) {
+        if (el.closest('h1,h2')) word = 'Title';
+        else if (el.closest('li')) word = 'Item';
+      }
+    } catch (e) {}
+    t.nodeValue = word;
+  });
+  return tpl.innerHTML;
+}
+function applyTemplate(){
+  var sel = $('#tpl-select');
+  var name = sel && sel.value;
+  var html = name && App.model.templates ? App.model.templates[name] : null;
+  if (!html) return false;
+  exitStepEdit();
+  var s = activeSlide();
+  s.html = resetTemplateText(html);
+  s.title = deriveTitle(s.html);
+  clearSelection();
+  renderStage();
+  renderFilmstrip();
+  renderInspector();
+  persistSlide();
+  return true;
+}
+function deleteTemplate(){
+  var sel = $('#tpl-select');
+  var name = sel && sel.value;
+  if (!name || !App.model.templates || !App.model.templates[name]) return false;
+  if (!confirm('Delete template "' + name + '"?')) return false;
+  delete App.model.templates[name];
+  refreshTplSelect();
+  refreshDirty(); scheduleAutosave();
+  return true;
 }
 /* ---- shrink-to-fit: per-slide flag; the loop writes block font sizes so
    saved decks and exports carry the shrunk text (no measuring needed there) ---- */
@@ -4512,6 +4610,9 @@ function bind(){
   $('#btn-chart').addEventListener('click', function(){ insertChart($('#chart-type').value, $('#chart-csv').value); });
   $('#btn-chart-apply').addEventListener('click', applyChartToSelected);
   $('#btn-block').addEventListener('click', addTextBlock);
+  $('#btn-tpl-save').addEventListener('click', saveTemplate);
+  $('#btn-tpl-apply').addEventListener('click', applyTemplate);
+  $('#btn-tpl-del').addEventListener('click', deleteTemplate);
   var fd = $('#font-dropper');
   if (fd && !window.EyeDropper) fd.hidden = true;
   Array.prototype.forEach.call(document.querySelectorAll('#arrange-wrap [data-arr]'), function(b){

@@ -2,8 +2,8 @@
 
 ## Session state (update when switching tasks/sessions)
 
-- Status: items 1-13 DONE and committed (564 checks). Next: item 14
-  (slide masters).
+- Status: items 1-14 DONE and committed (573 checks). Next: item 15
+  (canvas zoom/pan).
 - Conventions: commit per item, suite green before each commit, flip that item's
   `[ ]` to `[x]` when committed.
 
@@ -243,7 +243,7 @@ green before each commit, commit per item, agent-map anchors stay resolving
   then removed. `data-chart` survives the sanitizer and both exports; stage
   render re-renders charts from data, normalizing older decks.
 
-## [ ] 14. Slide masters (custom layouts)
+## [x] 14. Slide masters (custom layouts)
 
 - Goal: save any slide's block arrangement as a named reusable template.
 - UX: Templates menu in the Slide section: save current (name prompt), apply
@@ -254,6 +254,10 @@ green before each commit, commit per item, agent-map anchors stay resolving
   regenerate via `ensureSlideInitials` on next sync), then `persistSlide`.
 - Tests: save/apply/delete round-trip, apply regenerates initials, templates
   persist in save file, bad templates map dropped.
+- Findings: text reset uses `closest('h1,h2'/'li')` because real text lives in
+  styled spans (parent-tag checks miss). `data-anim` (incl. initials) survives
+  templating, so masters carry motion too — initials stay valid since geometry
+  is preserved. Serialized attrs use `&quot;`, which test regexes must match.
 
 ## [ ] 15. Canvas zoom/pan
 

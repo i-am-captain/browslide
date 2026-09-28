@@ -2406,6 +2406,50 @@ DCH.querySelector('#btn-save').click();
 await wait(300);
 check('save keeps chart data', /data-chart=/.test(await blobToText(WCH.__savedBlob, WCH)));
 
+// ---------- 53. slide masters ----------
+const domTM = makeDom(html);
+await wait(400);
+const WTM = domTM.window, DTM = WTM.document;
+WTM.gotoSlide(WTM.App.model.slideOrder[1]);
+await wait(100);
+check('no templates initially', Object.keys(WTM.App.model.templates).length === 0 &&
+  DTM.querySelector('#tpl-select').disabled === true);
+DTM.querySelector('#tpl-name').value = '';
+DTM.querySelector('#btn-tpl-save').click();
+check('empty name rejected', Object.keys(WTM.App.model.templates).length === 0 && WTM.__alerts.length === 1);
+DTM.querySelector('#tpl-name').value = 'Two col';
+DTM.querySelector('#btn-tpl-save').click();
+check('save stores current html', WTM.App.model.templates['Two col'] === WTM.activeSlide().html &&
+  DTM.querySelector('#tpl-select').disabled === false);
+WTM.gotoSlide(WTM.App.model.slideOrder[0]);
+await wait(100);
+const tmBefore = WTM.activeSlide().html;
+DTM.querySelector('#tpl-select').value = 'Two col';
+DTM.querySelector('#btn-tpl-apply').click();
+await wait(100);
+const appliedHtml = WTM.activeSlide().html;
+check('apply swaps geometry, resets text', appliedHtml !== tmBefore && /left:\s*8%/.test(appliedHtml) &&
+  !/How to use/.test(appliedHtml) && /Title/.test(appliedHtml));
+check('apply regenerates initials', /&quot;initial&quot;:true/.test(appliedHtml));
+check('filmstrip follows apply', DTM.querySelector('#filmstrip-list li.active .lbl').textContent === WTM.activeSlide().title);
+DTM.querySelector('#btn-tpl-del').click();
+check('delete removes template', Object.keys(WTM.App.model.templates).length === 0 &&
+  DTM.querySelector('#tpl-select').disabled === true);
+check('normalize drops bad templates', (function(){
+  const m = WTM.normalizeModel({ app: 'browslide', version: 2, title: 'T', theme: 'dark', slideOrder: ['s1'], nextId: 2, nextResId: 1,
+    settings: {}, aspect: { w: 16, h: 9 }, resources: {},
+    templates: { ok: '<p>x</p>', bad: 7, arr: [], evil: '<p onclick="z()">y</p>' },
+    slides: { s1: { title: 'T', layout: 'blank', transition: 'none', notes: '', html: '<p>x</p>' } } });
+  return m.templates.ok === '<p>x</p>' && m.templates.bad === undefined && m.templates.arr === undefined &&
+    m.templates.evil === '<p>y</p>';
+})());
+DTM.querySelector('#tpl-name').value = 'Persisted';
+DTM.querySelector('#btn-tpl-save').click();
+DTM.querySelector('#btn-save').click();
+await wait(300);
+const tTM = await blobToText(WTM.__savedBlob, WTM);
+check('templates persist in save', /"templates":\{"Persisted"/.test(tTM));
+
 // ---------- 45. style painter ----------
 const domPT = makeDom(html);
 await wait(400);
