@@ -2351,6 +2351,61 @@ await wait(300);
 const exP = await blobToText(WMP.__savedBlob, WMP);
 check('viewer carries path player + data', exP.includes('pathPointAt') && /&quot;path&quot;/.test(exP));
 
+// ---------- 52. charts ----------
+check('parseCSV quotes + commas', JSON.stringify(WBG.parseCSV('a,"b,c"\n"d""e",f\r\n\n  ,  ')) === JSON.stringify([['a', 'b,c'], ['d"e', 'f']]));
+check('chartData header + values', (function(){
+  const d = WBG.chartData('Label,A,B\nQ1,1,2\nQ2,3,x');
+  return !!d && JSON.stringify(d.labels) === JSON.stringify(['Q1', 'Q2']) &&
+    d.series.length === 2 && d.series[0].name === 'A' && JSON.stringify(d.series[0].values) === JSON.stringify([1, 3]) &&
+    JSON.stringify(d.series[1].values) === JSON.stringify([2, 0]);
+})());
+check('chartData rejects thin air', WBG.chartData('') === null && WBG.chartData('a,b\nc,d') !== null &&
+  WBG.chartData('onlylabels\nfoo\nbar') === null);
+check('bar renders grouped rects', (function(){
+  const g = WBG.renderBarSVG({ labels: ['A', 'B'], series: [{ name: 'S', values: [5, 10] }] });
+  return (g.match(/<rect/g) || []).length === 2 && /<text/.test(g) && !/NaN/.test(g);
+})());
+check('line renders polyline + dots', (function(){
+  const g = WBG.renderLineSVG({ labels: ['A', 'B'], series: [{ name: 'S', values: [5, 10] }] });
+  return /<polyline/.test(g) && (g.match(/<circle/g) || []).length === 2;
+})());
+check('pie renders ring + legend', (function(){
+  const g = WBG.renderPieSVG({ labels: ['A', 'B'], series: [{ name: 'S', values: [1, 3] }] });
+  return (g.match(/<circle/g) || []).length === 2 && /<text/.test(g);
+})());
+const domCH = makeDom(html);
+await wait(400);
+const WCH = domCH.window, DCH = WCH.document;
+WCH.gotoSlide(WCH.App.model.slideOrder[1]);
+await wait(100);
+check('single-column csv rejected with alert', WCH.insertChart('bar', 'just\nwords\nhere') === false &&
+  WCH.__alerts.length > 0);
+const csvGood = 'Q,A\nQ1,12\nQ2,19';
+check('insertChart builds svg block', WCH.insertChart('bar', csvGood) === true &&
+  !!DCH.querySelector('#stage .blk svg[data-chart]'));
+const chSvg = DCH.querySelector('#stage .blk svg[data-chart]');
+check('chart data attr saved', JSON.parse(chSvg.getAttribute('data-chart')).csv === csvGood &&
+  /data-chart=/.test(WCH.App.model.slides.s2.html));
+check('form auto-loads on select', (function(){
+  WCH.setSingleSelection(chSvg.closest('.blk'));
+  return DCH.querySelector('#chart-csv').value === csvGood && DCH.querySelector('#chart-type').value === 'bar';
+})());
+DCH.querySelector('#chart-csv').value = 'Q,A\nQ1,1\nQ2,2';
+DCH.querySelector('#chart-csv').blur();
+const beforeApply = chSvg.innerHTML;
+DCH.querySelector('#btn-chart-apply').click();
+check('apply re-renders selected', chSvg.innerHTML !== beforeApply);
+check('apply writes attr', JSON.parse(chSvg.getAttribute('data-chart')).csv === 'Q,A\nQ1,1\nQ2,2');
+chSvg.innerHTML = 'junk';
+WCH.gotoSlide(WCH.App.model.slideOrder[0]);
+await wait(100);
+WCH.gotoSlide(WCH.App.model.slideOrder[1]);
+await wait(100);
+check('render rebuilds charts from data', DCH.querySelector('#stage .blk svg[data-chart]').innerHTML.includes('<rect'));
+DCH.querySelector('#btn-save').click();
+await wait(300);
+check('save keeps chart data', /data-chart=/.test(await blobToText(WCH.__savedBlob, WCH)));
+
 // ---------- 45. style painter ----------
 const domPT = makeDom(html);
 await wait(400);

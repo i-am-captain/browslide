@@ -2,8 +2,8 @@
 
 ## Session state (update when switching tasks/sessions)
 
-- Status: items 1-12 DONE and committed (550 checks). Next: item 13
-  (basic charts).
+- Status: items 1-13 DONE and committed (564 checks). Next: item 14
+  (slide masters).
 - Conventions: commit per item, suite green before each commit, flip that item's
   `[ ]` to `[x]` when committed.
 
@@ -226,7 +226,7 @@ green before each commit, commit per item, agent-map anchors stay resolving
   exists only on non-initial rows (motion on a rest-mirror is meaningless).
   Player string grew ~1.3k, still under the export size guard.
 
-## [ ] 13. Basic charts
+## [x] 13. Basic charts
 
 - Goal: Insert -> Chart (bar/line/pie) from pasted CSV, editable later.
 - UX: CSV textarea dialog; chart renders as SVG in a `.blk`; selecting it
@@ -237,6 +237,11 @@ green before each commit, commit per item, agent-map anchors stay resolving
   attr + re-renders + persists.
 - Tests: CSV parse (quotes/commas/bad rows), renderers emit sane SVG for fixed
   input, save round-trip preserves data attr, malformed CSV rejected with alert.
+- Findings: pie is a donut of dasharray circles (not path arcs) so the overlay
+  bbox math keeps working. The editor auto-loads the selection through
+  `refreshSelectionUI` with a typing guard; a redundant Load button was added
+  then removed. `data-chart` survives the sanitizer and both exports; stage
+  render re-renders charts from data, normalizing older decks.
 
 ## [ ] 14. Slide masters (custom layouts)
 

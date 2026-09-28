@@ -363,6 +363,9 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
       <p><button id="btn-img">Image…</button> <button id="btn-video">Video…</button></p>
       <div class="srow"><span>Table</span><input id="tbl-rows" type="number" min="1" max="12" value="2" title="Rows"><input id="tbl-cols" type="number" min="1" max="8" value="3" title="Columns"><button id="btn-table" title="Insert a table block">Insert</button></div>
       <div class="srow"><span>Rows/cols</span><button id="btn-row-add" title="Add row to the selected table">+Row</button><button id="btn-row-del" title="Remove last row">−Row</button><button id="btn-col-add" title="Add column">+Col</button><button id="btn-col-del" title="Remove last column">−Col</button></div>
+      <div class="srow"><span>Chart</span><select id="chart-type" title="Chart type"><option value="bar">Bars</option><option value="line">Lines</option><option value="pie">Pie</option></select><button id="btn-chart" title="Insert a chart from the data below">Insert</button></div>
+      <textarea id="chart-csv" rows="4" placeholder="Label, Series A&#10;Q1, 12&#10;Q2, 19"></textarea>
+      <div class="srow"><span></span><button id="btn-chart-apply" title="Apply the editor data to the selected chart">Apply to selected</button></div>
       <label class="row"><input type="checkbox" id="opt-downscale"> Downscale photos on insert (max <select id="opt-maxdim"><option value="1280">1280</option><option value="1920" selected>1920</option><option value="2560">2560</option></select> px)</label>
     </details>
     <details id="shapes-wrap">
@@ -991,6 +994,7 @@ function renderStage(){
   sec.innerHTML = expandHtml(s.html, App.model.resources);
   ensureStyledSpans(sec);
   Array.prototype.forEach.call(sec.querySelectorAll('svg[data-kind]'), function(svg){ renderShape(svg); }); /* normalize older decks to tight boxes */
+  Array.prototype.forEach.call(sec.querySelectorAll('svg[data-chart]'), function(svg){ renderChart(svg); }); /* charts re-render from their data */
   sec.addEventListener('input', onStageInput);
   sec.addEventListener('paste', function(){
     /* pasted content (e.g. from older decks) may carry legacy <font> tags;
@@ -2044,6 +2048,176 @@ function renderShape(svg){
   svg.setAttribute('viewBox', '0 0 100 100');
   return true;
 }
+/* ---- charts: CSV data in data-chart, rendered SVG (bar/line/pie) ---- */
+var CHART_COLORS = ['#2563eb', '#16a34a', '#dc2626', '#d97706', '#7c3aed', '#0891b2'];
+function escXml(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function parseCSV(text){
+  var rows = [], row = [], cur = '', q = false, i, c;
+  var s = String(text || '').replace(/^\uFEFF/, '');
+  for (i = 0; i < s.length; i++) {
+    c = s[i];
+    if (q) {
+      if (c === '"') {
+        if (s[i + 1] === '"') { cur += '"'; i++; }
+        else q = false;
+      } else cur += c;
+    } else {
+      if (c === '"') q = true;
+      else if (c === ',') { row.push(cur); cur = ''; }
+      else if (c === '\n') { row.push(cur); rows.push(row); row = []; cur = ''; }
+      else if (c === '\r') {}
+      else cur += c;
+    }
+  }
+  row.push(cur); rows.push(row);
+  return rows.map(function(r){ return r.map(function(cell){ return cell.trim(); }); })
+    .filter(function(r){ return r.some(function(cell){ return cell !== ''; }); });
+}
+function chartData(csv){
+  /* {labels, series:[{name, values}]} or null; first column labels, first row
+     names when non-numeric, missing values read as 0 */
+  var rows = parseCSV(csv);
+  if (!rows.length) return null;
+  var header = rows[0];
+  var hasHeader = header.slice(1).some(function(cell){ return cell !== '' && !isFinite(parseFloat(cell)); });
+  var names = header.slice(1);
+  if (!hasHeader) names = names.map(function(_, i){ return 'Series ' + (i + 1); });
+  if (!names.length) return null;
+  var body = hasHeader ? rows.slice(1) : rows;
+  var labels = [], series = names.map(function(nm){ return { name: nm, values: [] }; });
+  body.forEach(function(r){
+    if (!r.length) return;
+    labels.push(r[0]);
+    for (var i = 0; i < series.length; i++) {
+      var v = parseFloat(r[i + 1]);
+      series[i].values.push(isFinite(v) ? v : 0);
+    }
+  });
+  if (!labels.length) return null;
+  return { labels: labels, series: series };
+}
+function chartMax(data){
+  var mx = 0;
+  data.series.forEach(function(s){ s.values.forEach(function(v){ if (v > mx) mx = v; }); });
+  return mx > 0 ? mx : 1;
+}
+function renderBarSVG(data){
+  var n = data.labels.length, m = data.series.length, mx = chartMax(data), out = '';
+  var groupW = 184 / n, barW = Math.min(14, groupW / m * 0.7), base = 104;
+  out += '<line x1="8" y1="' + base + '" x2="192" y2="' + base + '" stroke="currentColor" stroke-width="1"/>';
+  data.labels.forEach(function(lb, i){
+    data.series.forEach(function(s, j){
+      var h = Math.max(0, s.values[i] / mx * 88);
+      var x = 8 + i * groupW + (groupW - m * barW) / 2 + j * barW;
+      out += '<rect x="' + r1(x) + '" y="' + r1(base - h) + '" width="' + r1(barW) + '" height="' + r1(h) + '" fill="' + CHART_COLORS[j % CHART_COLORS.length] + '"/>';
+    });
+    out += '<text x="' + r1(8 + i * groupW + groupW / 2) + '" y="114" font-size="7.5" text-anchor="middle" fill="currentColor">' + escXml(lb) + '</text>';
+  });
+  return out;
+}
+function renderLineSVG(data){
+  var n = data.labels.length, mx = chartMax(data), out = '';
+  var base = 104;
+  function X(i){ return n > 1 ? 8 + i * (184 / (n - 1)) : 100; }
+  function Y(v){ return base - v / mx * 88; }
+  out += '<line x1="8" y1="' + base + '" x2="192" y2="' + base + '" stroke="currentColor" stroke-width="1"/>';
+  data.labels.forEach(function(lb, i){
+    out += '<text x="' + r1(X(i)) + '" y="114" font-size="7.5" text-anchor="middle" fill="currentColor">' + escXml(lb) + '</text>';
+  });
+  data.series.forEach(function(s, j){
+    var col = CHART_COLORS[j % CHART_COLORS.length];
+    out += '<polyline points="' + s.values.map(function(v, i){ return r1(X(i)) + ',' + r1(Y(v)); }).join(' ') + '" fill="none" stroke="' + col + '" stroke-width="2"/>';
+    s.values.forEach(function(v, i){
+      out += '<circle cx="' + r1(X(i)) + '" cy="' + r1(Y(v)) + '" r="2" fill="' + col + '"/>';
+    });
+  });
+  return out;
+}
+function renderPieSVG(data){
+  /* donut ring (dasharray circles keep the overlay bbox math working) + legend */
+  var vals = data.series.length ? data.series[0].values : [];
+  var total = 0;
+  vals.forEach(function(v){ if (v > 0) total += v; });
+  var out = '', C = 2 * Math.PI * 38, acc = 0;
+  if (!(total > 0)) {
+    return '<circle cx="70" cy="60" r="38" fill="none" stroke="#9aa0a6" stroke-width="22"/>';
+  }
+  vals.forEach(function(v, i){
+    if (!(v > 0)) return;
+    var frac = v / total, col = CHART_COLORS[i % CHART_COLORS.length];
+    out += '<circle cx="70" cy="60" r="38" fill="none" stroke="' + col + '" stroke-width="22" stroke-dasharray="' +
+      r1(frac * C) + ' ' + r1(C) + '" transform="rotate(' + r1(-90 + acc * 360) + ' 70 60)"/>';
+    acc += frac;
+  });
+  data.labels.forEach(function(lb, i){
+    if (!(vals[i] > 0)) return;
+    out += '<rect x="118" y="' + (24 + i * 13) + '" width="8" height="8" fill="' + CHART_COLORS[i % CHART_COLORS.length] + '"/>';
+    out += '<text x="129" y="' + (31 + i * 13) + '" font-size="9" fill="currentColor">' + escXml(String(lb).slice(0, 14)) + '</text>';
+  });
+  return out;
+}
+function renderChart(svg){
+  var d = null;
+  try { d = JSON.parse(svg.getAttribute('data-chart')); } catch (e) {}
+  if (!d || typeof d.csv !== 'string') return false;
+  var data = chartData(d.csv);
+  if (!data) return false;
+  svg.innerHTML = d.type === 'pie' ? renderPieSVG(data) : d.type === 'line' ? renderLineSVG(data) : renderBarSVG(data);
+  return true;
+}
+function selectedChartSvg(){
+  var el = resizer.el;
+  if (!el || !document.contains(el)) return null;
+  if (el.tagName === 'svg' && el.hasAttribute('data-chart')) return el;
+  return el.querySelector ? el.querySelector('svg[data-chart]') : null;
+}
+function syncChartForm(){
+  /* selection drives the chart editor (never while typing in it) */
+  var type = $('#chart-type'), csv = $('#chart-csv');
+  if (!type || !csv) return;
+  if (document.activeElement === type || document.activeElement === csv) return;
+  var svg = selectedChartSvg();
+  if (!svg) return;
+  try {
+    var d = JSON.parse(svg.getAttribute('data-chart'));
+    if (d && d.type) type.value = d.type;
+    if (d && typeof d.csv === 'string') csv.value = d.csv;
+  } catch (e) {}
+}
+function insertChart(type, csv){
+  var sec = $('#stage .slide');
+  if (!sec || !App.model) return false;
+  if (['bar', 'line', 'pie'].indexOf(type) < 0) type = 'bar';
+  var data = chartData(csv);
+  if (!data) { alert('Could not read chart data — use "Label, Value" rows.'); return false; }
+  var wrap = document.createElement('div');
+  wrap.className = 'blk';
+  wrap.style.left = '20%';
+  wrap.style.top = '25%';
+  wrap.style.width = '60%';
+  var svgNS = 'http://www.w3.org/2000/svg';
+  var svg = document.createElementNS(svgNS, 'svg');
+  svg.setAttribute('viewBox', '0 0 200 120');
+  svg.setAttribute('data-chart', JSON.stringify({ type: type, csv: csv }));
+  renderChart(svg);
+  wrap.appendChild(svg);
+  sec.appendChild(wrap);
+  syncStageToModel(); refreshDirty(); scheduleSize(); scheduleAutosave();
+  selectMedia(wrap);
+  return true;
+}
+function applyChartToSelected(){
+  var svg = selectedChartSvg();
+  if (!svg) return false;
+  var type = $('#chart-type') ? $('#chart-type').value : 'bar';
+  var csv = $('#chart-csv') ? $('#chart-csv').value : '';
+  if (['bar', 'line', 'pie'].indexOf(type) < 0) type = 'bar';
+  if (!chartData(csv)) { alert('Could not read chart data — use "Label, Value" rows.'); return false; }
+  svg.setAttribute('data-chart', JSON.stringify({ type: type, csv: csv }));
+  renderChart(svg);
+  persistSlide();
+  return true;
+}
 function addTextBlock(){
   var sec = $('#stage .slide');
   if (!sec || !App.model) return false;
@@ -2156,6 +2330,7 @@ function refreshSelectionUI(){
   resizerOverlay();
   positionResizer();
   refreshAnimUI();
+  syncChartForm();
 }
 function setSingleSelection(el){
   resizer.el = el;
@@ -4334,6 +4509,8 @@ function bind(){
   $('#btn-row-del').addEventListener('click', tableDelRow);
   $('#btn-col-add').addEventListener('click', tableAddCol);
   $('#btn-col-del').addEventListener('click', tableDelCol);
+  $('#btn-chart').addEventListener('click', function(){ insertChart($('#chart-type').value, $('#chart-csv').value); });
+  $('#btn-chart-apply').addEventListener('click', applyChartToSelected);
   $('#btn-block').addEventListener('click', addTextBlock);
   var fd = $('#font-dropper');
   if (fd && !window.EyeDropper) fd.hidden = true;
