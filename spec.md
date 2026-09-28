@@ -1,21 +1,33 @@
 # Browslide feature specs (ordered by build preference)
 
+## Session state (update when switching tasks/sessions)
+
+- Status: item 1 (undo/redo) DONE and committed (445 checks). Next: item 2
+  (nudge + duplicate).
+- Conventions: commit per item, suite green before each commit, flip that item's
+  `[ ]` to `[x]` when committed.
+
 Global constraints for every item: single `browslide.html`, zero dependencies,
 `file://`-compatible (no modules/fetch/CDN), full suite (`cd tests && npm test`)
 green before each commit, commit per item, agent-map anchors stay resolving
 (tests enforce), slide HTML stays sanitizable.
 
-## 1. Undo/redo (build first: safety net for everything below)
+## [x] 1. Undo/redo (build first: safety net for everything below)
 
 - Goal: Ctrl+Z / Ctrl+Shift+Z (and Ctrl+Y) plus toolbar buttons undo/redo any
   deck mutation: slides, text, geometry, steps, settings, tables, charts.
-- UX: native text undo wins inside text caret/inputs (don't hijack); elsewhere
-  Ctrl+Z undoes deck ops. Toolbar `↩`/`↪` buttons with disabled state.
+- UX: browser-native undo wins for field focus and non-collapsed text selections
+  (don't hijack); a collapsed caret uses deck undo (typed bursts revert as one
+  entry, so drag-then-undo always works); elsewhere Ctrl+Z undoes deck ops.
+  Toolbar `↩`/`↪` buttons with disabled state.
 - Model: snapshot stack of `{ json, active, n }` (`stable(App.model)` +
-  `activeId` + slide count). Push in `persistSlide` when json differs from top;
-  coalesce when <2s since last push, same active slide, same slide count
-  (typing/nudge bursts collapse). Cap 30 entries AND ~12MB total (drop oldest,
-  keep >=1). New edits clear redo. `loadModel` resets stacks to `[initial]`.
+  `activeId` + slide count). Push in `refreshDirty` (the single shared sink, so
+  slide-structural ops that bypass `persistSlide` are covered too) when json
+  differs from top; coalesce when <2s since last push, same active slide, same
+  slide count (typing/nudge bursts collapse) — but the saved state is never
+  absorbed (save points stay reachable). Cap 30 entries AND ~12MB total (drop
+  oldest, keep >=1). New edits clear redo. `loadModel` and boot reset stacks
+  to `[initial]`.
 - Implementation: snapshots come from the live (decoded) model, so restore is
   `normalizeModel(JSON.parse(json))` + clamp active + `clearSelection` +
   `renderAll` + `refreshDirty` (dirty-vs-saved falls out naturally) — no
@@ -25,7 +37,7 @@ green before each commit, commit per item, agent-map anchors stay resolving
   undo-to-saved shows Saved flag, coalescing collapses rapid persists, caps
   trim, Ctrl+Z keeps native behavior in text caret, stacks reset on load.
 
-## 2. Nudge + Duplicate (tiny, daily value)
+## [ ] 2. Nudge + Duplicate (tiny, daily value)
 
 - Goal: arrows move selection ~1px (Shift = x10); Ctrl+D duplicates.
 - UX: only when selection exists and caret is NOT in stage text (text keeps
@@ -38,7 +50,7 @@ green before each commit, commit per item, agent-map anchors stay resolving
 - Tests: nudge math/fallback, caret guard keeps native keys, duplicate offsets
   and selects the copy, step-editing nudge writes the step.
 
-## 3. Align / distribute / match size
+## [ ] 3. Align / distribute / match size
 
 - Goal: Arrange menu (inspector): align L/C/R/T/M/B, distribute H/V, match W/H.
 - UX: align works with 1 item (relative to slide) or many (relative to their
@@ -50,7 +62,7 @@ green before each commit, commit per item, agent-map anchors stay resolving
 - Tests: pure-fn units (centering, equal gaps, width copy), apply writes %,
   single-item slide-relative align, no-op guards.
 
-## 4. Snap guides while dragging
+## [ ] 4. Snap guides while dragging
 
 - Goal: dragged items snap to slide center/edges and other items' edges/centers
   with visible guide lines (~6px threshold).
@@ -62,7 +74,7 @@ green before each commit, commit per item, agent-map anchors stay resolving
 - Tests: pure snap math (center/edge attraction, threshold miss, multi-box),
   guides render/clear around a drag.
 
-## 5. Eyedropper + recent colors
+## [ ] 5. Eyedropper + recent colors
 
 - Goal: pick any on-screen color; last-used palette near color inputs.
 - UX: dropper buttons beside text-color (formatbar) and step-row stroke color
@@ -74,7 +86,7 @@ green before each commit, commit per item, agent-map anchors stay resolving
   / step-row commit paths so undo + presets keep working.
 - Tests: normalize fallback, push dedup/cap, swatch apply writes span color.
 
-## 6. Style painter
+## [ ] 6. Style painter
 
 - Goal: copy one item's look onto others (text style, alignment, stroke, sizes).
 - UX: painter button toggles pick mode (Esc cancels): click source samples,
@@ -86,7 +98,7 @@ green before each commit, commit per item, agent-map anchors stay resolving
 - Tests: sample/apply units (text, shape, cross-kind geometry skip), mode
   enter/cancel/apply transitions.
 
-## 7. Tables
+## [ ] 7. Tables
 
 - Goal: Insert -> Table (R x C dialog in Insert menu), native cell editing,
   add/remove row/col, survives save/export.
@@ -100,7 +112,7 @@ green before each commit, commit per item, agent-map anchors stay resolving
 - Tests: insert shape, cell edit + format round-trip, save/export keeps table,
   row/col add/remove, sanitizer keeps tables while stripping handlers.
 
-## 8. Lists, bullets, shrink-to-fit
+## [ ] 8. Lists, bullets, shrink-to-fit
 
 - Goal: Tab/Shift-Tab indent/outdent in lists, bullet-style picker,
   per-slide shrink-text-to-fit.
@@ -113,7 +125,7 @@ green before each commit, commit per item, agent-map anchors stay resolving
 - Tests: picker writes `list-style-type`, indent fallback path, shrink flag
   round-trips and shrinks overflowing text in a stubbed layout.
 
-## 9. Symbol shapes
+## [ ] 9. Symbol shapes
 
 - Goal: +12 insertable symbols (plus, minus, diamond, pentagon, hexagon,
   heart, right-triangle, smiley, note, bolt, arrow-curved?, block-arrow).
@@ -124,7 +136,7 @@ green before each commit, commit per item, agent-map anchors stay resolving
 - Tests: library contains all kinds, markup inert, insert + save round-trip,
   no size handles for fixed symbols.
 
-## 10. Copy/paste animation steps
+## [ ] 10. Copy/paste animation steps
 
 - Goal: "Copy steps" / "Paste steps" buttons in the Animation panel.
 - UX: copies selected item's full step list to an internal clipboard; pasting
@@ -136,7 +148,7 @@ green before each commit, commit per item, agent-map anchors stay resolving
 - Tests: paste preserves target initial, copies steps verbatim, empty
   clipboard no-ops, scrub range accounts for pasted groups.
 
-## 11. Filmstrip stage badges
+## [ ] 11. Filmstrip stage badges
 
 - Goal: each filmstrip row shows its click/auto stage counts at a glance.
 - UX: tiny badge (e.g. `3▸ 2●`) on rows that have animation; none otherwise.
@@ -148,7 +160,7 @@ green before each commit, commit per item, agent-map anchors stay resolving
 - Tests: count units (mixed triggers, no anim, malformed JSON), badges render
   and refresh after step add/delete.
 
-## 12. Motion paths
+## [ ] 12. Motion paths
 
 - Goal: a step can move its item along a drawn path, not just to one pose.
 - UX: select a step -> "Draw path" -> drag the item; pointer trail is sampled
@@ -163,7 +175,7 @@ green before each commit, commit per item, agent-map anchors stay resolving
 - Tests: polyline interpolation units (ends exact, midpoint sane), clean keeps/
   drops paths, playback with fake rAF follows path, viewer player carries it.
 
-## 13. Basic charts
+## [ ] 13. Basic charts
 
 - Goal: Insert -> Chart (bar/line/pie) from pasted CSV, editable later.
 - UX: CSV textarea dialog; chart renders as SVG in a `.blk`; selecting it
@@ -175,7 +187,7 @@ green before each commit, commit per item, agent-map anchors stay resolving
 - Tests: CSV parse (quotes/commas/bad rows), renderers emit sane SVG for fixed
   input, save round-trip preserves data attr, malformed CSV rejected with alert.
 
-## 14. Slide masters (custom layouts)
+## [ ] 14. Slide masters (custom layouts)
 
 - Goal: save any slide's block arrangement as a named reusable template.
 - UX: Templates menu in the Slide section: save current (name prompt), apply
@@ -187,7 +199,7 @@ green before each commit, commit per item, agent-map anchors stay resolving
 - Tests: save/apply/delete round-trip, apply regenerates initials, templates
   persist in save file, bad templates map dropped.
 
-## 15. Canvas zoom/pan
+## [ ] 15. Canvas zoom/pan
 
 - Goal: 50-200% canvas zoom (Ctrl+=/-/0 + control), pan via native scroll.
 - UX: zoom is session-only (not saved); percentage readout near aspect controls.
@@ -198,7 +210,7 @@ green before each commit, commit per item, agent-map anchors stay resolving
 - Tests: zoom factor plumbing (deltas scale, fit scales), zoom resets control,
   zoom never dirties the deck or persists.
 
-## 16. Search & replace
+## [ ] 16. Search & replace
 
 - Goal: find/replace text across all slides with match count.
 - UX: toolbar button opens a small dialog (find, replace, Replace-all button,
@@ -210,7 +222,7 @@ green before each commit, commit per item, agent-map anchors stay resolving
 - Tests: replace units (multi-node, no-match, special chars literal), count
   accuracy, one undo entry reverts all, jump selects the slide.
 
-## 17. Rehearse timer + per-slide timings
+## [ ] 17. Rehearse timer + per-slide timings
 
 - Goal: record how long each slide takes; optionally auto-advance on time.
 - UX: Present gets a timer readout; "Use timings" checkbox (Presentation menu)
@@ -222,7 +234,7 @@ green before each commit, commit per item, agent-map anchors stay resolving
 - Tests: timing resolution helper, arm/clear on advance, export carries
   timings + player auto-advances with fake timers, off-by-default.
 
-## 18. Presenter view (second window)
+## [ ] 18. Presenter view (second window)
 
 - Goal: audience sees clean slides on screen 2; you see current + notes +
   next + timer.
@@ -236,7 +248,7 @@ green before each commit, commit per item, agent-map anchors stay resolving
 - Tests: builder emits notes/next/console and no editor code; console advance
   drives stage index (headless via function-level test); blocked-popup path.
 
-## 19. Slide sorter overview
+## [ ] 19. Slide sorter overview
 
 - Goal: grid overview of all slides for rearranging the big picture.
 - UX: toggle button switches filmstrip to a scaled-clone grid; click jumps,

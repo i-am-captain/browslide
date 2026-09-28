@@ -1832,5 +1832,90 @@ const ffRows = DFF.querySelectorAll('#anim-rows details.astep');
 const L2 = Array.prototype.map.call(ffRows[1].querySelectorAll('.aline'), (l) => l.firstChild.textContent);
 check('follow-up row: geometry without stroke', L2.indexOf('Radius') >= 0 && L2.indexOf('Line width') < 0 && L2.indexOf('Line color') < 0);
 
+// ---------- 40. undo/redo ----------
+const domUN = makeDom(html);
+await wait(400);
+const WUN = domUN.window, DUN = WUN.document;
+check('undo stack starts with one state', WUN.undoStack.length === 1 && WUN.redoStack.length === 0);
+check('undo/redo buttons start disabled', DUN.querySelector('#btn-undo').disabled === true &&
+  DUN.querySelector('#btn-redo').disabled === true);
+check('empty undo is a no-op', WUN.undo() === false);
+DUN.querySelector('#btn-add').click();
+await wait(100);
+check('add slide pushes', DUN.querySelectorAll('#filmstrip-list li').length === 4 && WUN.undoStack.length === 2);
+check('undo drops the slide', WUN.undo() === true &&
+  DUN.querySelectorAll('#filmstrip-list li').length === 3);
+check('redo re-adds the slide', WUN.redo() === true &&
+  DUN.querySelectorAll('#filmstrip-list li').length === 4);
+check('buttons follow stacks', DUN.querySelector('#btn-undo').disabled === false &&
+  DUN.querySelector('#btn-redo').disabled === true);
+// new edit clears redo
+WUN.undo();
+DUN.querySelector('#btn-add').click();
+await wait(100);
+check('new edit clears redo', WUN.redo() === false && WUN.undoStack.length === 2);
+// animation add undoes cleanly
+WUN.gotoSlide(WUN.App.model.slideOrder[1]);
+await wait(100);
+const unBlk = DUN.querySelector('#stage .blk');
+WUN.setSingleSelection(unBlk);
+WUN.lastPushAt = 0; /* force a fresh entry: defeat burst coalescing on purpose */
+DUN.querySelector('#btn-anim-add').click();
+await wait(50);
+const withStep = unBlk.hasAttribute('data-anim');
+WUN.undo();
+await wait(50);
+const undoneLists = Array.prototype.map.call(DUN.querySelectorAll('#stage .blk'), (b) => JSON.parse(b.getAttribute('data-anim') || '[]'));
+check('step add undoes to initial-only', withStep === true &&
+  undoneLists.every((l) => l.length === 1 && l[0].initial === true) &&
+  !/data-anim=/.test(WUN.App.model.slides.s2.html));
+check('undo keeps slide context', WUN.App.activeId === WUN.App.model.slideOrder[1]);
+WUN.redo();
+await wait(50);
+check('step add redoes', DUN.querySelector('#stage .blk').hasAttribute('data-anim'));
+// undo back to a saved state clears the dirty flag
+DUN.querySelector('#btn-save').click();
+await wait(300);
+DUN.querySelector('#btn-add').click();
+await wait(100);
+WUN.undo();
+check('undo-to-saved shows Saved', DUN.querySelector('#dirty-flag').textContent === 'Saved');
+// rapid persists coalesce into one entry
+const stackBefore = WUN.undoStack.length;
+WUN.App.model.title = 'burst-1';
+WUN.persistSlide();
+WUN.App.model.title = 'burst-2';
+WUN.persistSlide();
+check('burst coalesces', WUN.undoStack.length === stackBefore + 1 &&
+  JSON.parse(WUN.undoStack[WUN.undoStack.length - 1].json).title === 'burst-2');
+// count cap trims oldest
+for (let i = 0; i < 40; i++) {
+  WUN.lastPushAt = 0;
+  WUN.App.model.title = 'cap-' + i;
+  WUN.persistSlide();
+}
+check('stack capped at 30', WUN.undoStack.length === 30 &&
+  JSON.parse(WUN.undoStack[WUN.undoStack.length - 1].json).title === 'cap-39');
+// Ctrl+Z drives deck undo outside text, native inside text
+WUN.App.model.title = 'key-1';
+WUN.lastPushAt = 0;
+WUN.persistSlide();
+DUN.dispatchEvent(new WUN.KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true, cancelable: true }));
+check('ctrl+z undoes', WUN.App.model.title !== 'key-1');
+const unRng = DUN.createRange();
+unRng.selectNodeContents(DUN.querySelector('#stage .slide h1') || DUN.querySelector('#stage .slide'));
+DUN.getSelection().removeAllRanges();
+DUN.getSelection().addRange(unRng);
+const undoLen = WUN.undoStack.length;
+const unKeyEv = new WUN.KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true, cancelable: true });
+DUN.dispatchEvent(unKeyEv);
+check('ctrl+z in text keeps native undo', WUN.undoStack.length === undoLen && unKeyEv.defaultPrevented === false);
+// load resets stacks
+WUN.loadModel(WUN.normalizeModel(JSON.parse(JSON.stringify({ app: 'browslide', version: 2, title: 'R', theme: 'dark',
+  slideOrder: ['s1'], nextId: 2, nextResId: 1, settings: {}, aspect: { w: 16, h: 9 }, resources: {},
+  slides: { s1: { title: 'R', layout: 'blank', transition: 'none', notes: '', html: '<p>r</p>' } } }))));
+await wait(100);
+check('load resets stacks', WUN.undoStack.length === 1 && WUN.redoStack.length === 0 && WUN.undo() === false);
+
 console.log(failures === 0 ? '\nALL TESTS PASSED' : `\n${failures} TEST(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);

@@ -200,6 +200,8 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
   <button id="btn-export" title="Export a viewer-only copy for sharing">Export viewer</button>
   <button id="btn-open" title="Open a saved browslide.html copy">Open</button>
   <button id="btn-new" title="Start a new deck">New</button>
+  <button id="btn-undo" title="Undo (Ctrl+Z)">↩</button>
+  <button id="btn-redo" title="Redo (Ctrl+Shift+Z)">↪</button>
   <button id="btn-save" class="primary" title="Save (downloads an .html copy)">Save</button>
 </header>
 
@@ -813,10 +815,15 @@ function syncStageToModel(){
   }
 }
 function refreshDirty(){
-  App.dirty = stable(App.model) !== App.lastClean;
+  var json = stable(App.model);
+  App.dirty = json !== App.lastClean;
   var f = $('#dirty-flag');
   f.textContent = App.dirty ? '● Unsaved changes' : 'Saved';
   f.classList.toggle('dirty', App.dirty);
+  var u = $('#btn-undo'), r = $('#btn-redo');
+  if (u) u.disabled = undoStack.length < 2;
+  if (r) r.disabled = !redoStack.length;
+  pushUndoJson(json);
 }
 
 /* ================= STORE (IndexedDB autosave) ================= */
@@ -1012,6 +1019,78 @@ function persistSlide(){
   syncStageToModel(); refreshDirty(); scheduleSize(); scheduleAutosave();
   rebuildScrub();
 }
+/* ---- undo/redo: snapshot stack over the single model JSON. Every persist
+   pushes the post-mutation state (coalesced for bursts); undo pops back to
+   the previous top. Snapshots come from the live decoded model, so restore
+   is synchronous with no re-decode. ---- */
+var undoStack = [], redoStack = [], undoGuard = false, lastPushAt = 0;
+function trimUndo(){
+  while (undoStack.length > 30) undoStack.shift();
+  var bytes = 0, i;
+  for (i = 0; i < undoStack.length; i++) bytes += undoStack[i].json.length;
+  while (undoStack.length > 1 && bytes > 12 * 1024 * 1024) {
+    bytes -= undoStack[0].json.length;
+    undoStack.shift();
+  }
+}
+function pushUndoState(){
+  undoStack.push({ json: stable(App.model), active: App.activeId, n: App.model.slideOrder.length });
+  trimUndo();
+}
+function pushUndoJson(json){
+  /* single shared sink (called from refreshDirty, so every mutation path is
+     covered); no-ops when nothing changed. Bursts coalesce, except the saved
+     state is never absorbed (save points stay reachable). */
+  if (undoGuard || !App.model) return;
+  var s = { json: json, active: App.activeId, n: App.model.slideOrder.length };
+  var top = undoStack[undoStack.length - 1];
+  if (top && top.json === s.json) return;
+  var now = Date.now();
+  if (top && top.json !== App.lastClean && now - lastPushAt < 2000 && top.active === s.active && top.n === s.n) undoStack[undoStack.length - 1] = s;
+  else { undoStack.push(s); trimUndo(); }
+  lastPushAt = now;
+  redoStack = [];
+}
+function resetUndo(){
+  undoStack = []; redoStack = []; lastPushAt = 0;
+  if (App.model) pushUndoState();
+}
+function restoreSnapshot(s){
+  undoGuard = true;
+  try {
+    var m = normalizeModel(JSON.parse(s.json));
+    if (!m) return false;
+    App.model = m;
+    sanitizeAllSlides();
+    App.activeId = m.slides[s.active] ? s.active : m.slideOrder[0];
+    clearSelection();
+    renderAll(); refreshDirty(); scheduleAutosave();
+  } finally { undoGuard = false; }
+  return true;
+}
+function undo(){
+  if (undoStack.length < 2) return false;
+  redoStack.push(undoStack.pop());
+  restoreSnapshot(undoStack[undoStack.length - 1]);
+  return true;
+}
+function redo(){
+  if (!redoStack.length) return false;
+  var s = redoStack.pop();
+  undoStack.push(s); trimUndo();
+  restoreSnapshot(s);
+  return true;
+}
+function nativeUndoFocus(){
+  /* field focus or a real text selection: the browser's own undo must win.
+     A collapsed caret uses deck undo (it covers typed bursts as one entry,
+     so drag-then-undo always works right after selecting). */
+  try {
+    var a = document.activeElement;
+    if (a && a.closest && a.closest('input,textarea,select')) return true;
+  } catch (e) {}
+  return stageTextSelected();
+}
 var onStageInput = debounce(function(){
   syncStageToModel();
   updateFilmstripLabel();
@@ -1026,6 +1105,7 @@ function gotoSlide(id){
   if (!App.model.slides[id] || id === App.activeId) return;
   syncStageToModel();
   App.activeId = id;
+  if (undoStack.length) undoStack[undoStack.length - 1].active = id; /* navigation follows context without pushing */
   clearSelection(); /* stage nodes are rebuilt; drop detached selection */
   renderFilmstrip(); renderStage(); renderInspector();
   refreshDirty(); scheduleAutosave();
@@ -3410,6 +3490,7 @@ function loadModel(m, cleanJson){
   App.lastClean = (typeof cleanJson === 'string') ? cleanJson : stable(m);
   clearSelection();
   renderAll(); autosaveNow();
+  resetUndo();
 }
 function resumeModel(json, cleanJson){
   /* autosave resume goes through the same validation as every other load path */
@@ -3520,6 +3601,8 @@ function bind(){
   $('#btn-save').addEventListener('click', saveNow);
   $('#btn-export').addEventListener('click', exportViewer);
   $('#btn-new').addEventListener('click', newDeck);
+  $('#btn-undo').addEventListener('click', function(){ undo(); });
+  $('#btn-redo').addEventListener('click', function(){ redo(); });
   $('#btn-open').addEventListener('click', function(){ $('#open-file').click(); });
   $('#open-file').addEventListener('change', function(e){ if (e.target.files[0]) openFile(e.target.files[0]); e.target.value = ''; });
   $('#btn-img').addEventListener('click', function(){ $('#insert-image').click(); });
@@ -3678,6 +3761,12 @@ function bind(){
       return;
     }
     if (e.key === 'Escape' && resizer.el) { deselectMedia(); e.preventDefault(); }
+    else if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
+      if (!nativeUndoFocus()) { e.preventDefault(); if (e.shiftKey) redo(); else undo(); }
+    }
+    else if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) {
+      if (!nativeUndoFocus()) { e.preventDefault(); redo(); }
+    }
     else if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) { e.preventDefault(); saveNow(); }
     else if ((e.ctrlKey || e.metaKey) && (e.key === 'o' || e.key === 'O')) { e.preventDefault(); $('#open-file').click(); }
     else if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C')) {
@@ -3720,6 +3809,7 @@ function boot(){
     App.lastClean = stable(decoded);
     bind();
     renderAll();
+    resetUndo();
   IDB.get('autosave').then(function(rec){
     if (!rec || !rec.json || rec.json === App.lastClean) return;
     var age = rec.at ? new Date(rec.at).toLocaleString() : 'unknown time';
