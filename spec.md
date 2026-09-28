@@ -2,8 +2,8 @@
 
 ## Session state (update when switching tasks/sessions)
 
-- Status: items 1-4 DONE and committed (471 checks). Next: item 5
-  (eyedropper + recent colors).
+- Status: items 1-5 DONE and committed (482 checks). Next: item 6
+  (style painter).
 - Conventions: commit per item, suite green before each commit, flip that item's
   `[ ]` to `[x]` when committed.
 
@@ -90,7 +90,7 @@ green before each commit, commit per item, agent-map anchors stay resolving
   existing drag tests pass unchanged. Guides live in `#stage-wrap` (survive
   stage rebuilds), hence explicit clearing on drop + re-render.
 
-## [ ] 5. Eyedropper + recent colors
+## [x] 5. Eyedropper + recent colors
 
 - Goal: pick any on-screen color; last-used palette near color inputs.
 - UX: dropper buttons beside text-color (formatbar) and step-row stroke color
@@ -101,6 +101,11 @@ green before each commit, commit per item, agent-map anchors stay resolving
 - Implementation: picked/applied colors flow through existing `applySpanStyle`
   / step-row commit paths so undo + presets keep working.
 - Tests: normalize fallback, push dedup/cap, swatch apply writes span color.
+- Findings: recent colors record in the UI handlers (not inside `applySpanStyle`,
+  which is also a read-path callee), so picks record even with no selection.
+  Step-row stroke commits re-push the current color (dedup keeps the list
+  stable). `pickColor` never throws: null without API or on deny. Normalize
+  dedups (saves from other copies could repeat).
 
 ## [ ] 6. Style painter
 

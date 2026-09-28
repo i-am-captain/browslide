@@ -89,6 +89,8 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 #formatbar .ali.c i{margin-left:4px;margin-right:4px}
 #formatbar .ali.r i{margin-left:8px}
 #formatbar .ali.j i:nth-child(2){margin-right:4px}
+#recent-swatches{display:inline-flex;gap:3px;align-items:center}
+#recent-swatches button{width:18px;height:18px;padding:0;border-radius:4px;min-width:0}
 #main{display:grid;grid-template-columns:190px 1fr 300px;gap:10px;padding:10px;flex:1 1 auto;min-height:0}
 #filmstrip{background:var(--panel);border:1px solid var(--border);border-radius:8px;overflow:auto;padding:8px}
 #filmstrip-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
@@ -245,6 +247,8 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
     <option value="4em">64</option>
   </select>
   <input type="color" id="font-color" value="#000000" title="Text color">
+  <button id="font-dropper" title="Pick a color from the screen">💧</button>
+  <span id="recent-swatches" title="Recently used colors"></span>
   <span class="sep"></span>
   <button data-cmd="bold" title="Bold"><b>B</b></button>
   <button data-cmd="italic" title="Italic"><i>I</i></button>
@@ -519,11 +523,13 @@ function normalizeModel(raw){
   if (!m.slideOrder.length) return null;
   if (raw.nextId && raw.nextId >= m.nextId) m.nextId = raw.nextId;
   var st = (raw.settings && typeof raw.settings === 'object') ? raw.settings : {};
+  var rc = Array.isArray(st.recentColors) ? st.recentColors.filter(function(c){ return /^#[0-9a-f]{6}$/i.test(String(c || '')); }).map(function(c){ return String(c).toLowerCase(); }).filter(function(c, i, a){ return a.indexOf(c) === i; }) : [];
   m.settings = { compress: st.compress !== false, downscale: !!st.downscale,
     maxDim: (st.maxDim === 1280 || st.maxDim === 2560) ? st.maxDim : 1920,
     showBar: st.showBar !== false, tight: !!st.tight,
     lineWidth: (parseInt(st.lineWidth, 10) >= 1 && parseInt(st.lineWidth, 10) <= 32) ? parseInt(st.lineWidth, 10) : 3,
-    lineColor: (/^#[0-9a-f]{6}$/i.test(String(st.lineColor || '')) ? String(st.lineColor) : '#2563eb') };
+    lineColor: (/^#[0-9a-f]{6}$/i.test(String(st.lineColor || '')) ? String(st.lineColor) : '#2563eb'),
+    recentColors: rc.slice(0, 8) };
   var ax = (raw.aspect && typeof raw.aspect === 'object') ? raw.aspect : null;
   var awd = ax ? parseInt(ax.w, 10) : NaN, aht = ax ? parseInt(ax.h, 10) : NaN;
   m.aspect = (awd >= 1 && awd <= 99 && aht >= 1 && aht <= 99) ? { w: awd, h: aht } : { w: 16, h: 9 };
@@ -1350,6 +1356,45 @@ function nearestStyleValue(node, names){
   }
   return '';
 }
+function pushRecentColor(hex){
+  /* last-used palette (max 8, deduped); callers persist through their own path */
+  if (!App.model || !App.model.settings) return false;
+  var c = String(hex || '').toLowerCase();
+  if (!/^#[0-9a-f]{6}$/.test(c)) return false;
+  var arr = App.model.settings.recentColors;
+  if (!Array.isArray(arr)) arr = App.model.settings.recentColors = [];
+  App.model.settings.recentColors = [c].concat(arr.filter(function(x){ return x !== c; })).slice(0, 8);
+  return true;
+}
+function pickColor(){
+  /* screen eyedropper where available, else null (callers hide the button) */
+  try {
+    if (!window.EyeDropper) return Promise.resolve(null);
+    return new window.EyeDropper().open().then(function(r){
+      var hex = r && r.sRGBHex;
+      return /^#[0-9a-f]{6}$/i.test(hex || '') ? String(hex).toLowerCase() : null;
+    }).catch(function(){ return null; });
+  } catch (e) { return Promise.resolve(null); }
+}
+function renderRecentSwatches(){
+  var host = $('#recent-swatches');
+  if (!host) return;
+  host.innerHTML = '';
+  var arr = (App.model && App.model.settings && App.model.settings.recentColors) || [];
+  arr.forEach(function(c){
+    var b = document.createElement('button');
+    b.style.background = c;
+    b.title = c;
+    b.addEventListener('click', function(){
+      var fc = $('#font-color');
+      if (fc) fc.value = c;
+      pushRecentColor(c);
+      renderRecentSwatches();
+      applySpanStyle('color', c);
+    });
+    host.appendChild(b);
+  });
+}
 function cssColorToHex(s){
   s = String(s || '').trim().toLowerCase();
   var m = /^#([0-9a-f]{3})$/.exec(s);
@@ -1713,6 +1758,7 @@ function updateFormatUI(){
     if (b.dataset.cmd !== 'clear') b.classList.toggle('active', !!on[b.dataset.cmd]);
   });
   syncFormatSelects();
+  renderRecentSwatches();
 }
 var scheduleFormatUI = debounce(function(){ trackSelection(); updateFormatUI(); }, 150);
 function insertFile(file, kind){
@@ -3094,6 +3140,19 @@ function buildAnimRows(el){
       fLC.value = (/^#[0-9a-f]{6}$/i.test(curC) ? curC : '#2563eb');
       fLC.title = 'Stroke color (initial state)';
       line('Line color', fLC);
+      if (window.EyeDropper) {
+        var sdp = document.createElement('button');
+        sdp.textContent = '💧';
+        sdp.title = 'Pick a color from the screen';
+        sdp.addEventListener('click', function(){
+          pickColor().then(function(hex){
+            if (!hex) return;
+            fLC.value = hex;
+            commit();
+          });
+        });
+        fLC.parentNode.appendChild(sdp);
+      }
     }
     function rv(inp, min, max, fb){
       var v = parseFloat(inp.value);
@@ -3123,6 +3182,7 @@ function buildAnimRows(el){
           if (/^#[0-9a-f]{6}$/i.test(lc)) {
             App.model.settings.lineColor = lc;
             svgAlive.setAttribute('stroke', lc);
+            pushRecentColor(lc);
           }
         }
       }
@@ -3807,6 +3867,8 @@ function bind(){
   $('#btn-clean-media').addEventListener('click', removeUnusedMedia);
   $('#btn-shape').addEventListener('click', function(){ insertShape($('#shape-select').value); });
   $('#btn-block').addEventListener('click', addTextBlock);
+  var fd = $('#font-dropper');
+  if (fd && !window.EyeDropper) fd.hidden = true;
   Array.prototype.forEach.call(document.querySelectorAll('#arrange-wrap [data-arr]'), function(b){
     b.addEventListener('click', function(){ arrangeSelection(b.getAttribute('data-arr')); });
   });
@@ -3862,7 +3924,21 @@ function bind(){
   });
   $('#font-select').addEventListener('change', function(e){ applySpanStyle('fontFamily', e.target.value); });
   $('#size-select').addEventListener('change', function(e){ applySpanStyle('fontSize', e.target.value); });
-  $('#font-color').addEventListener('change', function(e){ applySpanStyle('color', e.target.value); });
+  $('#font-color').addEventListener('change', function(e){
+    pushRecentColor(e.target.value);
+    renderRecentSwatches();
+    applySpanStyle('color', e.target.value);
+  });
+  $('#font-dropper').addEventListener('click', function(){
+    pickColor().then(function(hex){
+      if (!hex) return;
+      var fc = $('#font-color');
+      if (fc) fc.value = hex;
+      pushRecentColor(hex);
+      renderRecentSwatches();
+      applySpanStyle('color', hex);
+    });
+  });
   $('#style-select').addEventListener('change', function(e){ applyBlock(e.target.value); });
   document.addEventListener('selectionchange', function(){ trackSelection(); scheduleFormatUI(); });
   $('#stage-wrap').addEventListener('keyup', function(){ pendingFormat = null; scheduleFormatUI(); });

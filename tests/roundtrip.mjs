@@ -2082,5 +2082,48 @@ check('guides clear', DND.querySelectorAll('#stage-wrap .snapguide').length === 
 WND.showSnapGuides(snapSec, []);
 check('empty guides render nothing', DND.querySelectorAll('#stage-wrap .snapguide').length === 0);
 
+// ---------- 44. eyedropper + recent colors ----------
+const domRC = makeDom(html);
+await wait(400);
+const WRC = domRC.window, DRC = WRC.document;
+check('recent defaults empty', Array.isArray(WRC.App.model.settings.recentColors) &&
+  WRC.App.model.settings.recentColors.length === 0);
+check('normalize scrubs recents', (function(){
+  const m = WRC.normalizeModel({ app: 'browslide', version: 2, title: 'T', theme: 'dark', slideOrder: ['s1'], nextId: 2, nextResId: 1,
+    settings: { recentColors: ['#FF0000', 'bogus', '#abc', 7, '#00ff00', '#00FF00'] }, aspect: { w: 16, h: 9 },
+    resources: {}, slides: { s1: { title: 'T', layout: 'blank', transition: 'none', notes: '', html: '<p>x</p>' } } });
+  return JSON.stringify(m.settings.recentColors) === JSON.stringify(['#ff0000', '#00ff00']);
+})());
+check('push dedups + validates', (function(){
+  WRC.pushRecentColor('#112233');
+  WRC.pushRecentColor('nope');
+  WRC.pushRecentColor('#112233');
+  WRC.pushRecentColor('#445566');
+  return JSON.stringify(WRC.App.model.settings.recentColors) === JSON.stringify(['#445566', '#112233']);
+})());
+for (let i = 0; i < 10; i++) WRC.pushRecentColor('#0000' + (i < 10 ? '0' + i : i));
+check('recent caps at 8 newest-first', WRC.App.model.settings.recentColors.length === 8 &&
+  WRC.App.model.settings.recentColors[0] === '#000009');
+check('dropper hidden without API', DRC.querySelector('#font-dropper').hidden === true);
+WRC.renderRecentSwatches();
+check('swatches render', DRC.querySelectorAll('#recent-swatches button').length === 8);
+const rcSec = () => DRC.querySelector('#stage .slide');
+const rcRng = DRC.createRange();
+rcRng.selectNodeContents(rcSec().querySelector('h1 span').firstChild);
+DRC.getSelection().removeAllRanges();
+DRC.getSelection().addRange(rcRng);
+WRC.trackSelection();
+DRC.querySelectorAll('#recent-swatches button')[0].click();
+const rcColored = Array.prototype.filter.call(rcSec().querySelectorAll('span'), (s) => s.style.color !== '');
+check('swatch applies span color', rcColored.length >= 1);
+DRC.querySelector('#font-color').value = '#123456';
+DRC.querySelector('#font-color').dispatchEvent(new WRC.Event('change', { bubbles: true }));
+check('color input records recent', WRC.App.model.settings.recentColors[0] === '#123456');
+check('pickColor null without API', await WRC.pickColor() === null);
+WRC.EyeDropper = function(){ this.open = () => Promise.resolve({ sRGBHex: '#1A2b3C' }); };
+check('pickColor reads API', await WRC.pickColor() === '#1a2b3c');
+WRC.EyeDropper = function(){ this.open = () => Promise.reject(new Error('denied')); };
+check('pickColor null on deny', await WRC.pickColor() === null);
+
 console.log(failures === 0 ? '\nALL TESTS PASSED' : `\n${failures} TEST(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);
