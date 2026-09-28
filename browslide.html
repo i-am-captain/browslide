@@ -377,6 +377,18 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
         <option value="star">Star ★</option>
         <option value="check">Check ✓</option>
         <option value="cross">Cross ✕</option>
+        <option value="plus">Plus +</option>
+        <option value="minus">Minus −</option>
+        <option value="diamond">Diamond ◇</option>
+        <option value="pentagon">Pentagon ⬠</option>
+        <option value="hexagon">Hexagon ⬡</option>
+        <option value="heart">Heart ♥</option>
+        <option value="right-triangle">Right triangle ◺</option>
+        <option value="smiley">Smiley ☺</option>
+        <option value="note">Note ▤</option>
+        <option value="bolt">Bolt ⚡</option>
+        <option value="block-arrow">Block arrow ➡</option>
+        <option value="target">Target ◎</option>
       </select></div>
       <div class="srow"><span></span><button id="btn-shape">Add shape</button></div>
     </details>
@@ -1959,7 +1971,19 @@ var SHAPE_DEFS = {
   'ellipse': { params: [{ key: 'width', label: 'Width', min: 10, def: 72 }, { key: 'height', label: 'Height', min: 10, def: 48 }], geo: function(p){ return ellipseGeo(numParam(p, 'width', 72, 10), numParam(p, 'height', 48, 10)); } },
   'star': { params: [], geo: function(){ return '<polygon points="50,6 61,39 96,39 68,60 79,94 50,73 21,94 32,60 4,39 39,39"/>'; } },
   'check': { params: [], geo: function(){ return '<polyline points="22,54 43,74 78,30"/>'; } },
-  'cross': { params: [], geo: function(){ return '<line x1="26" y1="26" x2="74" y2="74"/><line x1="74" y1="26" x2="26" y2="74"/>'; } }
+  'cross': { params: [], geo: function(){ return '<line x1="26" y1="26" x2="74" y2="74"/><line x1="74" y1="26" x2="26" y2="74"/>'; } },
+  'plus': { params: [], geo: function(){ return '<line x1="50" y1="26" x2="50" y2="74"/><line x1="26" y1="50" x2="74" y2="50"/>'; } },
+  'minus': { params: [], geo: function(){ return '<line x1="26" y1="50" x2="74" y2="50"/>'; } },
+  'diamond': { params: [], geo: function(){ return '<polygon points="50,15 85,50 50,85 15,50"/>'; } },
+  'pentagon': { params: [], geo: function(){ return '<polygon points="50,8 92,38 76,88 24,88 8,38"/>'; } },
+  'hexagon': { params: [], geo: function(){ return '<polygon points="50,8 86,29 86,71 50,92 14,71 14,29"/>'; } },
+  'heart': { params: [], geo: function(){ return '<polygon points="50,80 20,58 14,40 24,26 38,26 50,38 62,26 76,26 86,40 80,58"/>'; } },
+  'right-triangle': { params: [], geo: function(){ return '<polygon points="30,20 30,80 75,80"/>'; } },
+  'smiley': { params: [], geo: function(){ return '<circle cx="50" cy="46" r="30"/><line x1="41" y1="40" x2="43" y2="40"/><line x1="57" y1="40" x2="59" y2="40"/><polyline points="36,58 44,66 56,66 64,58"/>'; } },
+  'note': { params: [], geo: function(){ return '<rect x="28" y="18" width="44" height="62" rx="4"/><polyline points="58,18 58,36 72,36"/>'; } },
+  'bolt': { params: [], geo: function(){ return '<polygon points="56,10 30,56 46,56 42,90 70,44 54,44"/>'; } },
+  'block-arrow': { params: [], geo: function(){ return '<polygon points="10,38 58,38 58,24 90,50 58,76 58,62 10,62"/>'; } },
+  'target': { params: [], geo: function(){ return '<circle cx="50" cy="50" r="30"/><circle cx="50" cy="50" r="12"/>'; } }
 };
 var SHAPES = {};
 Object.keys(SHAPE_DEFS).forEach(function(k){

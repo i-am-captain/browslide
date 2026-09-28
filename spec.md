@@ -2,8 +2,8 @@
 
 ## Session state (update when switching tasks/sessions)
 
-- Status: items 1-8 DONE and committed (521 checks). Next: item 9
-  (symbol shapes).
+- Status: items 1-9 DONE and committed (526 checks). Next: item 10
+  (copy/paste animation steps).
 - Conventions: commit per item, suite green before each commit, flip that item's
   `[ ]` to `[x]` when committed.
 
@@ -161,7 +161,7 @@ green before each commit, commit per item, agent-map anchors stay resolving
   `selectOption` leaves stale values on exotic input — guarded with an explicit
   reset. CSS serializes `0.50em` to `0.5em` (test expectation, not app).
 
-## [ ] 9. Symbol shapes
+## [x] 9. Symbol shapes
 
 - Goal: +12 insertable symbols (plus, minus, diamond, pentagon, hexagon,
   heart, right-triangle, smiley, note, bolt, arrow-curved?, block-arrow).
@@ -171,6 +171,8 @@ green before each commit, commit per item, agent-map anchors stay resolving
   stroke-only, `shapeSizeKeys` returns `[]` automatically).
 - Tests: library contains all kinds, markup inert, insert + save round-trip,
   no size handles for fixed symbols.
+- Findings: all 12 drawn from primitive tags only (no `<path>`) so the
+  geometry→screen overlay math keeps working — verified per-glyph by test.
 
 ## [ ] 10. Copy/paste animation steps
 

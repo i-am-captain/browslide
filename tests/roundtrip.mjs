@@ -2193,6 +2193,31 @@ DLS.querySelector('#opt-shrink').dispatchEvent(new WLS.Event('change', { bubbles
 Object.defineProperty(lsBlk, 'scrollHeight', { value: 200, configurable: true });
 check('shrink off skips loop', WLS.shrinkToFit(lsSec()) === false);
 
+// ---------- 48. symbol shapes ----------
+const domSY = makeDom(html);
+await wait(400);
+const WSY = domSY.window, DSY = WSY.document;
+WSY.gotoSlide(WSY.App.model.slideOrder[1]);
+await wait(100);
+const newKinds = ['plus', 'minus', 'diamond', 'pentagon', 'hexagon', 'heart', 'right-triangle', 'smiley', 'note', 'bolt', 'block-arrow', 'target'];
+check('library gains 12 symbols', newKinds.every((k) => !!WSY.SHAPE_DEFS[k] && WSY.SHAPE_DEFS[k].params.length === 0) &&
+  Object.keys(WSY.SHAPE_DEFS).length === 26);
+check('new markup inert + primitive-only', newKinds.every((k) => {
+  const g = WSY.SHAPE_DEFS[k].geo({});
+  return /<(line|polyline|polygon|circle|rect|ellipse)/.test(g) && !/script|on\w+=|javascript:|<path/i.test(g);
+}));
+WSY.insertShape('heart');
+await wait(50);
+const heartSvg = DSY.querySelectorAll('#stage .blk svg');
+const heartBlk = heartSvg[heartSvg.length - 1].closest('.blk');
+check('heart inserts + saves', heartSvg[heartSvg.length - 1].getAttribute('data-kind') === 'heart' &&
+  WSY.App.model.slides.s2.html.includes('data-kind="heart"'));
+check('heart bbox resolves (no path tags)', WSY.svgContentBox(heartSvg[heartSvg.length - 1]) !== null);
+WSY.setSingleSelection(heartBlk);
+check('fixed symbols hide size handles', DSY.querySelector('#media-resizer .mhandle').style.display === 'none' &&
+  DSY.querySelector('#media-resizer .mh-e').style.display === 'none' &&
+  DSY.querySelector('#media-resizer .mh-s').style.display === 'none');
+
 // ---------- 45. style painter ----------
 const domPT = makeDom(html);
 await wait(400);
