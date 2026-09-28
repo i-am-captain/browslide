@@ -268,6 +268,14 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
   <span class="sep"></span>
   <button data-cmd="insertUnorderedList" title="Bullet list"><span>•≡</span></button>
   <button data-cmd="insertOrderedList" title="Numbered list"><span>1≡</span></button>
+  <select id="list-select" title="Bullet style">
+    <option value="" selected>• Default</option>
+    <option value="disc">• Disc</option>
+    <option value="circle">○ Circle</option>
+    <option value="square">■ Square</option>
+    <option value="decimal">1. Numbers</option>
+    <option value="none">None</option>
+  </select>
   <button data-cmd="clear" title="Clear formatting"><span>Tₓ</span></button>
   <span class="sep"></span>
   <button id="btn-painter" title="Copy item style: click a source item, then the target (Shift keeps applying, Esc cancels)">🎨</button>
@@ -295,6 +303,7 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
         <option value="slide">Slide</option>
       </select>
     </label>
+      <label class="row"><input type="checkbox" id="opt-shrink"> Shrink text to fit blocks</label>
       <p><button id="btn-block" title="Add a free text block to this slide">+ Text block</button></p>
     </details>
     <details id="present-settings">
@@ -522,7 +531,8 @@ function normalizeModel(raw){
       layout: LAYOUTS.indexOf(s.layout) >= 0 ? s.layout : 'title-body',
       transition: TRANSITIONS.indexOf(s.transition) >= 0 ? s.transition : 'fade',
       html: sanitizeSlideHTML(s.html || '<p></p>'),
-      notes: String(s.notes || '')
+      notes: String(s.notes || ''),
+      shrinkText: s.shrinkText === true
     };
     m.slideOrder.push(id);
     var n = parseInt(String(id).replace(/^s/, ''), 10);
@@ -976,6 +986,7 @@ function renderStage(){
   wrap.appendChild(sec);
   ensureSlideInitials(); /* every item starts with an initial step (needs live DOM) */
   clearSnapGuides(); /* guides never survive a re-render */
+  shrinkToFit(sec);
   fitStage();
   scrubGroup = 1; scrubSnaps = []; /* fresh slide starts at the initial stage */
   rebuildScrub();
@@ -1012,8 +1023,27 @@ function renderInspector(){
   $('#layout-select').value = s.layout;
   $('#transition-select').value = s.transition;
   $('#theme-select').value = App.model.theme;
+  $('#opt-shrink').checked = !!s.shrinkText;
   syncAspectUI();
   if (document.activeElement !== $('#notes')) $('#notes').value = s.notes;
+}
+/* ---- shrink-to-fit: per-slide flag; the loop writes block font sizes so
+   saved decks and exports carry the shrunk text (no measuring needed there) ---- */
+function shrinkToFit(sec){
+  if (!sec || !activeSlide() || !activeSlide().shrinkText) return false;
+  var changed = false;
+  Array.prototype.forEach.call(sec.querySelectorAll('.blk'), function(b){
+    b.style.fontSize = '';
+    var fs = 1, guard = 0;
+    try {
+      while (b.scrollHeight > b.clientHeight + 1 && fs > 0.5 && guard++ < 20) {
+        fs = Math.round((fs - 0.05) * 100) / 100;
+        b.style.fontSize = fs.toFixed(2) + 'em';
+      }
+    } catch (e) {}
+    if (b.style.fontSize) changed = true;
+  });
+  return changed;
 }
 function syncAspectUI(){
   var a = deckAR();
@@ -1128,6 +1158,8 @@ function nativeUndoFocus(){
   return stageTextSelected();
 }
 var onStageInput = debounce(function(){
+  var sec = $('#stage .slide');
+  if (sec) shrinkToFit(sec); /* shrink first: sizes save with this sync */
   syncStageToModel();
   updateFilmstripLabel();
   refreshDirty();
@@ -1297,6 +1329,71 @@ function alignState(){
     if (v === 'justify') return 'justifyFull';
     return 'justifyLeft';
   } catch (e) { return null; }
+}
+/* ---- lists: indent/outdent + bullet styles ---- */
+function caretLI(){
+  try {
+    var sel = document.getSelection();
+    if (!sel.rangeCount) return null;
+    var n = sel.anchorNode, sec = $('#stage .slide');
+    if (!sec || !(n === sec || sec.contains(n))) return null;
+    n = (n && n.nodeType === 3) ? n.parentNode : n;
+    while (n && n !== sec) {
+      if (n.nodeType === 1 && n.tagName === 'LI') return n;
+      n = n.parentNode;
+    }
+  } catch (e) {}
+  return null;
+}
+function currentList(){
+  try {
+    var sel = document.getSelection();
+    if (!sel.rangeCount) return null;
+    var n = sel.anchorNode, sec = $('#stage .slide');
+    if (!sec || !(n === sec || sec.contains(n))) return null;
+    n = (n && n.nodeType === 3) ? n.parentNode : n;
+    while (n && n !== sec) {
+      if (n.nodeType === 1 && (n.tagName === 'UL' || n.tagName === 'OL')) return n;
+      n = n.parentNode;
+    }
+  } catch (e) {}
+  return null;
+}
+function indentList(dir){
+  var sec = $('#stage .slide');
+  if (!sec || !caretLI()) return false;
+  var before = sec.innerHTML;
+  try { document.execCommand(dir > 0 ? 'indent' : 'outdent', false, null); } catch (e) {}
+  if (sec.innerHTML === before) {
+    /* engine ignored it (or no-op): stepped padding fallback, scale-safe em */
+    var li = caretLI();
+    if (!li) return false;
+    var cur = parseFloat(li.style.paddingLeft) || 0;
+    var next = Math.max(0, Math.min(6, cur + dir * 2));
+    li.style.paddingLeft = next ? next + 'em' : '';
+  }
+  afterFormat();
+  return true;
+}
+function applyListStyle(style){
+  var lists = [];
+  var at = currentList();
+  if (at) lists = [at];
+  else {
+    blocksInSelection().forEach(function(b){
+      Array.prototype.forEach.call(b.querySelectorAll ? b.querySelectorAll('ul,ol') : [], function(l){
+        if (lists.indexOf(l) < 0) lists.push(l);
+      });
+    });
+    var cb = caretBlock();
+    if (!lists.length && cb) Array.prototype.forEach.call(cb.querySelectorAll ? cb.querySelectorAll('ul,ol') : [], function(l){
+      if (lists.indexOf(l) < 0) lists.push(l);
+    });
+  }
+  if (!lists.length) return false;
+  lists.forEach(function(l){ l.style.listStyleType = style || ''; });
+  afterFormat();
+  return true;
 }
 function trackSelection(){
   try {
@@ -1485,6 +1582,10 @@ function syncFormatSelects(){
     }
     var blk = nearestBlock(anchor);
     if (blk) selectOption($('#style-select'), function(v){ return v === blk; });
+    var lst = currentList();
+    var lsel = $('#list-select');
+    if (!lst) lsel.selectedIndex = 0;
+    else selectOption(lsel, function(v){ return v === (lst.style.listStyleType || ''); });
   } catch (e) {}
 }
 function dropEmpties(root){
@@ -4103,6 +4204,7 @@ function bind(){
     });
   });
   $('#style-select').addEventListener('change', function(e){ applyBlock(e.target.value); });
+  $('#list-select').addEventListener('change', function(e){ applyListStyle(e.target.value); });
   document.addEventListener('selectionchange', function(){ trackSelection(); scheduleFormatUI(); });
   $('#stage-wrap').addEventListener('keyup', function(){ pendingFormat = null; scheduleFormatUI(); });
   $('#stage-wrap').addEventListener('click', function(){ pendingFormat = null; scheduleFormatUI(); });
@@ -4129,6 +4231,17 @@ function bind(){
     s.layout = e.target.value;
     var sec = $('#stage .slide'); if (sec) sec.className = 'slide layout-' + s.layout;
     refreshDirty(); scheduleAutosave();
+  });
+  $('#opt-shrink').addEventListener('change', function(e){
+    var s = activeSlide(); if (!s) return;
+    s.shrinkText = !!e.target.checked;
+    var sec = $('#stage .slide');
+    if (sec && !s.shrinkText) {
+      /* toggling off clears shrunk sizes back to natural */
+      Array.prototype.forEach.call(sec.querySelectorAll('.blk'), function(b){ b.style.fontSize = ''; });
+    }
+    if (sec) shrinkToFit(sec);
+    persistSlide();
   });
   $('#transition-select').addEventListener('change', function(e){ activeSlide().transition = e.target.value; refreshDirty(); scheduleAutosave(); });
   $('#theme-select').addEventListener('change', function(e){
@@ -4255,6 +4368,11 @@ function bind(){
       else if (e.key === 'PageUp') step(-1);
       else if (e.key === 'Home') gotoSlide(App.model.slideOrder[0]);
       else gotoSlide(App.model.slideOrder[App.model.slideOrder.length - 1]);
+    }
+    else if (e.key === 'Tab' && !inFormField() && caretLI()) {
+      /* Tab indents list items instead of moving focus */
+      e.preventDefault();
+      indentList(e.shiftKey ? -1 : 1);
     }
   });
   window.addEventListener('dragover', function(e){ e.preventDefault(); });

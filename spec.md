@@ -2,8 +2,8 @@
 
 ## Session state (update when switching tasks/sessions)
 
-- Status: items 1-7 DONE and committed (507 checks). Next: item 8
-  (lists, bullets, shrink-to-fit).
+- Status: items 1-8 DONE and committed (521 checks). Next: item 9
+  (symbol shapes).
 - Conventions: commit per item, suite green before each commit, flip that item's
   `[ ]` to `[x]` when committed.
 
@@ -143,7 +143,7 @@ green before each commit, commit per item, agent-map anchors stay resolving
   `tableTouch` (which also persists, so row/col ops are undoable). Rapid table
   ops coalesce in undo; tests force `lastPushAt = 0` for undo targets.
 
-## [ ] 8. Lists, bullets, shrink-to-fit
+## [x] 8. Lists, bullets, shrink-to-fit
 
 - Goal: Tab/Shift-Tab indent/outdent in lists, bullet-style picker,
   per-slide shrink-text-to-fit.
@@ -155,6 +155,11 @@ green before each commit, commit per item, agent-map anchors stay resolving
   fits (guarded, min 50%).
 - Tests: picker writes `list-style-type`, indent fallback path, shrink flag
   round-trips and shrinks overflowing text in a stubbed layout.
+- Findings: jsdom has no `execCommand`, so the suite pins the padding fallback;
+  real browsers take the native path first. Shrink sizes are written into the
+  model by the editor loop, so presenter + viewer need no measuring code.
+  `selectOption` leaves stale values on exotic input — guarded with an explicit
+  reset. CSS serializes `0.50em` to `0.5em` (test expectation, not app).
 
 ## [ ] 9. Symbol shapes
 

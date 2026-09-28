@@ -2133,6 +2133,66 @@ const dirtyT = WTB2.normalizeModel({ app: 'browslide', version: 2, title: 'T', t
   slides: { s1: { title: 'T', layout: 'blank', transition: 'none', notes: '', html: '<table><tr><td onclick="x()">a<script>e()<\/script></td></tr></table>' } } });
 check('sanitizer keeps tables, strips junk', /<table/.test(dirtyT.slides.s1.html) && !/onclick|script/i.test(dirtyT.slides.s1.html));
 
+// ---------- 47. lists, bullets, shrink ----------
+const domLS = makeDom(html);
+await wait(400);
+const WLS = domLS.window, DLS = WLS.document;
+WLS.gotoSlide(WLS.App.model.slideOrder[1]);
+await wait(100);
+const lsSec = () => DLS.querySelector('#stage .slide');
+function lsCaret(node) {
+  const r = DLS.createRange();
+  r.setStart(node, 0);
+  r.collapse(true);
+  DLS.getSelection().removeAllRanges();
+  DLS.getSelection().addRange(r);
+  WLS.trackSelection();
+}
+lsCaret(lsSec().querySelector('ul li span').firstChild);
+check('caretLI finds item', WLS.caretLI() !== null && WLS.caretLI().tagName === 'LI');
+check('currentList finds list', WLS.currentList() !== null && WLS.currentList().tagName === 'UL');
+DLS.querySelector('#list-select').value = 'square';
+DLS.querySelector('#list-select').dispatchEvent(new WLS.Event('change', { bubbles: true }));
+check('bullet style applies + persists', lsSec().querySelector('ul').style.listStyleType === 'square' &&
+  /list-style-type:\s*square/.test(WLS.activeSlide().html));
+WLS.updateFormatUI();
+check('picker reflects list', DLS.querySelector('#list-select').value === 'square');
+const tabEv = new WLS.KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+DLS.dispatchEvent(tabEv);
+check('tab indents via fallback', tabEv.defaultPrevented === true &&
+  WLS.caretLI().style.paddingLeft === '2em');
+const tabBack = new WLS.KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true });
+DLS.dispatchEvent(tabBack);
+check('shift-tab outdents', WLS.caretLI().style.paddingLeft === '');
+lsCaret(lsSec().querySelector('h1 span').firstChild);
+const tabPlain = new WLS.KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+DLS.dispatchEvent(tabPlain);
+check('tab outside lists stays native', tabPlain.defaultPrevented === false);
+DLS.querySelector('#notes').focus();
+const tabField = new WLS.KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+DLS.dispatchEvent(tabField);
+check('tab in fields stays native', tabField.defaultPrevented === false);
+DLS.querySelector('#notes').blur();
+check('shrink defaults off', WLS.activeSlide().shrinkText === false);
+DLS.querySelector('#opt-shrink').checked = true;
+DLS.querySelector('#opt-shrink').dispatchEvent(new WLS.Event('change', { bubbles: true }));
+check('shrink toggle persists', WLS.activeSlide().shrinkText === true &&
+  /"shrinkText":true/.test(JSON.stringify(WLS.App.model.slides)));
+WLS.undo();
+check('shrink toggle undoes', WLS.activeSlide().shrinkText === false);
+DLS.querySelector('#opt-shrink').checked = true;
+DLS.querySelector('#opt-shrink').dispatchEvent(new WLS.Event('change', { bubbles: true }));
+const lsBlk = lsSec().querySelector('.blk');
+Object.defineProperty(lsBlk, 'scrollHeight', { value: 200, configurable: true });
+Object.defineProperty(lsBlk, 'clientHeight', { value: 100, configurable: true });
+check('shrink loop clamps at half', WLS.shrinkToFit(lsSec()) === true && lsBlk.style.fontSize === '0.5em');
+Object.defineProperty(lsBlk, 'scrollHeight', { value: 50, configurable: true });
+check('fitting text resets size', WLS.shrinkToFit(lsSec()) === false && lsBlk.style.fontSize === '');
+DLS.querySelector('#opt-shrink').checked = false;
+DLS.querySelector('#opt-shrink').dispatchEvent(new WLS.Event('change', { bubbles: true }));
+Object.defineProperty(lsBlk, 'scrollHeight', { value: 200, configurable: true });
+check('shrink off skips loop', WLS.shrinkToFit(lsSec()) === false);
+
 // ---------- 45. style painter ----------
 const domPT = makeDom(html);
 await wait(400);
