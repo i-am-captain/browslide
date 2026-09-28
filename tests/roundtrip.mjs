@@ -2045,5 +2045,42 @@ check('arrange matchW copies primary', WND.arrangeSelection('matchW') === true &
 WND.setSingleSelection(arRe[0]);
 check('distribute needs 2+', WND.arrangeSelection('distH') === false && WND.arrangeSelection('matchW') === false);
 
+// ---------- 43. snap guides ----------
+check('exact alignment holds with guide', (function(){
+  const r = WND.snapDelta([{ l: 391, t: 100, w: 18, h: 18 }], [], 800, 600, 0, 0);
+  return r.dx === 0 && r.dy === 0 && r.guides.length === 1 && r.guides[0].x === 400;
+})());
+check('snap catches center line', (function(){
+  // mover center-x at 398 + dx 0 -> 2px off 400: snaps +2 with a vertical guide
+  const r = WND.snapDelta([{ l: 389, t: 100, w: 18, h: 18 }], [], 800, 600, 0, 0);
+  return r.dx === 2 && r.dy === 0 && r.guides.length === 1 && r.guides[0].x === 400;
+})());
+check('snap catches item edges', (function(){
+  // static right edge at 300; mover left at 296 + dx 0 -> snaps +4
+  const r = WND.snapDelta([{ l: 296, t: 100, w: 40, h: 40 }], [{ l: 200, t: 100, w: 100, h: 40 }], 800, 600, 0, 0);
+  return r.dx === 4 && r.guides.some((g) => g.x === 300);
+})());
+check('snap respects threshold', (function(){
+  const r = WND.snapDelta([{ l: 370, t: 100, w: 18, h: 18 }], [], 800, 600, 0, 0);
+  return r.dx === 0 && r.dy === 0 && r.guides.length === 0;
+})());
+check('snap skips without layout', (function(){
+  const a = WND.snapDelta([{ l: 0, t: 0, w: 0, h: 0 }], [], 800, 600, 30, 10);
+  const b = WND.snapDelta([{ l: 10, t: 10, w: 20, h: 20 }], [], 0, 0, 30, 10);
+  return a.dx === 30 && a.dy === 10 && a.guides.length === 0 && b.dx === 30 && b.dy === 10;
+})());
+check('snap picks closest line', (function(){
+  // mover left 394 (6 off 400) but center 403 (3 off): center wins with -3
+  const r = WND.snapDelta([{ l: 394, t: 100, w: 18, h: 18 }], [], 800, 600, 0, 0);
+  return r.dx === -3 && r.guides.length === 1 && r.guides[0].x === 400;
+})());
+const snapSec = DND.querySelector('#stage .slide');
+WND.showSnapGuides(snapSec, [{ x: 400 }, { y: 300 }]);
+check('guides render', DND.querySelectorAll('#stage-wrap .snapguide').length === 2);
+WND.clearSnapGuides();
+check('guides clear', DND.querySelectorAll('#stage-wrap .snapguide').length === 0);
+WND.showSnapGuides(snapSec, []);
+check('empty guides render nothing', DND.querySelectorAll('#stage-wrap .snapguide').length === 0);
+
 console.log(failures === 0 ? '\nALL TESTS PASSED' : `\n${failures} TEST(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);

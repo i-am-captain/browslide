@@ -122,6 +122,7 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 #shapes-wrap .srow button{margin-left:auto}
 #shapes-wrap input:disabled{opacity:.45}
 .selextra{position:absolute;border:2px dashed var(--accent);border-radius:4px;pointer-events:none;z-index:4}
+.snapguide{position:absolute;z-index:6;pointer-events:none;background:var(--accent);opacity:.7}
 #compress-stats{color:var(--muted);font-size:12px}
 #sizes-body button{padding:2px 8px;font-size:11px}
 #aspect-custom{display:flex;gap:8px}
@@ -958,6 +959,7 @@ function renderStage(){
   });
   wrap.appendChild(sec);
   ensureSlideInitials(); /* every item starts with an initial step (needs live DOM) */
+  clearSnapGuides(); /* guides never survive a re-render */
   fitStage();
   scrubGroup = 1; scrubSnaps = []; /* fresh slide starts at the initial stage */
   rebuildScrub();
@@ -2038,6 +2040,88 @@ function placeCaretAtPoint(x, y){
     return true;
   } catch (e) { return false; }
 }
+/* ---- snap guides: dragged items catch slide center/edges and other items'
+   edges/centers (6px). Pure math over px boxes; guides are transient divs. ---- */
+function snapDelta(movers, statics, slideW, slideH, dx, dy){
+  var none = { dx: dx, dy: dy, guides: [] };
+  if (!(slideW > 0) || !(slideH > 0)) return none;
+  if (!movers.some(function(m){ return m.w > 0 && m.h > 0; })) return none; /* no layout (tests): never snap */
+  var TH = 6;
+  var cx = [0, slideW / 2, slideW], cy = [0, slideH / 2, slideH];
+  statics.forEach(function(s){
+    if (!(s.w > 0 && s.h > 0)) return;
+    cx.push(s.l, s.l + s.w / 2, s.l + s.w);
+    cy.push(s.t, s.t + s.h / 2, s.t + s.h);
+  });
+  function best(lines, cands, d){
+    var adj = 0, line = null;
+    lines.forEach(function(l){
+      cands.forEach(function(c){
+        var a = c - (l + d);
+        if (Math.abs(a) <= TH && (line === null || Math.abs(a) < Math.abs(adj))) { adj = a; line = c; }
+      });
+    });
+    return { adj: adj, line: line };
+  }
+  var mxs = [], mys = [];
+  movers.forEach(function(m){ mxs.push(m.l, m.l + m.w / 2, m.l + m.w); mys.push(m.t, m.t + m.h / 2, m.t + m.h); });
+  var bx = best(mxs, cx, dx), by = best(mys, cy, dy);
+  var guides = [];
+  if (bx.line !== null) guides.push({ x: bx.line });
+  if (by.line !== null) guides.push({ y: by.line });
+  return { dx: dx + bx.adj, dy: dy + by.adj, guides: guides };
+}
+function snapSelection(items, slideW, slideH, dx, dy){
+  var none = { dx: dx, dy: dy, guides: [] };
+  var sec = $('#stage .slide');
+  if (!sec || !(slideW > 0) || !(slideH > 0)) return none;
+  var movers = [];
+  items.forEach(function(el){
+    if (!el || !document.contains(el)) return;
+    movers.push({
+      l: (parseFloat(el.style.left) || 0) / 100 * slideW,
+      t: (parseFloat(el.style.top) || 0) / 100 * slideH,
+      w: el.offsetWidth || 0, h: el.offsetHeight || 0
+    });
+  });
+  if (!movers.length) return none;
+  var statics = [];
+  Array.prototype.forEach.call(sec.children, function(n){
+    if (!n || !n.classList) return;
+    if (!n.classList.contains('blk') && !/^(IMG|VIDEO)$/.test(n.tagName)) return;
+    if (items.indexOf(n) >= 0) return;
+    var b = { l: n.offsetLeft || 0, t: n.offsetTop || 0, w: n.offsetWidth || 0, h: n.offsetHeight || 0 };
+    if (b.w > 0 && b.h > 0) statics.push(b);
+  });
+  return snapDelta(movers, statics, slideW, slideH, dx, dy);
+}
+function showSnapGuides(sec, guides){
+  clearSnapGuides();
+  if (!guides.length || !sec) return;
+  var wrap = $('#stage-wrap');
+  if (!wrap) return;
+  var s, w;
+  try { s = sec.getBoundingClientRect(); w = wrap.getBoundingClientRect(); } catch (e) { return; }
+  guides.forEach(function(g){
+    var d = document.createElement('div');
+    d.className = 'snapguide';
+    if (g.x !== undefined) {
+      d.style.left = (s.left - w.left + wrap.scrollLeft + g.x) + 'px';
+      d.style.top = (s.top - w.top + wrap.scrollTop) + 'px';
+      d.style.width = '1px';
+      d.style.height = s.height + 'px';
+    } else {
+      d.style.left = (s.left - w.left + wrap.scrollLeft) + 'px';
+      d.style.top = (s.top - w.top + wrap.scrollTop + g.y) + 'px';
+      d.style.width = s.width + 'px';
+      d.style.height = '1px';
+    }
+    wrap.appendChild(d);
+  });
+}
+function clearSnapGuides(){
+  Array.prototype.forEach.call(document.querySelectorAll('#stage-wrap .snapguide'), function(n){ n.remove(); });
+}
 function trackDrag(host, onMove, onUp){
   /* one place for pointer-drag listener lifecycle (handle or window) */
   function off(){
@@ -2066,9 +2150,12 @@ function startItemDrag(e, caret){
   function onMove(ev){
     if (!moved && Math.abs(ev.clientX - startX) < 3 && Math.abs(ev.clientY - startY) < 3) return;
     if (!moved) { moved = true; forgetScrubbedRest(items); }
-    if (moveItemsBy(starts, ev.clientX - startX, ev.clientY - startY, slideW, slideH)) positionResizer();
+    var sn = snapSelection(items, slideW, slideH, ev.clientX - startX, ev.clientY - startY);
+    if (moveItemsBy(starts, sn.dx, sn.dy, slideW, slideH)) positionResizer();
+    showSnapGuides(sec, sn.guides);
   }
   function onUp(ev){
+    clearSnapGuides();
     if (!moved) {
       if (caret !== false && isFinite(ev.clientX)) placeCaretAtPoint(ev.clientX, ev.clientY);
       return; /* plain click: selection already set, model untouched */

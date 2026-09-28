@@ -2,8 +2,8 @@
 
 ## Session state (update when switching tasks/sessions)
 
-- Status: items 1-3 DONE and committed (462 checks). Next: item 4
-  (snap guides while dragging).
+- Status: items 1-4 DONE and committed (471 checks). Next: item 5
+  (eyedropper + recent colors).
 - Conventions: commit per item, suite green before each commit, flip that item's
   `[ ]` to `[x]` when committed.
 
@@ -74,7 +74,7 @@ green before each commit, commit per item, agent-map anchors stay resolving
   scrub re-applies stale initials), defeat coalescing + re-query after
   undo/redo.
 
-## [ ] 4. Snap guides while dragging
+## [x] 4. Snap guides while dragging
 
 - Goal: dragged items snap to slide center/edges and other items' edges/centers
   with visible guide lines (~6px threshold).
@@ -85,6 +85,10 @@ green before each commit, commit per item, agent-map anchors stay resolving
   `moveItemsBy`. No-layout environments skip (slidePx 0).
 - Tests: pure snap math (center/edge attraction, threshold miss, multi-box),
   guides render/clear around a drag.
+- Findings: snap uses unrotated boxes (rotation ignored — documented limit, feels
+  fine in practice). The no-layout guard doubles as the jsdom bypass, so all
+  existing drag tests pass unchanged. Guides live in `#stage-wrap` (survive
+  stage rebuilds), hence explicit clearing on drop + re-render.
 
 ## [ ] 5. Eyedropper + recent colors
 
