@@ -353,6 +353,8 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
     </label>
       <label class="row"><input type="checkbox" id="opt-showbar" checked> Toolbar in presentation</label>
       <label class="row"><input type="checkbox" id="opt-tight"> Maximum fullscreen (no border)</label>
+      <label class="row"><input type="checkbox" id="opt-timings"> Auto-advance on slide timings</label>
+      <p><button id="btn-rehearse" title="Present while recording per-slide timings">Rehearse timings</button></p>
     </details>
     <details id="anim-wrap">
       <summary>Animation</summary>
@@ -448,6 +450,7 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
   <div id="present-slide"></div>
   <div id="present-bar">
     <span id="present-count"></span>
+    <span id="present-timer"></span>
     <span>Space/→ next · ← prev · Esc exit (click advances)</span>
     <button id="btn-present-close">Exit</button>
   </div>
@@ -574,7 +577,8 @@ function normalizeModel(raw){
       transition: TRANSITIONS.indexOf(s.transition) >= 0 ? s.transition : 'fade',
       html: sanitizeSlideHTML(s.html || '<p></p>'),
       notes: String(s.notes || ''),
-      shrinkText: s.shrinkText === true
+      shrinkText: s.shrinkText === true,
+      timing: (isFinite(+s.timing) && +s.timing > 0) ? Math.round(+s.timing * 10) / 10 : null
     };
     m.slideOrder.push(id);
     var n = parseInt(String(id).replace(/^s/, ''), 10);
@@ -599,6 +603,7 @@ function normalizeModel(raw){
     showBar: st.showBar !== false, tight: !!st.tight,
     lineWidth: (parseInt(st.lineWidth, 10) >= 1 && parseInt(st.lineWidth, 10) <= 32) ? parseInt(st.lineWidth, 10) : 3,
     lineColor: (/^#[0-9a-f]{6}$/i.test(String(st.lineColor || '')) ? String(st.lineColor) : '#2563eb'),
+    useTimings: !!st.useTimings,
     recentColors: rc.slice(0, 8) };
   var ax = (raw.aspect && typeof raw.aspect === 'object') ? raw.aspect : null;
   var awd = ax ? parseInt(ax.w, 10) : NaN, aht = ax ? parseInt(ax.h, 10) : NaN;
@@ -1234,6 +1239,7 @@ function renderAll(){
   $('#opt-maxdim').value = String(App.model.settings.maxDim);
   $('#opt-showbar').checked = !!App.model.settings.showBar;
   $('#opt-tight').checked = !!App.model.settings.tight;
+  $('#opt-timings').checked = !!App.model.settings.useTimings;
 }
 function persistSlide(){
   syncStageToModel(); refreshDirty(); scheduleSize(); scheduleAutosave();
@@ -4107,11 +4113,14 @@ function openPresent(){
   $('#present-overlay').hidden = false;
   $('#present-bar').style.display = App.model.settings.showBar === false ? 'none' : '';
   showPresent(App.presentIdx);
+  startPresentTick();
   try { var p = document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); if (p && p.catch) p.catch(function(){}); } catch (e) {}
 }
 function showPresent(i, revealAll){
   var order = App.model.slideOrder;
+  if (rehearseOn) rehearseOut(); /* stamp the outgoing slide first */
   App.presentIdx = Math.max(0, Math.min(order.length - 1, i));
+  if (rehearseOn) rehearseAt = Date.now();
   var s = App.model.slides[order[App.presentIdx]];
   var host = $('#present-slide');
   host.innerHTML = '';
@@ -4124,6 +4133,50 @@ function showPresent(i, revealAll){
   updatePresentCount();
   fitPresent();
   chainAutos();
+  armTiming();
+}
+/* ---- slide timings: rehearse records them, auto-advance obeys them ---- */
+var kfAdvanceTimer = 0, rehearseOn = false, rehearseAt = 0, presentTick = 0;
+function clearTiming(){ if (kfAdvanceTimer) { clearTimeout(kfAdvanceTimer); kfAdvanceTimer = 0; } }
+function armTiming(){
+  clearTiming();
+  if (App.model.settings.useTimings !== true) return;
+  var s = App.model.slides[App.model.slideOrder[App.presentIdx]];
+  var t = s && +s.timing;
+  if (!(t > 0)) return;
+  kfAdvanceTimer = setTimeout(function(){ kfAdvanceTimer = 0; advancePresent(); }, Math.round(t * 1000));
+}
+function rehearseOut(){
+  /* stamp the current slide with the elapsed dwell (called pre-switch + on exit) */
+  if (!rehearseOn || !rehearseAt) return;
+  var id = App.model.slideOrder[App.presentIdx];
+  var s = id && App.model.slides[id];
+  if (s) {
+    s.timing = Math.max(0.1, Math.round((Date.now() - rehearseAt) / 100) / 10);
+    refreshDirty();
+    scheduleAutosave();
+  }
+  rehearseAt = 0;
+}
+function startRehearse(){
+  rehearseOn = true;
+  rehearseAt = 0;
+  openPresent();
+}
+function startPresentTick(){
+  stopPresentTick();
+  try { presentTick = setInterval(updatePresentTimer, 500); } catch (e) {}
+  updatePresentTimer();
+}
+function stopPresentTick(){ if (presentTick) { clearInterval(presentTick); presentTick = 0; } }
+function updatePresentTimer(){
+  var el = $('#present-timer');
+  if (!el || $('#present-overlay').hidden) return;
+  var s = App.model.slides[App.model.slideOrder[App.presentIdx]];
+  var txt = '';
+  if (rehearseOn && rehearseAt) txt = '⏱ ' + ((Date.now() - rehearseAt) / 1000).toFixed(0) + 's (rehearsing)';
+  else if (s && +s.timing > 0) txt = '⏱ ' + s.timing + 's';
+  el.textContent = txt;
 }
 function chainAutos(){
   /* after arriving/playing, auto groups that follow play by themselves;
@@ -4166,6 +4219,7 @@ function kfPlayGroup(gi){
 }
 function advancePresent(){
   if (kfTimer) { clearTimeout(kfTimer); kfTimer = 0; }
+  clearTiming();
   var nxt = kfGroupIdx + 1;
   while (nxt < kfGroups.length && !groupWouldMove(kfGroups[nxt])) nxt++; /* no-op stages (initial-only) never cost a click */
   if (nxt < kfGroups.length) kfPlayGroup(nxt);
@@ -4447,6 +4501,10 @@ function animateProps(el, to, durMs, easeFn, done){
 }
 function closePresent(){
   kfCancel();
+  clearTiming();
+  stopPresentTick();
+  rehearseOut();
+  rehearseOn = false;
   $('#present-overlay').hidden = true;
   try { if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen(); } catch (e) {}
   gotoSlide(App.model.slideOrder[App.presentIdx]);
@@ -4469,7 +4527,10 @@ var PLAYER_JS = [
   "var idx=0;",
   "var count=document.getElementById('count');",
   "var deckTitle=document.title.replace(/ \\(viewer\\)$/,'');",
-  "var AR_W=@AR_W@,AR_H=@AR_H@,TIGHT=@TIGHT@;",
+  "var AR_W=@AR_W@,AR_H=@AR_H@,TIGHT=@TIGHT@,USETIMING=@TIMING@;",
+  "var advTimer=0;",
+  "function clearAdv(){if(advTimer){clearTimeout(advTimer);advTimer=0;}}",
+  "function armAdv(){clearAdv();if(!USETIMING)return;var t=parseFloat(slides[idx].getAttribute('data-timing'));if(t>0)advTimer=setTimeout(function(){advTimer=0;advance();},Math.round(t*1000));}",
   "function fit(){",
   "var bar=document.getElementById('bar');",
   "var aw=Math.max(200,window.innerWidth-(TIGHT?0:40));",
@@ -4490,7 +4551,7 @@ var PLAYER_JS = [
   "if(t&&t!=='none'){s.classList.add('trans-'+t);}",
   "document.title=s.getAttribute('data-title')+' — '+deckTitle;",
   "}});",
-  "kfReset(slides[idx],!!reveal);updateCount();",
+  "kfReset(slides[idx],!!reveal);updateCount();armAdv();",
   "}",
   "var kfGroups=[],kfGroupIdx=-1,kfTimer=0,kfLive=[];",
   "function easeFor(mode,p){p=p||{};",
@@ -4526,7 +4587,7 @@ var PLAYER_JS = [
   "function chainAutos(){var nxt=kfGroupIdx+1;while(nxt<kfGroups.length&&!groupWouldMove(kfGroups[nxt]))nxt++;kfGroupIdx=nxt-1;updateCount();var g=kfGroups[nxt];if(!g||!g.items.length)return;var auto=g.items.every(function(x){return x.entry.trigger==='auto';});if(!auto)return;var delay=Math.max.apply(null,g.items.map(function(x){return x.entry.delay||0;}));kfTimer=setTimeout(function(){kfTimer=0;kfPlayGroup(nxt);},delay);}",
   "function ensureKfPos(el,sec){function ok(v){return /^\\s*-?[\\d.]+\\s*%\\s*$/.test(v||'');}if(ok(el.style.left)&&ok(el.style.top))return;var r=el.getBoundingClientRect(),s=sec.getBoundingClientRect();if(s.width>0){if(!ok(el.style.left))el.style.left=(Math.round((r.left-s.left)/s.width*1000)/10)+'%';if(!ok(el.style.top)&&s.height>0)el.style.top=(Math.round((r.top-s.top)/s.height*1000)/10)+'%';}var pos='';try{pos=getComputedStyle(el).position;}catch(e){}if(pos!=='absolute')el.style.position='absolute';}",
   "function kfPlayGroup(gi){var g=kfGroups[gi];if(!g)return;kfGroupIdx=gi;var movers=g.items.filter(function(x){return entryWouldMove(x.entry,x.el);});movers=movers.filter(function(x){if(!x.entry.initial)return true;return !movers.some(function(y){return y.el===x.el&&!y.entry.initial;});});var pending=movers.length;if(!pending){updateCount();chainAutos();return;}movers.forEach(function(x){var e=x.entry,el=x.el;ensureKfPos(el,slides[idx]);el.style.visibility='visible';var ef=easeFor(e.mode,e);animateProps(el,e.to,Math.max(50,Math.round(e.dur*ef.durScale)),ef.fn,function(){if(e.to.opacity===0)el.style.visibility='hidden';if(--pending<=0&&gi===kfGroupIdx){updateCount();chainAutos();}});});updateCount();}",
-  "function advance(){if(kfTimer){clearTimeout(kfTimer);kfTimer=0;}var nxt=kfGroupIdx+1;while(nxt<kfGroups.length&&!groupWouldMove(kfGroups[nxt]))nxt++;if(nxt<kfGroups.length)kfPlayGroup(nxt);else show(idx+1);}",
+  "function advance(){if(kfTimer){clearTimeout(kfTimer);kfTimer=0;}clearAdv();var nxt=kfGroupIdx+1;while(nxt<kfGroups.length&&!groupWouldMove(kfGroups[nxt]))nxt++;if(nxt<kfGroups.length)kfPlayGroup(nxt);else show(idx+1);}",
   "function updateCount(){if(count){var live=kfGroups.some(function(g){return g.items.some(function(x){return !x.entry.initial;});});count.textContent=(idx+1)+' / '+slides.length+(live?' · '+(kfGroupIdx+1)+'/'+kfGroups.length:'');}}",
   "function fs(){try{if(document.fullscreenElement){document.exitFullscreen();}else if(document.documentElement.requestFullscreen){document.documentElement.requestFullscreen();}}catch(e){}}",
   "function on(id,ev,fn){var b=document.getElementById(id);if(b){b.addEventListener(ev,function(e){e.stopPropagation();fn();});}}",
@@ -4555,7 +4616,7 @@ function exportViewer(){
   var ar = deckAR();
   var css = document.querySelector('style').textContent;
   css += '\n#deck .slide{aspect-ratio:' + ar.w + '/' + ar.h + '}\n';
-  var playerJs = PLAYER_JS.split('@AR_W@').join(ar.w).split('@AR_H@').join(ar.h).split('@TIGHT@').join(App.model.settings.tight ? 1 : 0);
+  var playerJs = PLAYER_JS.split('@AR_W@').join(ar.w).split('@AR_H@').join(ar.h).split('@TIGHT@').join(App.model.settings.tight ? 1 : 0).split('@TIMING@').join(App.model.settings.useTimings ? 1 : 0);
   var barHtml = App.model.settings.showBar === false ? '' :
     '<div id="bar"><button id="prev" title="Previous">Prev</button><span id="count"></span>' +
     '<button id="next" title="Next">Next</button><button id="fs" title="Fullscreen">Fullscreen</button>' +
@@ -4563,7 +4624,7 @@ function exportViewer(){
   var sections = App.model.slideOrder.map(function(id, i){
     var s = App.model.slides[id];
     return '<section class="slide layout-' + s.layout + '" data-trans="' + s.transition +
-      '" data-title="' + escAttr(s.title) + '"' + (i === 0 ? '' : ' hidden') + '>' +
+      '" data-title="' + escAttr(s.title) + '"' + (s.timing > 0 ? ' data-timing="' + s.timing + '"' : '') + (i === 0 ? '' : ' hidden') + '>' +
       expandHtml(s.html, App.model.resources) + '</section>';
   }).join('\n');
   var doc = '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n' +
@@ -4886,6 +4947,8 @@ function bind(){
   });
   $('#opt-showbar').addEventListener('change', function(e){ App.model.settings.showBar = !!e.target.checked; refreshDirty(); scheduleAutosave(); });
   $('#opt-tight').addEventListener('change', function(e){ App.model.settings.tight = !!e.target.checked; refreshDirty(); scheduleAutosave(); });
+  $('#opt-timings').addEventListener('change', function(e){ App.model.settings.useTimings = !!e.target.checked; refreshDirty(); scheduleAutosave(); });
+  $('#btn-rehearse').addEventListener('click', startRehearse);
   $('#insert-image').addEventListener('change', function(e){ if (e.target.files[0]) insertFile(e.target.files[0], 'image'); e.target.value = ''; });
   $('#insert-video').addEventListener('change', function(e){ if (e.target.files[0]) insertFile(e.target.files[0], 'video'); e.target.value = ''; });
   $('#deck-title').addEventListener('input', debounce(function(e){

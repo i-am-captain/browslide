@@ -2523,6 +2523,59 @@ check('empty find no-ops', WSR.replaceAllSlides() === 0 && WSR.findNextMatch() =
 DSR.querySelector('#btn-search-close').click();
 check('search bar closes', DSR.querySelector('#searchbar').hidden === true);
 
+// ---------- 56. rehearse timer + timings ----------
+const domRH = makeDom(html);
+await wait(400);
+const WRH = domRH.window, DRH = WRH.document;
+check('timing normalize', (function(){
+  const m = WRH.normalizeModel({ app: 'browslide', version: 2, title: 'T', theme: 'dark', slideOrder: ['s1'], nextId: 2, nextResId: 1,
+    settings: { useTimings: 1 }, aspect: { w: 16, h: 9 }, resources: {},
+    slides: { s1: { title: 'T', layout: 'blank', transition: 'none', notes: '', html: '<p>x</p>', timing: 5 } } });
+  const bad = WRH.normalizeModel({ app: 'browslide', version: 2, title: 'T', theme: 'dark', slideOrder: ['s1'], nextId: 2, nextResId: 1,
+    settings: {}, aspect: { w: 16, h: 9 }, resources: {},
+    slides: { s1: { title: 'T', layout: 'blank', transition: 'none', notes: '', html: '<p>x</p>', timing: 'x' } } });
+  return m.slides.s1.timing === 5 && m.settings.useTimings === true && bad.slides.s1.timing === null && bad.settings.useTimings === false;
+})());
+check('timings off by default', WRH.App.model.settings.useTimings === false && DRH.querySelector('#opt-timings').checked === false);
+DRH.querySelector('#opt-timings').checked = true;
+DRH.querySelector('#opt-timings').dispatchEvent(new WRH.Event('change', { bubbles: true }));
+check('checkbox persists', WRH.App.model.settings.useTimings === true);
+WRH.gotoSlide(WRH.App.model.slideOrder[1]);
+await wait(100);
+WRH.activeSlide().timing = 30;
+WRH.syncStageToModel();
+DRH.querySelector('#btn-present').click();
+await wait(100);
+check('arrival arms timer', WRH.kfAdvanceTimer !== 0 && DRH.querySelector('#present-timer').textContent.includes('30'));
+DRH.dispatchEvent(new WRH.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+await wait(50);
+check('manual advance clears', WRH.kfAdvanceTimer === 0);
+DRH.dispatchEvent(new WRH.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+await wait(100);
+check('rehearse records dwell', (function(){
+  WRH.gotoSlide(WRH.App.model.slideOrder[0]);
+  return (WRH.startRehearse(), true);
+})());
+await wait(120);
+DRH.dispatchEvent(new WRH.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+await wait(50);
+const recT = WRH.App.model.slides[WRH.App.model.slideOrder[0]].timing;
+check('rehearsed timing stamped', typeof recT === 'number' && recT >= 0.1);
+DRH.dispatchEvent(new WRH.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+await wait(100);
+check('rehearse exits clean', WRH.rehearseOn === false && DRH.querySelector('#present-overlay').hidden === true);
+WRH.activeSlide().timing = null;
+WRH.App.model.slides[WRH.App.model.slideOrder[0]].timing = 0.05;
+DRH.querySelector('#btn-export').click();
+await wait(300);
+const exTM = await blobToText(WRH.__savedBlob, WRH);
+check('export carries timings + flag', /data-timing="0\.05"/.test(exTM) && /USETIMING=1/.test(exTM));
+const domVT = makeDom(exTM);
+await wait(400);
+const DVT = domVT.window, DDT = DVT.document;
+await wait(250);
+check('viewer auto-advances on timing', DDT.querySelector('#count').textContent === '2 / 3');
+
 // ---------- 45. style painter ----------
 const domPT = makeDom(html);
 await wait(400);

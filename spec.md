@@ -2,8 +2,8 @@
 
 ## Session state (update when switching tasks/sessions)
 
-- Status: items 1-16 DONE and committed (592 checks). Next: item 17
-  (rehearse timer + timings).
+- Status: items 1-17 DONE and committed (602 checks). Next: item 18
+  (presenter view).
 - Conventions: commit per item, suite green before each commit, flip that item's
   `[ ]` to `[x]` when committed.
 
@@ -293,7 +293,7 @@ green before each commit, commit per item, agent-map anchors stay resolving
   for non-active slides. The mid-file section ordering (44/45 after 55) is
   cosmetic — execution order is what matters.
 
-## [ ] 17. Rehearse timer + per-slide timings
+## [x] 17. Rehearse timer + per-slide timings
 
 - Goal: record how long each slide takes; optionally auto-advance on time.
 - UX: Present gets a timer readout; "Use timings" checkbox (Presentation menu)
@@ -304,6 +304,11 @@ green before each commit, commit per item, agent-map anchors stay resolving
   same arm/clear.
 - Tests: timing resolution helper, arm/clear on advance, export carries
   timings + player auto-advances with fake timers, off-by-default.
+- Findings: `closePresent` must switch rehearse mode off or the next normal
+  show keeps stamping. Manual advance cancels the armed timer (manual control
+  wins); slide changes re-arm. Rehearse stamps on every arrival plus on exit,
+  min 0.1s. Player string is now ~14.8k of the 16k export guard — the guard is
+  getting tight; the next player addition should budget for it.
 
 ## [ ] 18. Presenter view (second window)
 
