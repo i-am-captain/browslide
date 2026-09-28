@@ -2450,6 +2450,43 @@ await wait(300);
 const tTM = await blobToText(WTM.__savedBlob, WTM);
 check('templates persist in save', /"templates":\{"Persisted"/.test(tTM));
 
+// ---------- 54. canvas zoom ----------
+const domZM = makeDom(html);
+await wait(400);
+const WZM = domZM.window, DZM = WZM.document;
+WZM.gotoSlide(WZM.App.model.slideOrder[1]);
+await wait(100);
+check('zoom defaults to 1', WZM.App.zoom === 1 && DZM.querySelector('#zoom-flag').textContent === '100%');
+check('setZoom clamps + rounds', WZM.setZoom(5) === true && WZM.App.zoom === 2 &&
+  WZM.setZoom(0) === true && WZM.App.zoom === 0.5 && WZM.setZoom(1.234) === true && WZM.App.zoom === 1.23 &&
+  DZM.querySelector('#zoom-flag').textContent === '123%');
+check('setZoom no-ops when same', WZM.setZoom(1.23) === false);
+Object.defineProperty(DZM.querySelector('#stage-wrap'), 'clientWidth', { value: 836, configurable: true });
+Object.defineProperty(DZM.querySelector('#stage-wrap'), 'clientHeight', { value: 636, configurable: true });
+WZM.setZoom(1);
+const zmW1 = DZM.querySelector('#stage .slide').style.width;
+WZM.setZoom(2);
+const zmW2 = DZM.querySelector('#stage .slide').style.width;
+check('fit scales with zoom', zmW1 === '800px' && zmW2 === '1600px');
+const zmBefore = JSON.stringify(WZM.App.model);
+WZM.setZoom(1.5);
+check('zoom never dirties model', JSON.stringify(WZM.App.model) === zmBefore);
+DZM.querySelector('#btn-save').click();
+await wait(300);
+WZM.setZoom(1.25);
+check('zoom never dirties flag', DZM.querySelector('#dirty-flag').textContent === 'Saved');
+WZM.setZoom(1);
+DZM.dispatchEvent(new WZM.KeyboardEvent('keydown', { key: '=', ctrlKey: true, bubbles: true, cancelable: true }));
+check('ctrl+= zooms in', WZM.App.zoom === 1.25);
+DZM.dispatchEvent(new WZM.KeyboardEvent('keydown', { key: '0', ctrlKey: true, bubbles: true, cancelable: true }));
+check('ctrl+0 resets', WZM.App.zoom === 1);
+DZM.querySelector('#notes').focus();
+DZM.dispatchEvent(new WZM.KeyboardEvent('keydown', { key: '=', ctrlKey: true, bubbles: true, cancelable: true }));
+check('zoom respects fields', WZM.App.zoom === 1);
+DZM.querySelector('#zoom-in').click();
+check('zoom buttons work', WZM.App.zoom === 1.25);
+WZM.setZoom(1);
+
 // ---------- 45. style painter ----------
 const domPT = makeDom(html);
 await wait(400);

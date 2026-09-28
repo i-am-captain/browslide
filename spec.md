@@ -2,8 +2,8 @@
 
 ## Session state (update when switching tasks/sessions)
 
-- Status: items 1-14 DONE and committed (573 checks). Next: item 15
-  (canvas zoom/pan).
+- Status: items 1-15 DONE and committed (583 checks). Next: item 16
+  (search & replace).
 - Conventions: commit per item, suite green before each commit, flip that item's
   `[ ]` to `[x]` when committed.
 
@@ -259,7 +259,7 @@ green before each commit, commit per item, agent-map anchors stay resolving
   templating, so masters carry motion too — initials stay valid since geometry
   is preserved. Serialized attrs use `&quot;`, which test regexes must match.
 
-## [ ] 15. Canvas zoom/pan
+## [x] 15. Canvas zoom/pan
 
 - Goal: 50-200% canvas zoom (Ctrl+=/-/0 + control), pan via native scroll.
 - UX: zoom is session-only (not saved); percentage readout near aspect controls.
@@ -269,6 +269,12 @@ green before each commit, commit per item, agent-map anchors stay resolving
   overlay math is rect-based, already zoom-safe.
 - Tests: zoom factor plumbing (deltas scale, fit scales), zoom resets control,
   zoom never dirties the deck or persists.
+- Findings: implemented as bigger slide px, NOT CSS transform — pointer math
+  (`clientX` vs `clientWidth`) stays in one space, so zero drag changes were
+  needed and the overlay math is untouched. Consequently the spec's
+  delta-division is unnecessary. `setZoom(0)` exposed an `|| 1` falsy bug
+  (fixed with `isFinite`). Fresh decks read dirty after first navigation
+  (initials materialize) — pre-existing, so the zoom-clean test saves first.
 
 ## [ ] 16. Search & replace
 

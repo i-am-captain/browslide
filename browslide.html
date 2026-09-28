@@ -129,6 +129,8 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 #compress-stats{color:var(--muted);font-size:12px}
 #sizes-body button{padding:2px 8px;font-size:11px}
 #aspect-custom{display:flex;gap:8px}
+#zoom-row{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+#zoom-row #zoom-flag{min-width:44px;text-align:center;color:var(--ink)}
 #aspect-custom label{flex-direction:row;align-items:center}
 #aspect-custom input{width:64px}
 #repo-link{margin-top:auto;padding-top:10px;text-align:center;font-size:12px}
@@ -329,6 +331,7 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
       <label>W <input id="aspect-w" type="number" min="1" max="99"></label>
       <label>H <input id="aspect-h" type="number" min="1" max="99"></label>
     </div>
+    <div id="zoom-row"><span>Zoom</span><button id="zoom-out" title="Zoom out (Ctrl+-)">−</button><span id="zoom-flag">100%</span><button id="zoom-in" title="Zoom in (Ctrl+=)">+</button><button id="zoom-reset" title="Reset zoom (Ctrl+0)">Reset</button></div>
     <label>Theme
       <select id="theme-select">
         <option value="default">Light</option>
@@ -511,7 +514,7 @@ var TRANSITIONS = ['none', 'fade', 'slide'];
 var THEMES = ['default', 'dark'];
 
 /* ================= MODEL ================= */
-var App = { model: null, activeId: null, dirty: false, lastClean: '', overhead: 0, presentIdx: 0 };
+var App = { model: null, activeId: null, dirty: false, lastClean: '', overhead: 0, presentIdx: 0, zoom: 1 };
 
 function stable(model){ return JSON.stringify(model); }
 function activeSlide(){ return App.model.slides[App.activeId]; }
@@ -1044,8 +1047,24 @@ function fitSlideBox(sec, availW, availH){
 function fitStage(){
   var wrap = $('#stage-wrap'), sec = $('#stage .slide');
   if (!wrap || !sec || !App.model) return;
-  fitSlideBox(sec, Math.max(200, wrap.clientWidth - 36), Math.max(200, wrap.clientHeight - 36));
+  /* zoom renders a bigger/smaller slide (same px space as pointer math,
+     so drags need no adjustment); pan via native scroll */
+  var z = App.zoom || 1;
+  var aw = Math.max(200, wrap.clientWidth - 36), ah = Math.max(200, wrap.clientHeight - 36);
+  var ar = deckAR();
+  var w = Math.min(aw, ah * ar.w / ar.h) * z;
+  fitSlideBox(sec, w, w * ar.h / ar.w);
   positionResizer();
+}
+function setZoom(z){
+  var zn = +z;
+  z = Math.max(0.5, Math.min(2, isFinite(zn) ? Math.round(zn * 100) / 100 : 1));
+  if (z === App.zoom) return false;
+  App.zoom = z;
+  var f = $('#zoom-flag');
+  if (f) f.textContent = Math.round(z * 100) + '%';
+  fitStage();
+  return true;
 }
 function fitPresent(){
   var ov = $('#present-overlay'), sec = $('#present-slide .slide');
@@ -4812,6 +4831,9 @@ function bind(){
   });
   $('#aspect-w').addEventListener('change', function(e){ setAspect(e.target.value, App.model.aspect.h); });
   $('#aspect-h').addEventListener('change', function(e){ setAspect(App.model.aspect.w, e.target.value); });
+  $('#zoom-in').addEventListener('click', function(){ setZoom(App.zoom * 1.25); });
+  $('#zoom-out').addEventListener('click', function(){ setZoom(App.zoom / 1.25); });
+  $('#zoom-reset').addEventListener('click', function(){ setZoom(1); });
   window.addEventListener('resize', debounce(function(){ fitStage(); fitPresent(); }, 100));
   $('#filmstrip-list').addEventListener('keydown', function(e){
     var ids = App.model.slideOrder, i = activeIndex(), j = -1;
@@ -4856,6 +4878,11 @@ function bind(){
     }
     else if ((e.ctrlKey || e.metaKey) && (e.key === 'd' || e.key === 'D')) {
       if (!inFormField() && !stageTextSelected() && selectedItems().length && copySelection() && pasteClipboard()) e.preventDefault();
+    }
+    else if ((e.ctrlKey || e.metaKey) && !inFormField() && (e.key === '=' || e.key === '+' || e.key === '-' || e.key === '0')) {
+      if (e.key === '0') { e.preventDefault(); setZoom(1); }
+      else if (e.key === '-') { e.preventDefault(); setZoom(App.zoom / 1.25); }
+      else { e.preventDefault(); setZoom(App.zoom * 1.25); }
     }
     else if ((e.ctrlKey || e.metaKey) && (e.key === 'v' || e.key === 'V')) {
       var foc = document.activeElement;
