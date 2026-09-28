@@ -2277,6 +2277,80 @@ DBG.querySelector('#anim-rows .adel').click();
 await wait(50);
 check('badge clears after step delete', DBG.querySelector('#filmstrip-list li:nth-child(2) .stages') === null);
 
+// ---------- 51. motion paths ----------
+check('pathPointAt ends exact + midpoint', (function(){
+  const p0 = WBG.pathPointAt([{ x: 0, y: 0 }, { x: 10, y: 0 }], 0);
+  const p1 = WBG.pathPointAt([{ x: 0, y: 0 }, { x: 10, y: 0 }], 1);
+  const pm = WBG.pathPointAt([{ x: 0, y: 0 }, { x: 10, y: 0 }], 0.5);
+  return p0.x === 0 && p0.y === 0 && p1.x === 10 && p1.y === 0 && pm.x === 5 && pm.y === 0;
+})());
+check('pathPointAt multisegment + clamp + degenerate', (function(){
+  const L = [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }];
+  const mid = WBG.pathPointAt(L, 0.5);
+  const lo = WBG.pathPointAt(L, -1), hi = WBG.pathPointAt(L, 2);
+  const zg = WBG.pathPointAt([{ x: 5, y: 5 }, { x: 5, y: 5 }], 0.7);
+  return mid.x === 10 && mid.y === 0 && lo.x === 0 && lo.y === 0 && hi.x === 10 && hi.y === 10 &&
+    zg.x === 5 && zg.y === 5;
+})());
+check('clean keeps path, forces end', (function(){
+  const l = WBG.parseAnimList(JSON.stringify([{ group: 1, trigger: 'click', dur: 600, delay: 0, mode: 'linear',
+    to: { left: 10, top: 20, path: [{ x: 0, y: 0 }, { x: 1, y: 1 }] } }]));
+  return l.length === 1 && l[0].to.path.length === 2 && l[0].to.path[1].x === 10 && l[0].to.path[1].y === 20;
+})());
+check('clean drops bad paths', (function(){
+  const one = WBG.parseAnimList(JSON.stringify([{ group: 1, trigger: 'click', dur: 600, delay: 0, mode: 'linear', to: { left: 1, top: 1, path: [{ x: 0, y: 0 }] } }]));
+  const str = WBG.parseAnimList(JSON.stringify([{ group: 1, trigger: 'click', dur: 600, delay: 0, mode: 'linear', to: { left: 1, top: 1, path: 'nope' } }]));
+  const big = [];
+  for (let i = 0; i < 60; i++) big.push({ x: i, y: 0 });
+  const capped = WBG.parseAnimList(JSON.stringify([{ group: 1, trigger: 'click', dur: 600, delay: 0, mode: 'linear', to: { left: 59, top: 0, path: big } }]));
+  const nan = WBG.parseAnimList(JSON.stringify([{ group: 1, trigger: 'click', dur: 600, delay: 0, mode: 'linear', to: { left: 1, top: 1, path: [{ x: 0, y: 0 }, { x: 'z', y: 0 }] } }]));
+  return one[0].to.path === undefined && str[0].to.path === undefined &&
+    capped[0].to.path.length === 50 && nan[0].to.path === undefined;
+})());
+check('kfWrite follows path', (function(){
+  const el = WBG.document.createElement('div');
+  const to = { left: 10, top: 0, path: [{ x: 0, y: 0 }, { x: 10, y: 0 }] };
+  WBG.kfWrite(el, { left: 0, top: 0 }, to, 0.5);
+  const mid = el.style.left === '5%' && el.style.top === '0%';
+  WBG.kfWrite(el, { left: 0, top: 0 }, to, 1);
+  return mid && el.style.left === '10%' && el.style.top === '0%';
+})());
+const domMP = makeDom(html);
+await wait(400);
+const WMP = domMP.window, DMP = WMP.document;
+WMP.gotoSlide(WMP.App.model.slideOrder[1]);
+await wait(100);
+Object.defineProperty(DMP.querySelector('#stage .slide'), 'clientWidth', { value: 800, configurable: true });
+Object.defineProperty(DMP.querySelector('#stage .slide'), 'clientHeight', { value: 600, configurable: true });
+const mpBlk = DMP.querySelector('#stage .blk');
+WMP.setSingleSelection(mpBlk);
+DMP.querySelector('#btn-anim-add').click();
+await wait(50);
+DMP.querySelectorAll('#anim-rows .pdraw')[0].click();
+check('draw arms with seeded trail', !!WMP.pathDraw && WMP.pathDraw.idx === 1 &&
+  JSON.stringify(WMP.pathDraw.pts) === JSON.stringify([{ x: 8, y: 5 }]) &&
+  DMP.body.style.cursor === 'crosshair');
+mpBlk.dispatchEvent(new WMP.MouseEvent('mousedown', { bubbles: true, cancelable: true, clientX: 0, clientY: 0 }));
+DMP.defaultView.dispatchEvent(new WMP.MouseEvent('pointermove', { bubbles: true, clientX: 80, clientY: 0 }));
+DMP.defaultView.dispatchEvent(new WMP.MouseEvent('pointermove', { bubbles: true, clientX: 160, clientY: 0 }));
+DMP.defaultView.dispatchEvent(new WMP.MouseEvent('pointerup', { bubbles: true, clientX: 160, clientY: 0 }));
+await wait(100);
+const mpEntry = JSON.parse(mpBlk.getAttribute('data-anim'))[1];
+check('drop records trail ending at pose', mpEntry.to.left === 28 && mpEntry.to.path.length === 4 &&
+  mpEntry.to.path[0].x === 8 && mpEntry.to.path[3].x === 28 && mpEntry.to.path[3].y === 5 &&
+  mpBlk.style.left === '28%' && /left:\s*8%/.test(WMP.App.model.slides.s2.html) && WMP.pathDraw === null);
+check('trail overlay shows while editing', DMP.querySelectorAll('#stage-wrap .pathoverlay').length === 1 &&
+  DMP.querySelector('#stage-wrap .pathoverlay polyline') !== null);
+WMP.exitStepEdit();
+check('overlay clears on exit', DMP.querySelectorAll('#stage-wrap .pathoverlay').length === 0);
+DMP.querySelectorAll('#anim-rows .pdraw')[0].click();
+DMP.dispatchEvent(new WMP.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+check('esc cancels drawing', WMP.pathDraw === null && DMP.body.style.cursor === '');
+DMP.querySelector('#btn-export').click();
+await wait(300);
+const exP = await blobToText(WMP.__savedBlob, WMP);
+check('viewer carries path player + data', exP.includes('pathPointAt') && /&quot;path&quot;/.test(exP));
+
 // ---------- 45. style painter ----------
 const domPT = makeDom(html);
 await wait(400);

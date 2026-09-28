@@ -2,8 +2,8 @@
 
 ## Session state (update when switching tasks/sessions)
 
-- Status: items 1-11 DONE and committed (539 checks). Next: item 12
-  (motion paths).
+- Status: items 1-12 DONE and committed (550 checks). Next: item 13
+  (basic charts).
 - Conventions: commit per item, suite green before each commit, flip that item's
   `[ ]` to `[x]` when committed.
 
@@ -205,7 +205,7 @@ green before each commit, commit per item, agent-map anchors stay resolving
   persist (`refreshStageBadges`, no list rebuild) so filmstrip focus and scroll
   survive typing and drags.
 
-## [ ] 12. Motion paths
+## [x] 12. Motion paths
 
 - Goal: a step can move its item along a drawn path, not just to one pose.
 - UX: select a step -> "Draw path" -> drag the item; pointer trail is sampled
@@ -219,6 +219,12 @@ green before each commit, commit per item, agent-map anchors stay resolving
   the end pose.
 - Tests: polyline interpolation units (ends exact, midpoint sane), clean keeps/
   drops paths, playback with fake rAF follows path, viewer player carries it.
+- Findings: the trail lives in `to.path` (the engine reads `to.*` uniformly) —
+  an early draft wrote top-level `entry.path` and reparsing silently dropped
+  it; the overlay test caught it. End-forcing in `cleanAnimEntry` keeps
+  playback, scrub-end and overlay consistent by construction. The Draw button
+  exists only on non-initial rows (motion on a rest-mirror is meaningless).
+  Player string grew ~1.3k, still under the export size guard.
 
 ## [ ] 13. Basic charts
 
