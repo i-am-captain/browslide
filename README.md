@@ -28,6 +28,7 @@ Repo file vs. saved copies: `browslide.html` in this repo is the maintained **te
 | Arrange | Inspector menu: align edges/centers (one item aligns to the slide), distribute evenly, match width/height to the last-selected item. Step-aware like drags. |
 | Snap guides | Dragged items catch the slide center/edges and other items' edges, with guide lines. |
 | Canvas zoom | Ctrl+= / Ctrl+− zoom the editing canvas 50–200% (Ctrl+0 resets, session-only, never saved). |
+| Find | 🔍 toolbar button or Ctrl+F: literal find/replace across the deck with live counts; Enter jumps to each match, Replace all is a single undo entry. |
 | Colors | Screen eyedropper (where supported) beside text and stroke colors, plus a last-used palette. |
 | Style painter | 🎨 in the format bar copies one item's look (text, alignment, stroke, sizes, rotation) onto others; Shift multi-applies, Esc cancels. |
 | Undo/redo | Every deck change is undoable (Ctrl+Z / Ctrl+Shift+Z or Ctrl+Y, or the ↩/↪ toolbar buttons): slides, text, geometry, steps, settings. Text selections keep the browser's native undo; everywhere else one shortcut reverts the last change. |

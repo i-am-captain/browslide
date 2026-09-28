@@ -89,6 +89,9 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 #formatbar .ali.c i{margin-left:4px;margin-right:4px}
 #formatbar .ali.r i{margin-left:8px}
 #formatbar .ali.j i:nth-child(2){margin-right:4px}
+#searchbar{display:flex;align-items:center;gap:6px;padding:6px 12px;background:var(--panel);border-bottom:1px solid var(--border);flex:0 0 auto}
+#searchbar input{padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit;min-width:120px}
+#search-count{font-size:12px;color:var(--muted);min-width:90px}
 #recent-swatches{display:inline-flex;gap:3px;align-items:center}
 #recent-swatches button{width:18px;height:18px;padding:0;border-radius:4px;min-width:0}
 #main{display:grid;grid-template-columns:190px 1fr 300px;gap:10px;padding:10px;flex:1 1 auto;min-height:0}
@@ -223,6 +226,7 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
   <button id="btn-new" title="Start a new deck">New</button>
   <button id="btn-undo" title="Undo (Ctrl+Z)">↩</button>
   <button id="btn-redo" title="Redo (Ctrl+Shift+Z)">↪</button>
+  <button id="btn-search" title="Find and replace in deck (Ctrl+F)">🔍</button>
   <button id="btn-save" class="primary" title="Save (downloads an .html copy)">Save</button>
 </header>
 
@@ -289,6 +293,15 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
   <button data-cmd="clear" title="Clear formatting"><span>Tₓ</span></button>
   <span class="sep"></span>
   <button id="btn-painter" title="Copy item style: click a source item, then the target (Shift keeps applying, Esc cancels)">🎨</button>
+</div>
+
+<div id="searchbar" hidden>
+  <input id="find-input" placeholder="Find in deck" title="Text to find">
+  <input id="replace-input" placeholder="Replace with" title="Replacement text">
+  <span id="search-count"></span>
+  <button id="btn-find-next" title="Jump to next match (Enter)">Next</button>
+  <button id="btn-replace-all" title="Replace all matches in the deck">Replace all</button>
+  <button id="btn-search-close" title="Close find bar (Esc)">✕</button>
 </div>
 
 <div id="main">
@@ -1553,6 +1566,114 @@ function applyListStyle(style){
   if (!lists.length) return false;
   lists.forEach(function(l){ l.style.listStyleType = style || ''; });
   afterFormat();
+  return true;
+}
+/* ---- find & replace across the deck (literal match, one undo entry) ---- */
+function slideTextMatches(id, find){
+  if (!find) return 0;
+  var s = App.model && App.model.slides[id];
+  if (!s) return 0;
+  var d = document.createElement('div');
+  d.innerHTML = s.html;
+  var text = d.textContent || '', n = 0, pos = 0;
+  while ((pos = text.indexOf(find, pos)) >= 0) { n++; pos += find.length || 1; }
+  return n;
+}
+function deckMatchCount(find){
+  var total = 0;
+  if (!find || !App.model) return 0;
+  App.model.slideOrder.forEach(function(id){ total += slideTextMatches(id, find); });
+  return total;
+}
+function replaceInHtml(html, find, repl){
+  /* per-text-node literal replace (matches never span styled runs) */
+  if (!find) return { html: html, count: 0 };
+  var tpl = document.createElement('template');
+  tpl.innerHTML = String(html || '');
+  var walker = document.createTreeWalker(tpl.content, NodeFilter.SHOW_TEXT, null);
+  var nodes = [], n;
+  while ((n = walker.nextNode())) nodes.push(n);
+  var count = 0;
+  nodes.forEach(function(t){
+    var parts = t.nodeValue.split(find);
+    if (parts.length < 2) return;
+    count += parts.length - 1;
+    var frag = document.createDocumentFragment();
+    parts.forEach(function(part, i){
+      if (part) frag.appendChild(document.createTextNode(part));
+      if (i < parts.length - 1) frag.appendChild(document.createTextNode(repl));
+    });
+    t.parentNode.replaceChild(frag, t);
+  });
+  return { html: tpl.innerHTML, count: count };
+}
+function updateSearchCount(){
+  var c = $('#search-count'), f = $('#find-input');
+  if (!c || !f) return 0;
+  var n = deckMatchCount(f.value || '');
+  c.textContent = f.value ? n + (n === 1 ? ' match' : ' matches') : '';
+  return n;
+}
+function replaceAllSlides(){
+  var find = ($('#find-input') || {}).value || '';
+  var repl = ($('#replace-input') || {}).value || '';
+  if (!find || !App.model) return 0;
+  var total = 0;
+  App.model.slideOrder.forEach(function(id){
+    var s = App.model.slides[id];
+    var r = replaceInHtml(s.html, find, repl);
+    if (r.count) {
+      s.html = r.html;
+      s.title = deriveTitle(r.html);
+      total += r.count;
+    }
+  });
+  if (!total) return 0;
+  clearSelection();
+  renderAll();
+  refreshDirty();
+  scheduleAutosave();
+  updateSize();
+  var c = $('#search-count');
+  if (c) c.textContent = 'Replaced ' + total;
+  return total;
+}
+function selectFirstMatch(find){
+  var sec = $('#stage .slide');
+  if (!sec || !find) return false;
+  var walker = document.createTreeWalker(sec, NodeFilter.SHOW_TEXT, null);
+  var n;
+  while ((n = walker.nextNode())) {
+    var pos = (n.nodeValue || '').indexOf(find);
+    if (pos >= 0) {
+      try {
+        var r = document.createRange();
+        r.setStart(n, pos);
+        r.setEnd(n, pos + find.length);
+        var sel = document.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(r);
+        trackSelection();
+        if (sec.focus) sec.focus();
+      } catch (e) {}
+      return true;
+    }
+  }
+  return false;
+}
+function findNextMatch(){
+  var f = $('#find-input');
+  var find = (f && f.value) || '';
+  if (!find || !App.model) return false;
+  updateSearchCount();
+  var order = App.model.slideOrder, cur = activeIndex(), next = -1, i;
+  for (i = 0; i < order.length; i++) {
+    var idx = (cur + 1 + i) % order.length;
+    if (slideTextMatches(order[idx], find)) { next = idx; break; }
+  }
+  if (next < 0) return false;
+  if (next !== cur) gotoSlide(order[next]);
+  selectFirstMatch(find);
   return true;
 }
 function trackSelection(){
@@ -4615,6 +4736,26 @@ function bind(){
   $('#btn-new').addEventListener('click', newDeck);
   $('#btn-undo').addEventListener('click', function(){ undo(); });
   $('#btn-redo').addEventListener('click', function(){ redo(); });
+  $('#btn-search').addEventListener('click', function(){
+    var bar = $('#searchbar');
+    bar.hidden = !bar.hidden;
+    if (!bar.hidden) {
+      updateSearchCount();
+      $('#find-input').focus();
+    }
+  });
+  $('#find-input').addEventListener('input', updateSearchCount);
+  $('#find-input').addEventListener('keydown', function(e){
+    if (e.key === 'Enter') { e.preventDefault(); findNextMatch(); }
+    e.stopPropagation();
+  });
+  $('#replace-input').addEventListener('keydown', function(e){
+    if (e.key === 'Enter') { e.preventDefault(); findNextMatch(); }
+    e.stopPropagation();
+  });
+  $('#btn-find-next').addEventListener('click', findNextMatch);
+  $('#btn-replace-all').addEventListener('click', replaceAllSlides);
+  $('#btn-search-close').addEventListener('click', function(){ $('#searchbar').hidden = true; });
   $('#btn-open').addEventListener('click', function(){ $('#open-file').click(); });
   $('#open-file').addEventListener('change', function(e){ if (e.target.files[0]) openFile(e.target.files[0]); e.target.value = ''; });
   $('#btn-img').addEventListener('click', function(){ $('#insert-image').click(); });
@@ -4878,6 +5019,14 @@ function bind(){
     }
     else if ((e.ctrlKey || e.metaKey) && (e.key === 'd' || e.key === 'D')) {
       if (!inFormField() && !stageTextSelected() && selectedItems().length && copySelection() && pasteClipboard()) e.preventDefault();
+    }
+    else if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F')) {
+      if (!inFormField()) {
+        e.preventDefault();
+        var bar = $('#searchbar');
+        bar.hidden = !bar.hidden;
+        if (!bar.hidden) { updateSearchCount(); $('#find-input').focus(); }
+      }
     }
     else if ((e.ctrlKey || e.metaKey) && !inFormField() && (e.key === '=' || e.key === '+' || e.key === '-' || e.key === '0')) {
       if (e.key === '0') { e.preventDefault(); setZoom(1); }

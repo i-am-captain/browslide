@@ -2487,6 +2487,42 @@ DZM.querySelector('#zoom-in').click();
 check('zoom buttons work', WZM.App.zoom === 1.25);
 WZM.setZoom(1);
 
+// ---------- 55. search & replace ----------
+const domSR = makeDom(html);
+await wait(400);
+const WSR = domSR.window, DSR = WSR.document;
+check('replaceInHtml literal units', (function(){
+  const r1 = WSR.replaceInHtml('<p>a+b (c)</p>', 'a+b (c)', 'z');
+  const r2 = WSR.replaceInHtml('<p>one <b>two</b> one</p>', 'one', '1');
+  const r3 = WSR.replaceInHtml('<p>x</p>', 'y', 'z');
+  const r4 = WSR.replaceInHtml('<p>x</p>', '', 'z');
+  return r1.html === '<p>z</p>' && r1.count === 1 && r2.count === 2 && !r2.html.includes('one') &&
+    r3.count === 0 && r3.html === '<p>x</p>' && r4.count === 0;
+})());
+check('deck counts unique words', WSR.deckMatchCount('How to use') === 1 && WSR.deckMatchCount('Questions?') === 1 &&
+  WSR.deckMatchCount('slide') > 1 && WSR.deckMatchCount('') === 0);
+check('search bar toggles', DSR.querySelector('#searchbar').hidden === true &&
+  (DSR.querySelector('#btn-search').click(), DSR.querySelector('#searchbar').hidden === false));
+DSR.querySelector('#find-input').value = 'Questions?';
+DSR.querySelector('#find-input').dispatchEvent(new WSR.Event('input', { bubbles: true }));
+check('live count shows', DSR.querySelector('#search-count').textContent === '1 match');
+const srStack = WSR.undoStack.length;
+DSR.querySelector('#replace-input').value = 'Questions!';
+DSR.querySelector('#btn-replace-all').click();
+await wait(50);
+check('replace-all writes deck', WSR.deckMatchCount('Questions?') === 0 && WSR.deckMatchCount('Questions!') === 1 &&
+  DSR.querySelector('#search-count').textContent === 'Replaced 1' &&
+  WSR.App.model.slides.s3.html.includes('Questions!'));
+check('replace-all is one undo entry', WSR.undoStack.length === srStack + 1 && (WSR.undo(), WSR.deckMatchCount('Questions?') === 1));
+DSR.querySelector('#find-input').value = 'Thanks';
+DSR.querySelector('#btn-find-next').click();
+check('find jumps to match', WSR.App.activeId === WSR.App.model.slideOrder[2] &&
+  DSR.getSelection().toString() === 'Thanks');
+DSR.querySelector('#find-input').value = '';
+check('empty find no-ops', WSR.replaceAllSlides() === 0 && WSR.findNextMatch() === false);
+DSR.querySelector('#btn-search-close').click();
+check('search bar closes', DSR.querySelector('#searchbar').hidden === true);
+
 // ---------- 45. style painter ----------
 const domPT = makeDom(html);
 await wait(400);

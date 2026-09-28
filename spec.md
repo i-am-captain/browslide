@@ -2,8 +2,8 @@
 
 ## Session state (update when switching tasks/sessions)
 
-- Status: items 1-15 DONE and committed (583 checks). Next: item 16
-  (search & replace).
+- Status: items 1-16 DONE and committed (592 checks). Next: item 17
+  (rehearse timer + timings).
 - Conventions: commit per item, suite green before each commit, flip that item's
   `[ ]` to `[x]` when committed.
 
@@ -276,7 +276,7 @@ green before each commit, commit per item, agent-map anchors stay resolving
   (fixed with `isFinite`). Fresh decks read dirty after first navigation
   (initials materialize) — pre-existing, so the zoom-clean test saves first.
 
-## [ ] 16. Search & replace
+## [x] 16. Search & replace
 
 - Goal: find/replace text across all slides with match count.
 - UX: toolbar button opens a small dialog (find, replace, Replace-all button,
@@ -287,6 +287,11 @@ green before each commit, commit per item, agent-map anchors stay resolving
   entry); jump-to-match sets slide + text selection.
 - Tests: replace units (multi-node, no-match, special chars literal), count
   accuracy, one undo entry reverts all, jump selects the slide.
+- Findings: matches never span styled runs (per-text-node walk, documented).
+  `String.split` keeps matching literal (no regex escaping needed). Test
+  discipline: `dom.window.document`, never `dom.document`; assert the model
+  for non-active slides. The mid-file section ordering (44/45 after 55) is
+  cosmetic — execution order is what matters.
 
 ## [ ] 17. Rehearse timer + per-slide timings
 
