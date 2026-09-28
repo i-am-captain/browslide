@@ -2,8 +2,8 @@
 
 ## Session state (update when switching tasks/sessions)
 
-- Status: items 1-2 DONE and committed (452 checks). Next: item 3
-  (align / distribute / match size).
+- Status: items 1-3 DONE and committed (462 checks). Next: item 4
+  (snap guides while dragging).
 - Conventions: commit per item, suite green before each commit, flip that item's
   `[ ]` to `[x]` when committed.
 
@@ -55,7 +55,7 @@ green before each commit, commit per item, agent-map anchors stay resolving
   undo/redo. `caretInStageText` needs a real text-node anchor (starter HTML
   wraps text in styled spans).
 
-## [ ] 3. Align / distribute / match size
+## [x] 3. Align / distribute / match size
 
 - Goal: Arrange menu (inspector): align L/C/R/T/M/B, distribute H/V, match W/H.
 - UX: align works with 1 item (relative to slide) or many (relative to their
@@ -66,6 +66,13 @@ green before each commit, commit per item, agent-map anchors stay resolving
   Slide-relative metrics come from `clientWidth/Height` (guard 0 in jsdom).
 - Tests: pure-fn units (centering, equal gaps, width copy), apply writes %,
   single-item slide-relative align, no-op guards.
+- Findings: "primary" for match = `resizer.el` (last-selected), documented in the
+  Arrange hint and README. Arrange routes through the step machinery, so it
+  obeys scrub context like drags. Distribute returns null on overlap instead of
+  stacking. Test isolation rules that bit twice: scrub slider back to 1 before
+  geometry assertions, `syncInitialStep` after live-only setup writes (else
+  scrub re-applies stale initials), defeat coalescing + re-query after
+  undo/redo.
 
 ## [ ] 4. Snap guides while dragging
 

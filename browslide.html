@@ -137,6 +137,8 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 #anim-rows .aline{display:flex;flex-direction:row;align-items:center;gap:8px;margin:3px 0}
 #anim-rows .aline>span:first-child{flex:0 0 118px;color:var(--muted);font-size:12px}
 #anim-rows .aline input,#anim-rows .aline select{flex:1;min-width:0}
+#arrange-wrap .agrid{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin:6px 0}
+#arrange-wrap .ahint{font-size:11px;color:var(--muted)}
 #scrubbar{display:flex;align-items:center;gap:12px;padding:6px 12px;background:var(--panel);border-top:1px solid var(--border);flex:0 0 auto}
 #scrub-label{font-size:12px;color:var(--muted);min-width:200px}
 #scrub-range{flex:1;min-width:80px}
@@ -312,6 +314,22 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
         <div id="anim-rows"></div>
         <p><button id="btn-anim-add" title="Add a step ending at the current position/size">+ Add step (capture current)</button></p>
       </div>
+    </details>
+    <details id="arrange-wrap">
+      <summary>Arrange</summary>
+      <div class="agrid">
+        <button data-arr="left" title="Align left edges">Left</button>
+        <button data-arr="centerX" title="Center horizontally">Center</button>
+        <button data-arr="right" title="Align right edges">Right</button>
+        <button data-arr="top" title="Align top edges">Top</button>
+        <button data-arr="centerY" title="Center vertically">Middle</button>
+        <button data-arr="bottom" title="Align bottom edges">Bottom</button>
+        <button data-arr="distH" title="Space evenly (needs 2+ items)">Distribute H</button>
+        <button data-arr="distV" title="Space evenly (needs 2+ items)">Distribute V</button>
+        <button data-arr="matchW" title="Same width as primary (needs 2+ items)">Match W</button>
+        <button data-arr="matchH" title="Same height as primary (needs 2+ items)">Match H</button>
+      </div>
+      <div class="ahint">Align: 1+ items (one aligns to the slide). Distribute/Match need 2+.</div>
     </details>
     <details id="insert-wrap">
       <summary>Insert</summary>
@@ -2247,6 +2265,76 @@ function ensureBlockPos(el){
     el.style.top = (sec && sec.clientHeight > 0) ? (Math.round(q.y / sec.clientHeight * 1000) / 10 + '%') : '10%';
   }
 }
+/* ---- arrange: pure % -box layout (align/distribute/match) ---- */
+function unionBox(boxes){
+  var l = Math.min.apply(null, boxes.map(function(b){ return b.left; }));
+  var t = Math.min.apply(null, boxes.map(function(b){ return b.top; }));
+  var r = Math.max.apply(null, boxes.map(function(b){ return b.left + b.width; }));
+  var b = Math.max.apply(null, boxes.map(function(b){ return b.top + b.height; }));
+  return { left: l, top: t, width: r - l, height: b - t };
+}
+function arrangeBoxes(boxes, mode, frame, primary){
+  /* per-item {left?,top?,width?,height?} deltas, or null when not applicable */
+  var out = boxes.map(function(){ return {}; });
+  function orderBy(key){
+    return boxes.map(function(b, i){ return i; }).sort(function(a, c){ return boxes[a][key] - boxes[c][key]; });
+  }
+  if (mode === 'left') out.forEach(function(o){ o.left = frame.left; });
+  else if (mode === 'right') boxes.forEach(function(b, i){ out[i].left = frame.left + frame.width - b.width; });
+  else if (mode === 'centerX') boxes.forEach(function(b, i){ out[i].left = frame.left + (frame.width - b.width) / 2; });
+  else if (mode === 'top') out.forEach(function(o){ o.top = frame.top; });
+  else if (mode === 'bottom') boxes.forEach(function(b, i){ out[i].top = frame.top + frame.height - b.height; });
+  else if (mode === 'centerY') boxes.forEach(function(b, i){ out[i].top = frame.top + (frame.height - b.height) / 2; });
+  else if (mode === 'matchW') { if (!primary) return null; out.forEach(function(o){ o.width = primary.width; }); }
+  else if (mode === 'matchH') { if (!primary) return null; out.forEach(function(o){ o.height = primary.height; }); }
+  else if (mode === 'distH' || mode === 'distV') {
+    var k = mode === 'distH' ? 'left' : 'top', s = mode === 'distH' ? 'width' : 'height';
+    var ord = orderBy(k);
+    if (ord.length < 2) return null;
+    var first = boxes[ord[0]], last = boxes[ord[ord.length - 1]];
+    var span = (last[k] + last[s]) - first[k];
+    var sum = ord.reduce(function(a, i){ return a + boxes[i][s]; }, 0);
+    var gap = (span - sum) / (ord.length - 1);
+    if (!(gap >= 0)) return null; /* overlapping: nothing sane to do */
+    var pos = first[k];
+    ord.forEach(function(i){ out[i][k] = pos; pos += boxes[i][s] + gap; });
+  }
+  else return null;
+  return out;
+}
+function itemBoxPct(el){
+  /* element box in % coords, or null without layout */
+  var sec = $('#stage .slide');
+  var slideW = (sec && sec.clientWidth) || 0, slideH = (sec && sec.clientHeight) || 0;
+  function pct(v){ var m = /^\s*(-?[\d.]+)\s*%\s*$/.exec(v || ''); return m ? parseFloat(m[1]) : null; }
+  var l = pct(el.style.left), t = pct(el.style.top), w = pct(el.style.width), h = pct(el.style.height);
+  if (l === null || t === null) return null;
+  if (w === null) w = (slideW > 0 && el.offsetWidth > 0) ? Math.round(el.offsetWidth / slideW * 1000) / 10 : null;
+  if (h === null) h = (slideH > 0 && el.offsetHeight > 0) ? Math.round(el.offsetHeight / slideH * 1000) / 10 : null;
+  if (w === null || h === null) return null;
+  return { left: l, top: t, width: w, height: h };
+}
+function arrangeSelection(mode){
+  var items = selectedItems();
+  if (!items.length) return false;
+  if (items.length < 2 && (mode === 'matchW' || mode === 'matchH' || mode === 'distH' || mode === 'distV')) return false;
+  items.forEach(ensurePositioned);
+  maybeAutoStepEdit(items);
+  var boxes = items.map(itemBoxPct);
+  if (boxes.some(function(b){ return !b; })) return false;
+  var frame = items.length > 1 ? unionBox(boxes) : { left: 0, top: 0, width: 100, height: 100 };
+  var out = arrangeBoxes(boxes, mode, frame, boxes[0]);
+  if (!out) return false;
+  out.forEach(function(p, i){
+    if (p.left !== undefined) items[i].style.left = r1(p.left) + '%';
+    if (p.top !== undefined) items[i].style.top = r1(p.top) + '%';
+    if (p.width !== undefined) { items[i].style.width = Math.max(1, r1(p.width)) + '%'; items[i].style.height = 'auto'; }
+    if (p.height !== undefined) items[i].style.height = Math.max(1, r1(p.height)) + '%';
+  });
+  positionResizer();
+  commitStepGeometries();
+  return true;
+}
 function moveTargetTo(leftPct, topPct){
   var el = resizer.el;
   if (!el) return false;
@@ -3632,6 +3720,9 @@ function bind(){
   $('#btn-clean-media').addEventListener('click', removeUnusedMedia);
   $('#btn-shape').addEventListener('click', function(){ insertShape($('#shape-select').value); });
   $('#btn-block').addEventListener('click', addTextBlock);
+  Array.prototype.forEach.call(document.querySelectorAll('#arrange-wrap [data-arr]'), function(b){
+    b.addEventListener('click', function(){ arrangeSelection(b.getAttribute('data-arr')); });
+  });
   $('#anim-hidden').addEventListener('change', function(e){
     var el = selectedAnimTarget();
     if (!el) return;

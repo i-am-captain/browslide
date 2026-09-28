@@ -1978,5 +1978,72 @@ const ndList = JSON.parse(ndBlk.getAttribute('data-anim'));
 check('nudge lands in displayed step', ndList[ndList.length - 1].to.left === 9.5 && ndBlk.style.left === '9.5%' &&
   /left:\s*9\.4%/.test(WND.App.model.slides.s2.html));
 
+// ---------- 42. arrange ----------
+check('union + align centers', (function(){
+  const boxes = [{ left: 8, top: 5, width: 20, height: 10 }, { left: 50, top: 30, width: 20, height: 10 }];
+  const frame = WND.unionBox(boxes);
+  const out = WND.arrangeBoxes(boxes, 'centerX', frame, boxes[0]);
+  return frame.left === 8 && frame.width === 62 && out[0].left === 29 && out[1].left === 29;
+})());
+check('align edges + middles', (function(){
+  const boxes = [{ left: 8, top: 5, width: 20, height: 10 }, { left: 50, top: 30, width: 30, height: 20 }];
+  const frame = WND.unionBox(boxes);
+  return WND.arrangeBoxes(boxes, 'left', frame)[1].left === 8 &&
+    WND.arrangeBoxes(boxes, 'right', frame)[0].left === 60 &&
+    WND.arrangeBoxes(boxes, 'centerY', frame)[0].top === 22.5 &&
+    WND.arrangeBoxes(boxes, 'top', frame)[1].top === 5 &&
+    WND.arrangeBoxes(boxes, 'bottom', frame)[0].top === 40;
+})());
+check('distribute splits gaps evenly', (function(){
+  const boxes = [{ left: 0, top: 0, width: 10, height: 10 }, { left: 30, top: 0, width: 10, height: 10 }, { left: 90, top: 0, width: 10, height: 10 }];
+  const out = WND.arrangeBoxes(boxes, 'distH', WND.unionBox(boxes), boxes[0]);
+  return out[0].left === 0 && out[1].left === 45 && out[2].left === 90;
+})());
+check('distribute guards', WND.arrangeBoxes([{ left: 0, top: 0, width: 60, height: 10 }, { left: 40, top: 0, width: 60, height: 10 }], 'distH', { left: 0, top: 0, width: 100, height: 100 }) === null &&
+  WND.arrangeBoxes([{ left: 0, top: 0, width: 10, height: 10 }], 'distH', { left: 0, top: 0, width: 100, height: 100 }) === null &&
+  WND.arrangeBoxes([{ left: 0, top: 0, width: 10, height: 10 }], 'bogus', { left: 0, top: 0, width: 100, height: 100 }) === null);
+check('match copies primary', (function(){
+  const boxes = [{ left: 0, top: 0, width: 10, height: 10 }, { left: 0, top: 0, width: 30, height: 40 }];
+  const out = WND.arrangeBoxes(boxes, 'matchW', { left: 0, top: 0, width: 100, height: 100 }, boxes[0]);
+  const out2 = WND.arrangeBoxes(boxes, 'matchH', { left: 0, top: 0, width: 100, height: 100 }, boxes[1]);
+  return out[1].width === 10 && out2[0].height === 40;
+})());
+// DOM apply: stub heights (style has none), exit step-edit for isolation
+WND.exitStepEdit();
+DND.querySelector('#scrub-range').value = '1';
+DND.querySelector('#scrub-range').dispatchEvent(new WND.Event('input', { bubbles: true }));
+stubSlideND();
+const arBlks = DND.querySelectorAll('#stage .blk');
+arBlks[0].style.left = '8%'; arBlks[0].style.top = '5%'; arBlks[0].style.width = '20%';
+arBlks[1].style.left = '50%'; arBlks[1].style.top = '30%'; arBlks[1].style.width = '20%';
+[arBlks[0], arBlks[1]].forEach((b) => Object.defineProperty(b, 'offsetHeight', { value: 60, configurable: true }));
+[arBlks[0], arBlks[1]].forEach((b) => WND.syncInitialStep(b)); /* setup bypasses handlers: refresh initials or scrub re-applies stale ones */
+WND.persistSlide(); /* pin the 50% setup as its own undo step */
+WND.lastPushAt = 0; /* defeat burst coalescing: the arrange must push fresh */
+WND.setSingleSelection(arBlks[0]);
+WND.toggleSelection(arBlks[1]);
+DND.querySelector('#arrange-wrap [data-arr="left"]').click();
+await wait(50);
+check('arrange left applies + persists', arBlks[1].style.left === '8%' &&
+  /left:\s*8%/.test(WND.App.model.slides.s2.html));
+WND.undo();
+await wait(50);
+const arUndone = DND.querySelectorAll('#stage .blk');
+check('arrange undoes', arUndone[1].style.left === '50%');
+WND.redo();
+await wait(50);
+stubSlideND();
+const arRe = DND.querySelectorAll('#stage .blk');
+arRe[1].style.left = '50%'; /* spread them again: redo landed both at 8% */
+[arRe[0], arRe[1]].forEach((b) => Object.defineProperty(b, 'offsetHeight', { value: 60, configurable: true }));
+WND.setSingleSelection(arRe[0]);
+WND.toggleSelection(arRe[1]);
+check('arrange centerX via API', WND.arrangeSelection('centerX') === true &&
+  arRe[0].style.left === '29%' && arRe[1].style.left === '29%');
+arRe[1].style.width = '40%';
+check('arrange matchW copies primary', WND.arrangeSelection('matchW') === true && arRe[0].style.width === '40%' && arRe[1].style.width === '40%');
+WND.setSingleSelection(arRe[0]);
+check('distribute needs 2+', WND.arrangeSelection('distH') === false && WND.arrangeSelection('matchW') === false);
+
 console.log(failures === 0 ? '\nALL TESTS PASSED' : `\n${failures} TEST(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);
