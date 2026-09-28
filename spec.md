@@ -2,8 +2,9 @@
 
 ## Session state (update when switching tasks/sessions)
 
-- Status: items 1-18 DONE and committed (612 checks). Next: item 19
-  (slide sorter).
+- Status: ALL 19 ITEMS DONE and committed (619 checks). Nothing pending.
+- Conventions: commit per item, suite green before each commit, flip that item's
+  `[ ]` to `[x]` when committed.
 - Conventions: commit per item, suite green before each commit, flip that item's
   `[ ]` to `[x]` when committed.
 
@@ -330,7 +331,7 @@ green before each commit, commit per item, agent-map anchors stay resolving
   close-on-throw. Console keys take precedence in the keydown chain. Player
   string now ~15k of the 16k export guard.
 
-## [ ] 19. Slide sorter overview
+## [x] 19. Slide sorter overview
 
 - Goal: grid overview of all slides for rearranging the big picture.
 - UX: toggle button switches filmstrip to a scaled-clone grid; click jumps,
@@ -341,3 +342,9 @@ green before each commit, commit per item, agent-map anchors stay resolving
   item 11 show through.
 - Tests: grid renders N clones with titles, click navigates, reorder moves
   model order, toggle restores list mode.
+- Findings: `renderFilmstrip` delegates to the grid when sorter mode is on, so
+  every existing caller (add/delete/reorder/undo) stays correct with zero
+  changes. Test selectors must use `#filmstrip-list > li` — clones contain
+  real `<li>` content. Badge refresh generalized to both row types
+  (`setRowBadge`). Clones inline expanded media per clone (memory cost,
+  documented).

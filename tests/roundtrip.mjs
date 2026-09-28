@@ -2716,5 +2716,41 @@ check('pickColor reads API', await WRC.pickColor() === '#1a2b3c');
 WRC.EyeDropper = function(){ this.open = () => Promise.reject(new Error('denied')); };
 check('pickColor null on deny', await WRC.pickColor() === null);
 
+// ---------- 58. slide sorter ----------
+const domSO = makeDom(html);
+await wait(400);
+const WSO = domSO.window, DSO = WSO.document;
+WSO.gotoSlide(WSO.App.model.slideOrder[1]);
+await wait(100);
+DSO.querySelector('#btn-sorter').click();
+check('sorter renders clone grid', DSO.querySelector('#filmstrip-list').classList.contains('grid') &&
+  DSO.querySelectorAll('#filmstrip-list > li').length === 3 &&
+  DSO.querySelectorAll('#filmstrip-list .thumb section.slide').length === 3 &&
+  DSO.querySelectorAll('#filmstrip-list .tmeta .lbl')[1].textContent === 'How to use');
+check('clones are inert', DSO.querySelector('#filmstrip-list .thumb section').isContentEditable !== true &&
+  DSO.querySelectorAll('#filmstrip-list > li[draggable="true"]').length === 3);
+const orderBefore = WSO.App.model.slideOrder.slice();
+WSO.moveSlideBefore(orderBefore[2], orderBefore[0]);
+check('reorder keeps grid + reflects order', DSO.querySelector('#filmstrip-list').classList.contains('grid') &&
+  DSO.querySelectorAll('#filmstrip-list .tmeta .lbl')[0].textContent !== 'How to use' &&
+  WSO.App.model.slideOrder[0] === orderBefore[2]);
+WSO.undo();
+check('reorder undoes in grid', WSO.App.model.slideOrder.join(',') === orderBefore.join(',') &&
+  DSO.querySelector('#filmstrip-list').classList.contains('grid'));
+DSO.querySelectorAll('#filmstrip-list .thumb')[2].click();
+await wait(100);
+check('clone click jumps + exits sorter', WSO.App.activeId === WSO.App.model.slideOrder[2] &&
+  !DSO.querySelector('#filmstrip-list').classList.contains('grid') &&
+  !!DSO.querySelector('#filmstrip-list button.nav'));
+DSO.querySelector('#btn-sorter').click();
+DSO.dispatchEvent(new WSO.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+check('esc exits sorter', !DSO.querySelector('#filmstrip-list').classList.contains('grid'));
+DSO.querySelector('#btn-sorter').click();
+const soBlk = DSO.querySelector('#stage .blk');
+WSO.setSingleSelection(soBlk);
+DSO.querySelector('#btn-anim-add').click();
+await wait(50);
+check('badges show through in grid', /▸|●/.test(DSO.querySelector('#filmstrip-list').textContent));
+
 console.log(failures === 0 ? '\nALL TESTS PASSED' : `\n${failures} TEST(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);

@@ -108,6 +108,15 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 #filmstrip-list .stages{color:var(--muted);font-size:11px;margin-left:6px;white-space:nowrap}
 #filmstrip-list li[draggable="true"]{cursor:grab}
 #filmstrip-list li.drop-before{box-shadow:0 -3px 0 var(--accent)}
+#filmstrip-head{margin-bottom:6px}
+#btn-sorter.active{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+#filmstrip-list.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+#filmstrip-list.grid li{display:block}
+#filmstrip-list.grid .thumb{border:1px solid var(--border);border-radius:6px;overflow:hidden;cursor:pointer;background:var(--slide-bg)}
+#filmstrip-list.grid li.active .thumb{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+#filmstrip-list.grid .thumb section{pointer-events:none;margin:0;border:0;border-radius:0;box-shadow:none}
+#filmstrip-list.grid .tmeta{display:flex;gap:4px;align-items:center;font-size:11px;color:var(--muted);padding:3px 2px}
+#filmstrip-list.grid .tmeta .lbl{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #stage-wrap{overflow:auto;padding:18px;background:var(--panel);border:1px solid var(--border);border-radius:8px;position:relative}
 #stage{width:100%;height:100%}
 #inspector{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:10px;overflow:auto;display:flex;flex-direction:column;gap:10px}
@@ -313,7 +322,7 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 </div>
 
 <div id="main">
-  <aside id="filmstrip"><ol id="filmstrip-list"></ol><button id="btn-add-end" title="Add slide at the end">+ Add slide</button></aside>
+  <aside id="filmstrip"><div id="filmstrip-head"><button id="btn-sorter" title="Toggle grid overview (Esc exits)">Grid</button></div><ol id="filmstrip-list"></ol><button id="btn-add-end" title="Add slide at the end">+ Add slide</button></aside>
   <main id="stage-wrap"><div id="stage"></div></main>
   <aside id="inspector">
     <details id="slide-menu">
@@ -994,10 +1003,61 @@ function skeletonFor(layout){
     default: return '<div class="blk" style="left:8%;top:6%;width:84%"><h1>Heading</h1></div><div class="blk" style="left:8%;top:28%;width:84%"><ul><li>First point</li><li>Second point</li></ul></div>';
   }
 }
+/* ---- slide sorter: scaled-clone grid reusing the list drop handlers ---- */
+var sorterOn = false;
+function toggleSorter(force){
+  sorterOn = (typeof force === 'boolean') ? force : !sorterOn;
+  var btn = $('#btn-sorter');
+  if (btn) btn.classList.toggle('active', sorterOn);
+  renderFilmstrip();
+}
+function renderSorter(ol){
+  /* view-only clones (media inlines expand per clone); drops reuse moveSlideBefore */
+  var sec = $('#stage .slide');
+  var ar = deckAR();
+  var slideW = (sec && sec.clientWidth > 0) ? sec.clientWidth : 880;
+  var scale = 150 / slideW, thumbH = Math.max(1, Math.round(slideW * ar.h / ar.w * scale));
+  App.model.slideOrder.forEach(function(id, i){
+    var s = App.model.slides[id];
+    var li = document.createElement('li');
+    if (id === App.activeId) li.className = 'active';
+    li.draggable = true;
+    li.dataset.id = id;
+    li.addEventListener('dragstart', onSlideDragStart);
+    li.addEventListener('dragover', onSlideDragOver);
+    li.addEventListener('dragleave', onSlideDragLeave);
+    li.addEventListener('drop', onSlideDrop);
+    li.addEventListener('dragend', onSlideDragEnd);
+    var frame = document.createElement('div');
+    frame.className = 'thumb';
+    frame.title = s.title;
+    frame.style.width = '150px';
+    frame.style.height = thumbH + 'px';
+    var inner = document.createElement('section');
+    inner.className = 'slide layout-' + s.layout;
+    inner.style.width = slideW + 'px';
+    inner.style.transform = 'scale(' + scale + ')';
+    inner.style.transformOrigin = 'top left';
+    inner.innerHTML = expandHtml(s.html, App.model.resources);
+    frame.appendChild(inner);
+    var meta = document.createElement('div');
+    meta.className = 'tmeta';
+    var num = document.createElement('span'); num.textContent = (i + 1);
+    var lbl = document.createElement('span'); lbl.className = 'lbl'; lbl.textContent = s.title;
+    meta.appendChild(num); meta.appendChild(lbl);
+    li.appendChild(frame);
+    li.appendChild(meta);
+    setRowBadge(li, stageBadge(s.html));
+    frame.addEventListener('click', function(){ toggleSorter(false); gotoSlide(id); });
+    ol.appendChild(li);
+  });
+}
 function renderFilmstrip(){
   var ol = $('#filmstrip-list');
   ol.innerHTML = '';
-  App.model.slideOrder.forEach(function(id, i){
+  ol.classList.toggle('grid', sorterOn);
+  if (sorterOn) { renderSorter(ol); }
+  else App.model.slideOrder.forEach(function(id, i){
     var s = App.model.slides[id];
     var li = document.createElement('li');
     if (id === App.activeId) li.className = 'active';
@@ -1270,14 +1330,25 @@ function refreshStageBadges(){
     if (!s) return;
     var li = ol.querySelector('li[data-id="' + id + '"]');
     if (!li) return;
-    var nav = li.querySelector('button.nav');
-    if (!nav) return;
-    var badge = stageBadge(s.html);
+    setRowBadge(li, stageBadge(s.html));
+  });
+}
+function setRowBadge(li, badge){
+  /* list rows badge in the nav button, grid rows in the meta line */
+  var nav = li.querySelector('button.nav');
+  if (nav) {
     var st = nav.querySelector('.stages');
     if (!badge) { if (st) st.remove(); return; }
     if (!st) { st = document.createElement('span'); st.className = 'stages'; nav.appendChild(st); }
     if (st.textContent !== badge) st.textContent = badge;
-  });
+    return;
+  }
+  var meta = li.querySelector('.tmeta');
+  if (!meta) return;
+  var g = meta.querySelector('.gbadge');
+  if (!badge) { if (g) g.remove(); return; }
+  if (!g) { g = document.createElement('span'); g.className = 'gbadge'; meta.appendChild(g); }
+  if (g.textContent !== badge) g.textContent = badge;
 }
 /* ---- undo/redo: snapshot stack over the single model JSON. Every persist
    pushes the post-mutation state (coalesced for bursts); undo pops back to
@@ -4873,6 +4944,7 @@ var scheduleSize = debounce(updateSize, 1200);
 function bind(){
   $('#btn-add').addEventListener('click', function(){ addSlide(); });
   $('#btn-add-end').addEventListener('click', function(){ addSlide(App.model.slideOrder.length); });
+  $('#btn-sorter').addEventListener('click', function(){ toggleSorter(); });
   $('#btn-duplicate').addEventListener('click', duplicateSlide);
   $('#btn-delete').addEventListener('click', deleteSlide);
   $('#btn-prev').addEventListener('click', function(){ step(-1); });
@@ -5164,7 +5236,8 @@ function bind(){
       else if (e.key === 'End') { e.preventDefault(); showPresent(App.model.slideOrder.length - 1, true); }
       return;
     }
-    if (e.key === 'Escape' && pathDraw) {
+    if (e.key === 'Escape' && sorterOn) { toggleSorter(false); e.preventDefault(); }
+    else if (e.key === 'Escape' && pathDraw) {
       pathDraw = null;
       try { document.body.style.cursor = ''; } catch (e2) {}
       refreshAnimUI(true);
