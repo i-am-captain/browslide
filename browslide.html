@@ -102,6 +102,7 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 #filmstrip-list li.active button.nav{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
 #btn-add-end{width:100%;margin-top:6px}
 #filmstrip-list .num{color:var(--muted);font-size:11px;margin-right:6px}
+#filmstrip-list .stages{color:var(--muted);font-size:11px;margin-left:6px;white-space:nowrap}
 #filmstrip-list li[draggable="true"]{cursor:grab}
 #filmstrip-list li.drop-before{box-shadow:0 -3px 0 var(--accent)}
 #stage-wrap{overflow:auto;padding:18px;background:var(--panel);border:1px solid var(--border);border-radius:8px;position:relative}
@@ -957,6 +958,8 @@ function renderFilmstrip(){
     var num = document.createElement('span'); num.className = 'num'; num.textContent = (i + 1);
     var lbl = document.createElement('span'); lbl.className = 'lbl'; lbl.textContent = s.title;
     b.appendChild(num); b.appendChild(lbl);
+    var badge = stageBadge(s.html);
+    if (badge) { var st = document.createElement('span'); st.className = 'stages'; st.textContent = badge; b.appendChild(st); }
     b.addEventListener('click', function(){ gotoSlide(id); });
     li.appendChild(b);
     var del = document.createElement('button');
@@ -1097,6 +1100,25 @@ function renderAll(){
 function persistSlide(){
   syncStageToModel(); refreshDirty(); scheduleSize(); scheduleAutosave();
   rebuildScrub();
+  refreshStageBadges();
+}
+function refreshStageBadges(){
+  /* in-place badge text updates (no list rebuild: focus/scroll survive) */
+  var ol = $('#filmstrip-list');
+  if (!ol || !App.model) return;
+  App.model.slideOrder.forEach(function(id){
+    var s = App.model.slides[id];
+    if (!s) return;
+    var li = ol.querySelector('li[data-id="' + id + '"]');
+    if (!li) return;
+    var nav = li.querySelector('button.nav');
+    if (!nav) return;
+    var badge = stageBadge(s.html);
+    var st = nav.querySelector('.stages');
+    if (!badge) { if (st) st.remove(); return; }
+    if (!st) { st = document.createElement('span'); st.className = 'stages'; nav.appendChild(st); }
+    if (st.textContent !== badge) st.textContent = badge;
+  });
 }
 /* ---- undo/redo: snapshot stack over the single model JSON. Every persist
    pushes the post-mutation state (coalesced for bursts); undo pops back to
@@ -2964,6 +2986,37 @@ function maxGroupOnSlide(){
   var sec = $('#stage .slide'), mx = 0;
   if (sec) kfEntries(sec).forEach(function(x){ if (x.entry.group > mx) mx = x.entry.group; });
   return mx;
+}
+/* ---- filmstrip stage badges: click/auto stage counts per slide html ---- */
+var stageCountTpl = null;
+function slideStageCounts(html){
+  /* a stage is click when ANY entry in it wants click (same rule as playback) */
+  var counts = { total: 0, click: 0, auto: 0 };
+  try {
+    if (!stageCountTpl) stageCountTpl = document.createElement('template');
+    stageCountTpl.innerHTML = String(html || '');
+    var groups = {};
+    Array.prototype.forEach.call(stageCountTpl.content.querySelectorAll('[data-anim]'), function(n){
+      parseAnimList(n.getAttribute('data-anim')).forEach(function(e){
+        if (e.initial) return; /* infrastructure, not authored motion */
+        (groups[e.group] = groups[e.group] || []).push(e);
+      });
+    });
+    Object.keys(groups).forEach(function(g){
+      counts.total++;
+      if (groups[g].some(function(e){ return e.trigger !== 'auto'; })) counts.click++;
+      else counts.auto++;
+    });
+  } catch (e) {}
+  return counts;
+}
+function stageBadge(html){
+  var c = slideStageCounts(html);
+  if (!c.total) return '';
+  var parts = [];
+  if (c.click) parts.push(c.click + '▸');
+  if (c.auto) parts.push(c.auto + '●');
+  return parts.join(' ');
 }
 /* ---- initial step: every item carries an undeletable first step that mirrors
    its rest pose (source of truth for the initial state). Its group is the

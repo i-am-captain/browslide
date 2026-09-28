@@ -2249,6 +2249,34 @@ check('paste extends scrub range', DCP.querySelector('#scrub-range').max === '4'
 check('paste persists + undoes', /data-anim=/.test(WCP.App.model.slides.s2.html) && (WCP.undo(), JSON.parse(DCP.querySelectorAll('#stage .blk')[1].getAttribute('data-anim')).length === 1));
 check('paste button enables with clip', DCP.querySelector('#btn-anim-paste').disabled === false);
 
+// ---------- 50. filmstrip stage badges ----------
+const domBG = makeDom(html);
+await wait(400);
+const WBG = domBG.window, DBG = WBG.document;
+check('counts mixed triggers', JSON.stringify(WBG.slideStageCounts(
+  '<div data-anim=\'[{"group":1,"trigger":"click","dur":600,"delay":0,"mode":"linear","to":{"left":1}}]\'></div>' +
+  '<div data-anim=\'[{"group":1,"trigger":"auto","dur":600,"delay":0,"mode":"linear","to":{"left":2}},{"group":2,"trigger":"auto","dur":600,"delay":0,"mode":"linear","to":{"left":3}}]\'></div>'
+)) === JSON.stringify({ total: 2, click: 1, auto: 1 }));
+check('counts empty + malformed', JSON.stringify(WBG.slideStageCounts('<p>plain</p>')) === JSON.stringify({ total: 0, click: 0, auto: 0 }) &&
+  JSON.stringify(WBG.slideStageCounts('<div data-anim="bogus">x</div>')) === JSON.stringify({ total: 0, click: 0, auto: 0 }) &&
+  WBG.stageBadge('<p>plain</p>') === '' && WBG.stageBadge('') === '');
+check('badge formats split', WBG.stageBadge(
+  '<div data-anim=\'[{"group":1,"trigger":"click","dur":600,"delay":0,"mode":"linear","to":{"left":1}},{"group":3,"trigger":"click","dur":600,"delay":0,"mode":"linear","to":{"left":2}}]\'></div>'
+) === '2▸');
+WBG.gotoSlide(WBG.App.model.slideOrder[1]);
+await wait(100);
+check('no badge without animation', DBG.querySelector('#filmstrip-list li:nth-child(2) .stages') === null);
+const bgBlk = DBG.querySelector('#stage .blk');
+WBG.setSingleSelection(bgBlk);
+DBG.querySelector('#btn-anim-add').click();
+await wait(50);
+WBG.exitStepEdit();
+const bgBadge = DBG.querySelector('#filmstrip-list li:nth-child(2) .stages');
+check('badge appears after step add', !!bgBadge && bgBadge.textContent.includes('▸'));
+DBG.querySelector('#anim-rows .adel').click();
+await wait(50);
+check('badge clears after step delete', DBG.querySelector('#filmstrip-list li:nth-child(2) .stages') === null);
+
 // ---------- 45. style painter ----------
 const domPT = makeDom(html);
 await wait(400);

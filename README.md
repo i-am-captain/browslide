@@ -37,7 +37,7 @@ Repo file vs. saved copies: `browslide.html` in this repo is the maintained **te
 
 Right panel, top to bottom: Slide menu (layout, transition, text block), Presentation (aspect ratio, theme, toolbar, fullscreen), Animation (initial state + keyframe steps), Insert, Shapes (kind picker + insert only), save-size estimate, Media & Sizes, speaker notes, GitHub link.
 
-Left list: click to jump, **drag to reorder**, `PageUp`/`PageDown`/`Home`/`End` navigate when not editing text.
+Left list: click to jump, **drag to reorder**, `PageUp`/`PageDown`/`Home`/`End` navigate when not editing text. Rows with animation show click/auto stage badges.
 
 Unsaved work additionally autosaves to the browser (IndexedDB) — if you close without saving, reopening offers to resume.
 

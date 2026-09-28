@@ -2,8 +2,8 @@
 
 ## Session state (update when switching tasks/sessions)
 
-- Status: items 1-10 DONE and committed (533 checks). Next: item 11
-  (filmstrip stage badges).
+- Status: items 1-11 DONE and committed (539 checks). Next: item 12
+  (motion paths).
 - Conventions: commit per item, suite green before each commit, flip that item's
   `[ ]` to `[x]` when committed.
 
@@ -189,7 +189,7 @@ green before each commit, commit per item, agent-map anchors stay resolving
   count changes shape; the paste button disables on empty clipboard (plus a
   handler guard, since disabled buttons still fire programmatic clicks).
 
-## [ ] 11. Filmstrip stage badges
+## [x] 11. Filmstrip stage badges
 
 - Goal: each filmstrip row shows its click/auto stage counts at a glance.
 - UX: tiny badge (e.g. `3▸ 2●`) on rows that have animation; none otherwise.
@@ -200,6 +200,10 @@ green before each commit, commit per item, agent-map anchors stay resolving
   `renderFilmstrip`.
 - Tests: count units (mixed triggers, no anim, malformed JSON), badges render
   and refresh after step add/delete.
+- Findings: initial-only stages are excluded from counts (every item carries
+  one — otherwise every slide would badge). Badges refresh in place on every
+  persist (`refreshStageBadges`, no list rebuild) so filmstrip focus and scroll
+  survive typing and drags.
 
 ## [ ] 12. Motion paths
 
