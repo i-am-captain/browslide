@@ -142,6 +142,12 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 #anim-rows .aline input,#anim-rows .aline select{flex:1;min-width:0}
 #arrange-wrap .agrid{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin:6px 0}
 #arrange-wrap .ahint{font-size:11px;color:var(--muted)}
+#insert-wrap .srow{display:flex;align-items:center;gap:6px;margin:5px 0}
+#insert-wrap .srow>span:first-child{flex:1;color:var(--muted);font-size:12px}
+#insert-wrap .srow input[type="number"]{width:52px}
+.slide table.btable{border-collapse:collapse;width:100%;margin:.4em 0}
+.slide table.btable td,.slide table.btable th{border:1px solid currentColor;padding:.35em .6em;min-width:2em}
+.slide table.btable th{background:rgba(127,127,127,.18)}
 #scrubbar{display:flex;align-items:center;gap:12px;padding:6px 12px;background:var(--panel);border-top:1px solid var(--border);flex:0 0 auto}
 #scrub-label{font-size:12px;color:var(--muted);min-width:200px}
 #scrub-range{flex:1;min-width:80px}
@@ -341,6 +347,8 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
     <details id="insert-wrap">
       <summary>Insert</summary>
       <p><button id="btn-img">Image…</button> <button id="btn-video">Video…</button></p>
+      <div class="srow"><span>Table</span><input id="tbl-rows" type="number" min="1" max="12" value="2" title="Rows"><input id="tbl-cols" type="number" min="1" max="8" value="3" title="Columns"><button id="btn-table" title="Insert a table block">Insert</button></div>
+      <div class="srow"><span>Rows/cols</span><button id="btn-row-add" title="Add row to the selected table">+Row</button><button id="btn-row-del" title="Remove last row">−Row</button><button id="btn-col-add" title="Add column">+Col</button><button id="btn-col-del" title="Remove last column">−Col</button></div>
       <label class="row"><input type="checkbox" id="opt-downscale"> Downscale photos on insert (max <select id="opt-maxdim"><option value="1280">1280</option><option value="1920" selected>1920</option><option value="2560">2560</option></select> px)</label>
     </details>
     <details id="shapes-wrap">
@@ -432,7 +440,7 @@ function parseDataUrl(dataURL){
 var LAYOUTS = ['title', 'title-body', 'two-col', 'image-full', 'blank'];
 /* every text run carries explicit styling: default span values = slide base */
 var DEFAULT_FONT = '-apple-system,\'Segoe UI\',Roboto,Arial,sans-serif';
-var BLOCK_TAGS = { P: 1, H1: 1, H2: 1, H3: 1, LI: 1, DIV: 1, BLOCKQUOTE: 1 };
+var BLOCK_TAGS = { P: 1, H1: 1, H2: 1, H3: 1, LI: 1, DIV: 1, BLOCKQUOTE: 1, TABLE: 1, THEAD: 1, TBODY: 1, TFOOT: 1, TR: 1, TD: 1, TH: 1 };
 var INLINE_TAGS = { SPAN: 1, B: 1, I: 1, U: 1, S: 1, A: 1, EM: 1, STRONG: 1, CODE: 1, IMG: 1, VIDEO: 1, BR: 1 };
 function defaultSpan(doc){
   var sp = doc.createElement('span');
@@ -1227,7 +1235,7 @@ function savedInStage(){
     (savedRange.ec === sec || sec.contains(savedRange.ec)));
 }
 var ALIGN_VALUES = { justifyLeft: 'left', justifyCenter: 'center', justifyRight: 'right', justifyFull: 'justify' };
-var BLOCK_TAGS_ALIGN = ['P', 'H1', 'H2', 'H3', 'LI', 'DIV', 'BLOCKQUOTE'];
+var BLOCK_TAGS_ALIGN = ['P', 'H1', 'H2', 'H3', 'LI', 'DIV', 'BLOCKQUOTE', 'TD', 'TH'];
 function blocksInSelection(){
   /* block elements intersecting the selection (deduped to outermost) */
   var sec = $('#stage .slide'), out = [];
@@ -1243,6 +1251,7 @@ function blocksInSelection(){
     }
   } catch (e) { return []; }
   return out.filter(function(b){
+    if (b.tagName === 'TD' || b.tagName === 'TH') return true; /* cells align individually, never swallowed by their block */
     var p = b.parentNode;
     while (p && p !== sec) { if (out.indexOf(p) >= 0) return false; p = p.parentNode; }
     return true;
@@ -1915,6 +1924,72 @@ function insertShape(name){  var def = SHAPE_DEFS[name];
   sec.appendChild(wrap);
   syncStageToModel(); refreshDirty(); scheduleSize(); scheduleAutosave();
   return true;
+}
+/* ---- tables: plain table.btable blocks, native cell editing ---- */
+function insertTable(rows, cols){
+  var sec = $('#stage .slide');
+  if (!sec || !App.model) return false;
+  rows = Math.max(1, Math.min(12, parseInt(rows, 10) || 2));
+  cols = Math.max(1, Math.min(8, parseInt(cols, 10) || 3));
+  var wrap = document.createElement('div');
+  wrap.className = 'blk';
+  wrap.style.left = '20%';
+  wrap.style.top = '30%';
+  wrap.style.width = '60%';
+  var html = '<table class="btable"><tbody>', r, c;
+  for (r = 0; r < rows; r++) {
+    html += '<tr>';
+    for (c = 0; c < cols; c++) html += '<td>Cell</td>';
+    html += '</tr>';
+  }
+  wrap.innerHTML = html + '</tbody></table>';
+  sec.appendChild(wrap);
+  syncStageToModel(); refreshDirty(); scheduleSize(); scheduleAutosave();
+  selectMedia(wrap);
+  return true;
+}
+function selectedTable(){
+  var el = resizer.el;
+  if (!el || !document.contains(el)) return null;
+  if (el.tagName === 'TABLE') return el;
+  return el.querySelector ? el.querySelector('table') : null;
+}
+function tableColCount(t){
+  var n = 0;
+  Array.prototype.forEach.call(t.rows, function(row){ if (row.cells.length > n) n = row.cells.length; });
+  return n;
+}
+function tableTouch(t){
+  /* new cells need styled spans + a model write */
+  ensureStyledSpans($('#stage .slide'));
+  persistSlide();
+  return true;
+}
+function tableAddRow(){
+  var t = selectedTable();
+  if (!t || !t.rows.length) return false;
+  var n = Math.max(1, tableColCount(t)), html = '<tr>';
+  for (var c = 0; c < n; c++) html += '<td>Cell</td>';
+  t.rows[t.rows.length - 1].insertAdjacentHTML('afterend', html + '</tr>');
+  return tableTouch(t);
+}
+function tableDelRow(){
+  var t = selectedTable();
+  if (!t || t.rows.length < 2) return false;
+  t.deleteRow(t.rows.length - 1);
+  return tableTouch(t);
+}
+function tableAddCol(){
+  var t = selectedTable();
+  if (!t || !t.rows.length) return false;
+  Array.prototype.forEach.call(t.rows, function(row){ row.insertCell(row.cells.length).textContent = 'Cell'; });
+  return tableTouch(t);
+}
+function tableDelCol(){
+  var t = selectedTable();
+  if (!t || !t.rows.length || tableColCount(t) < 2) return false;
+  Array.prototype.forEach.call(t.rows, function(row){ if (row.cells.length) row.deleteCell(row.cells.length - 1); });
+  return tableTouch(t);
 }
 /* ---- media select + resize (drag handle, width stored as % of slide) ---- */
 var resizer = { el: null, extra: [] };
@@ -3945,6 +4020,11 @@ function bind(){
   $('#btn-video').addEventListener('click', function(){ $('#insert-video').click(); });
   $('#btn-clean-media').addEventListener('click', removeUnusedMedia);
   $('#btn-shape').addEventListener('click', function(){ insertShape($('#shape-select').value); });
+  $('#btn-table').addEventListener('click', function(){ insertTable($('#tbl-rows').value, $('#tbl-cols').value); });
+  $('#btn-row-add').addEventListener('click', tableAddRow);
+  $('#btn-row-del').addEventListener('click', tableDelRow);
+  $('#btn-col-add').addEventListener('click', tableAddCol);
+  $('#btn-col-del').addEventListener('click', tableDelCol);
   $('#btn-block').addEventListener('click', addTextBlock);
   var fd = $('#font-dropper');
   if (fd && !window.EyeDropper) fd.hidden = true;

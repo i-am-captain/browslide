@@ -2082,6 +2082,57 @@ check('guides clear', DND.querySelectorAll('#stage-wrap .snapguide').length === 
 WND.showSnapGuides(snapSec, []);
 check('empty guides render nothing', DND.querySelectorAll('#stage-wrap .snapguide').length === 0);
 
+// ---------- 46. tables ----------
+const domTB2 = makeDom(html);
+await wait(400);
+const WTB2 = domTB2.window, DTB2 = WTB2.document;
+WTB2.gotoSlide(WTB2.App.model.slideOrder[1]);
+await wait(100);
+check('insertTable clamps', WTB2.insertTable(-5, 99) === true);
+let tbl = DTB2.querySelector('#stage .blk table.btable');
+check('table shape + clamps', !!tbl && tbl.rows.length === 1 && tbl.rows[0].cells.length === 8);
+check('cells get styled spans', tbl.querySelector('td span') !== null);
+WTB2.setSingleSelection(tbl.closest('.blk'));
+check('row add/del + floor', WTB2.tableAddRow() === true && tbl.rows.length === 2 &&
+  WTB2.tableDelRow() === true && tbl.rows.length === 1 && WTB2.tableDelRow() === false);
+check('col add/del', WTB2.tableAddCol() === true && tbl.rows[0].cells.length === 9 &&
+  WTB2.tableDelCol() === true && tbl.rows[0].cells.length === 8);
+while (tbl.rows[0].cells.length > 1) WTB2.tableDelCol();
+check('col floor keeps one', tbl.rows[0].cells.length === 1 && WTB2.tableDelCol() === false);
+check('row/col ops need a table', (WTB2.setSingleSelection(DTB2.querySelectorAll('#stage .blk')[0]), WTB2.tableAddRow() === false));
+WTB2.insertTable(2, 3);
+await wait(50);
+const tbl2 = DTB2.querySelectorAll('#stage .blk table.btable')[1];
+const cellRng = DTB2.createRange();
+cellRng.selectNodeContents(tbl2.rows[1].cells[2].querySelector('span').firstChild);
+DTB2.getSelection().removeAllRanges();
+DTB2.getSelection().addRange(cellRng);
+WTB2.trackSelection();
+WTB2.applySpanStyle('color', '#ff0000');
+check('cell text takes color', Array.prototype.some.call(tbl2.querySelectorAll('span'), (s) => s.style.color !== ''));
+WTB2.applyAlign('justifyCenter');
+check('cell aligns individually', tbl2.rows[1].cells[2].style.textAlign === 'center');
+const rowsBefore = tbl2.rows.length;
+WTB2.setSingleSelection(tbl2.closest('.blk'));
+WTB2.lastPushAt = 0; /* defeat coalescing: the add must push fresh */
+WTB2.tableAddRow();
+WTB2.undo();
+await wait(50);
+check('table row add undoes', DTB2.querySelectorAll('#stage .blk table.btable')[1].rows.length === rowsBefore);
+DTB2.querySelector('#btn-save').click();
+await wait(300);
+const tT = await blobToText(WTB2.__savedBlob, WTB2);
+check('save keeps tables', /<table/.test(tT) && /<td/.test(tT));
+const savedT = JSON.parse(new JSDOM(tT).window.document.querySelector('#slider-data').textContent);
+check('saved model has table html', /<table/.test(savedT.slides[WTB2.App.model.slideOrder[1]].html));
+DTB2.querySelector('#btn-export').click();
+await wait(300);
+check('export keeps tables', /<table/.test(await blobToText(WTB2.__savedBlob, WTB2)));
+const dirtyT = WTB2.normalizeModel({ app: 'browslide', version: 2, title: 'T', theme: 'dark', slideOrder: ['s1'], nextId: 2, nextResId: 1,
+  settings: {}, aspect: { w: 16, h: 9 }, resources: {},
+  slides: { s1: { title: 'T', layout: 'blank', transition: 'none', notes: '', html: '<table><tr><td onclick="x()">a<script>e()<\/script></td></tr></table>' } } });
+check('sanitizer keeps tables, strips junk', /<table/.test(dirtyT.slides.s1.html) && !/onclick|script/i.test(dirtyT.slides.s1.html));
+
 // ---------- 45. style painter ----------
 const domPT = makeDom(html);
 await wait(400);

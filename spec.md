@@ -2,7 +2,8 @@
 
 ## Session state (update when switching tasks/sessions)
 
-- Status: items 1-6 DONE and committed (493 checks). Next: item 7 (tables).
+- Status: items 1-7 DONE and committed (507 checks). Next: item 8
+  (lists, bullets, shrink-to-fit).
 - Conventions: commit per item, suite green before each commit, flip that item's
   `[ ]` to `[x]` when committed.
 
@@ -123,7 +124,7 @@ green before each commit, commit per item, agent-map anchors stay resolving
   Edit discipline that bit 3 times: anchor insertions on the END of the previous
   block, never on a bare next-function header (headers get eaten).
 
-## [ ] 7. Tables
+## [x] 7. Tables
 
 - Goal: Insert -> Table (R x C dialog in Insert menu), native cell editing,
   add/remove row/col, survives save/export.
@@ -136,6 +137,11 @@ green before each commit, commit per item, agent-map anchors stay resolving
   buttons. Sanitizer already keeps plain table elements.
 - Tests: insert shape, cell edit + format round-trip, save/export keeps table,
   row/col add/remove, sanitizer keeps tables while stripping handlers.
+- Findings: TD/TH joined both `BLOCK_TAGS` (span-wrap recursion reaches cells)
+  and `BLOCK_TAGS_ALIGN`, plus a dedup exemption — otherwise the `.blk` DIV
+  swallows cells and align hits the whole block. New cells get styled spans via
+  `tableTouch` (which also persists, so row/col ops are undoable). Rapid table
+  ops coalesce in undo; tests force `lastPushAt = 0` for undo targets.
 
 ## [ ] 8. Lists, bullets, shrink-to-fit
 

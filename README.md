@@ -23,6 +23,7 @@ Repo file vs. saved copies: `browslide.html` in this repo is the maintained **te
 | Format bar | Paragraph style (H1–H3), font (system fonts only), size and text color, bold/italic/underline/strikethrough, alignment, bullet/numbered lists, clear formatting. Applies to selected text — or set it first, then type. |
 | Blocks | Slide content lives in freely positionable blocks: click once to select, drag anywhere except text to move (text behaves as text: click for caret, drag to select), click again to edit text. Ctrl/Cmd/shift-click multi-selects (move/resize/animate together). Images land in blocks too; add more with + Text block under Insert. Copy/paste blocks with Ctrl+C / Ctrl+V. |
 | Nudge / Duplicate | Arrow keys move the selection ~1px (Shift ×10); Ctrl+D duplicates. Nudges land in the displayed animation step, like drags. |
+| Tables | Insert menu adds table blocks (cells edit natively, per-cell formatting, row/column controls); survives save and viewer export. |
 | Arrange | Inspector menu: align edges/centers (one item aligns to the slide), distribute evenly, match width/height to the last-selected item. Step-aware like drags. |
 | Snap guides | Dragged items catch the slide center/edges and other items' edges, with guide lines. |
 | Colors | Screen eyedropper (where supported) beside text and stroke colors, plus a last-used palette. |
