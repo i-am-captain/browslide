@@ -335,6 +335,7 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
         <label class="row"><input type="checkbox" id="anim-hidden"> Start hidden</label>
         <div id="anim-rows"></div>
         <p><button id="btn-anim-add" title="Add a step ending at the current position/size">+ Add step (capture current)</button></p>
+        <p><button id="btn-anim-copy" title="Copy this item's steps">Copy steps</button> <button id="btn-anim-paste" title="Paste steps onto the selected item (keeps its initial state)">Paste steps</button></p>
       </div>
     </details>
     <details id="arrange-wrap">
@@ -3010,6 +3011,7 @@ function ensureSlideInitials(){
    the rest pose. Rest pose is snapshotted at entry and restored on every
    model sync, so saved decks always keep the rest state. ---- */
 var stepEdit = null;
+var animClip = null; /* internal step clipboard (Copy/Paste steps buttons) */
 function snapStepState(el){
   return {
     left: el.style.left, top: el.style.top, width: el.style.width,
@@ -3273,6 +3275,8 @@ function refreshAnimUI(force){
   hint.hidden = true;
   ctl.hidden = false;
   $('#anim-hidden').checked = el.hasAttribute('data-hidden');
+  var pasteBtn = $('#btn-anim-paste');
+  if (pasteBtn) pasteBtn.disabled = !animClip || !animClip.length;
   if (!force && animRowsFor === el &&
       document.activeElement && $('#anim-rows').contains(document.activeElement)) return; /* same element mid-edit: keep caret */
   buildAnimRows(el); /* selection changed (or first build): always rebuild so rows never lie */
@@ -4192,6 +4196,27 @@ function bind(){
       enterStepEdit(el, list.length - 1);
       dets[dets.length - 1].classList.add('editing');
     }
+  });
+  $('#btn-anim-copy').addEventListener('click', function(){
+    var el = selectedAnimTarget();
+    if (!el) return;
+    animClip = animListOf(el).map(function(e){ return JSON.parse(JSON.stringify(e)); });
+    refreshAnimUI();
+  });
+  $('#btn-anim-paste').addEventListener('click', function(){
+    var el = selectedAnimTarget();
+    if (!el || !animClip || !animClip.length) return;
+    ensureInitialStep(el);
+    var init = initialEntryOf(animListOf(el));
+    var next = animClip.filter(function(e){ return !e.initial; }).map(function(e){
+      return JSON.parse(JSON.stringify(e));
+    });
+    if (init) next.unshift(init.entry);
+    writeAnimList(el, next);
+    if (stepEdit && stepEdit.el === el) exitStepEdit();
+    persistSlide();
+    animRowsFor = null;
+    refreshAnimUI();
   });
   var fbar = $('#formatbar');
   fbar.addEventListener('mousedown', function(e){ if (e.target.closest('button')) e.preventDefault(); });

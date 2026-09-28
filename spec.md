@@ -2,8 +2,8 @@
 
 ## Session state (update when switching tasks/sessions)
 
-- Status: items 1-9 DONE and committed (526 checks). Next: item 10
-  (copy/paste animation steps).
+- Status: items 1-10 DONE and committed (533 checks). Next: item 11
+  (filmstrip stage badges).
 - Conventions: commit per item, suite green before each commit, flip that item's
   `[ ]` to `[x]` when committed.
 
@@ -174,7 +174,7 @@ green before each commit, commit per item, agent-map anchors stay resolving
 - Findings: all 12 drawn from primitive tags only (no `<path>`) so the
   geometry→screen overlay math keeps working — verified per-glyph by test.
 
-## [ ] 10. Copy/paste animation steps
+## [x] 10. Copy/paste animation steps
 
 - Goal: "Copy steps" / "Paste steps" buttons in the Animation panel.
 - UX: copies selected item's full step list to an internal clipboard; pasting
@@ -185,6 +185,9 @@ green before each commit, commit per item, agent-map anchors stay resolving
   (renumbered untouched), then `persistSlide` + `rebuildScrub`.
 - Tests: paste preserves target initial, copies steps verbatim, empty
   clipboard no-ops, scrub range accounts for pasted groups.
+- Findings: paste forces a row rebuild (`animRowsFor = null`) since the row
+  count changes shape; the paste button disables on empty clipboard (plus a
+  handler guard, since disabled buttons still fire programmatic clicks).
 
 ## [ ] 11. Filmstrip stage badges
 

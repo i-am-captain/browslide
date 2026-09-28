@@ -2218,6 +2218,37 @@ check('fixed symbols hide size handles', DSY.querySelector('#media-resizer .mhan
   DSY.querySelector('#media-resizer .mh-e').style.display === 'none' &&
   DSY.querySelector('#media-resizer .mh-s').style.display === 'none');
 
+// ---------- 49. copy/paste animation steps ----------
+const domCP = makeDom(html);
+await wait(400);
+const WCP = domCP.window, DCP = WCP.document;
+WCP.gotoSlide(WCP.App.model.slideOrder[1]);
+await wait(100);
+const cpBlks = DCP.querySelectorAll('#stage .blk');
+const mkStep = (group, left) => ({ group, trigger: 'click', dur: 600, delay: 200, mode: 'linear', maxSpeed: 1.5, accel: 2, minSpeed: 0, decel: 2, to: { left } });
+check('paste with empty clipboard no-ops', (function(){
+  WCP.setSingleSelection(cpBlks[0]);
+  DCP.querySelector('#btn-anim-paste').click();
+  return JSON.parse(cpBlks[0].getAttribute('data-anim')).length === 1;
+})());
+check('copy needs a selection', (WCP.clearSelection(), DCP.querySelector('#btn-anim-copy').click(), WCP.animClip === null));
+cpBlks[0].setAttribute('data-anim', JSON.stringify([mkStep(2, 20), mkStep(4, 60)]));
+cpBlks[1].setAttribute('data-anim', JSON.stringify([mkStep(3, 40)]));
+WCP.syncStageToModel();
+WCP.setSingleSelection(cpBlks[0]);
+DCP.querySelector('#btn-anim-copy').click();
+check('copy takes full list', WCP.animClip.length === 3 && WCP.animClip[0].initial === true &&
+  WCP.animClip[2].to.left === 60);
+WCP.setSingleSelection(cpBlks[1]);
+DCP.querySelector('#btn-anim-paste').click();
+await wait(50);
+const pasted = JSON.parse(cpBlks[1].getAttribute('data-anim'));
+check('paste preserves target initial', pasted.length === 3 && pasted[0].initial === true &&
+  pasted[0].to.left === 8 && pasted[1].to.left === 20 && pasted[2].to.left === 60);
+check('paste extends scrub range', DCP.querySelector('#scrub-range').max === '4');
+check('paste persists + undoes', /data-anim=/.test(WCP.App.model.slides.s2.html) && (WCP.undo(), JSON.parse(DCP.querySelectorAll('#stage .blk')[1].getAttribute('data-anim')).length === 1));
+check('paste button enables with clip', DCP.querySelector('#btn-anim-paste').disabled === false);
+
 // ---------- 45. style painter ----------
 const domPT = makeDom(html);
 await wait(400);
