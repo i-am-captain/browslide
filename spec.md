@@ -2,8 +2,7 @@
 
 ## Session state (update when switching tasks/sessions)
 
-- Status: items 1-5 DONE and committed (482 checks). Next: item 6
-  (style painter).
+- Status: items 1-6 DONE and committed (493 checks). Next: item 7 (tables).
 - Conventions: commit per item, suite green before each commit, flip that item's
   `[ ]` to `[x]` when committed.
 
@@ -107,7 +106,7 @@ green before each commit, commit per item, agent-map anchors stay resolving
   stable). `pickColor` never throws: null without API or on deny. Normalize
   dedups (saves from other copies could repeat).
 
-## [ ] 6. Style painter
+## [x] 6. Style painter
 
 - Goal: copy one item's look onto others (text style, alignment, stroke, sizes).
 - UX: painter button toggles pick mode (Esc cancels): click source samples,
@@ -118,6 +117,11 @@ green before each commit, commit per item, agent-map anchors stay resolving
   across same-kind shapes, rest skipped per-field.
 - Tests: sample/apply units (text, shape, cross-kind geometry skip), mode
   enter/cancel/apply transitions.
+- Findings: apply goes through `setSingleSelection` + `commitStepGeometries`,
+  so painter edits are step/scrub/undo-consistent for free. `sampleLook`
+  returns null when nothing is samplable (bare media) which disarms pick mode.
+  Edit discipline that bit 3 times: anchor insertions on the END of the previous
+  block, never on a bare next-function header (headers get eaten).
 
 ## [ ] 7. Tables
 

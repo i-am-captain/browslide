@@ -2082,6 +2082,54 @@ check('guides clear', DND.querySelectorAll('#stage-wrap .snapguide').length === 
 WND.showSnapGuides(snapSec, []);
 check('empty guides render nothing', DND.querySelectorAll('#stage-wrap .snapguide').length === 0);
 
+// ---------- 45. style painter ----------
+const domPT = makeDom(html);
+await wait(400);
+const WPT = domPT.window, DPT = WPT.document;
+WPT.gotoSlide(WPT.App.model.slideOrder[1]);
+await wait(100);
+const ptBlks = DPT.querySelectorAll('#stage .blk');
+const sampT = WPT.sampleLook(ptBlks[0]);
+check('sample reads text look', !!sampT && !!sampT.text && sampT.text.fontSize === '1em' &&
+  sampT.align === null && sampT.stroke === null && sampT.geom === null && sampT.rot === null);
+const loneImg = DPT.createElement('img');
+loneImg.src = 'data:image/png;base64,AAA=';
+DPT.querySelector('#stage .slide').appendChild(loneImg);
+check('bare media samples nothing', WPT.sampleLook(loneImg) === null);
+WPT.insertShape('circle');
+WPT.insertShape('rectangle');
+await wait(50);
+const ptShapes = Array.prototype.filter.call(DPT.querySelectorAll('#stage .blk'), (b) => b.querySelector('svg'));
+const sampC = WPT.sampleLook(ptShapes[0]);
+check('sample reads shape look', !!sampC && sampC.stroke.color === '#2563eb' && sampC.stroke.width === '3' &&
+  sampC.geom.kind === 'circle' && sampC.geom.params.radius === 40);
+WPT.applyLook(ptShapes[1], sampC);
+check('cross-kind skips geometry, keeps stroke', ptShapes[1].querySelector('svg').getAttribute('data-width') === '72' &&
+  ptShapes[1].querySelector('svg').getAttribute('stroke') === '#2563eb');
+ptShapes[0].setAttribute('data-rot', '30');
+WPT.applyTransform(ptShapes[0]);
+check('rot copies', WPT.sampleLook(ptShapes[0]).rot === 30 &&
+  (WPT.applyLook(ptShapes[1], WPT.sampleLook(ptShapes[0])), ptShapes[1].getAttribute('data-rot') === '30'));
+ptBlks[0].querySelector('span').style.color = '#abcdef';
+DPT.querySelector('#btn-painter').click();
+check('painter arms pick mode', WPT.paintPicking === true && DPT.querySelector('#btn-painter').classList.contains('active'));
+ptBlks[0].dispatchEvent(new WPT.MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+check('pick samples source', WPT.paintPicking === false && !!WPT.paintDesc && WPT.paintDesc.text.color !== '');
+const dstColor = WPT.paintDesc.text.color;
+ptBlks[1].dispatchEvent(new WPT.MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+await wait(50);
+check('apply stamps + disarms', ptBlks[1].querySelector('span').style.color === dstColor &&
+  WPT.paintArmed() === false && !DPT.querySelector('#btn-painter').classList.contains('active'));
+DPT.querySelector('#btn-painter').click();
+ptBlks[0].dispatchEvent(new WPT.MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+ptBlks[1].dispatchEvent(new WPT.MouseEvent('mousedown', { bubbles: true, cancelable: true, shiftKey: true }));
+check('shift keeps apply mode', WPT.paintArmed() === true);
+DPT.dispatchEvent(new WPT.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+check('esc cancels painter', WPT.paintArmed() === false);
+DPT.querySelector('#btn-painter').click();
+loneImg.dispatchEvent(new WPT.MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+check('empty pick disarms', WPT.paintArmed() === false && WPT.paintDesc === null);
+
 // ---------- 44. eyedropper + recent colors ----------
 const domRC = makeDom(html);
 await wait(400);

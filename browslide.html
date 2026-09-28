@@ -263,6 +263,8 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
   <button data-cmd="insertUnorderedList" title="Bullet list"><span>•≡</span></button>
   <button data-cmd="insertOrderedList" title="Numbered list"><span>1≡</span></button>
   <button data-cmd="clear" title="Clear formatting"><span>Tₓ</span></button>
+  <span class="sep"></span>
+  <button id="btn-painter" title="Copy item style: click a source item, then the target (Shift keeps applying, Esc cancels)">🎨</button>
 </div>
 
 <div id="main">
@@ -2168,6 +2170,83 @@ function showSnapGuides(sec, guides){
 function clearSnapGuides(){
   Array.prototype.forEach.call(document.querySelectorAll('#stage-wrap .snapguide'), function(n){ n.remove(); });
 }
+/* ---- style painter: sample one item's look, stamp it onto others ---- */
+var paintPicking = false, paintDesc = null;
+function paintArmed(){ return paintPicking || !!paintDesc; }
+function updatePainterBtn(){
+  var b = $('#btn-painter');
+  if (b) b.classList.toggle('active', paintArmed());
+}
+function disarmPainter(){
+  paintPicking = false;
+  paintDesc = null;
+  updatePainterBtn();
+}
+function sampleLook(el){
+  if (!el || !document.contains(el)) return null;
+  var d = { text: null, align: null, stroke: null, geom: null, rot: null };
+  var t = (el.querySelector && el.querySelector('span')) || el;
+  var tx = {
+    fontFamily: t.style.fontFamily || '',
+    fontSize: t.style.fontSize || '',
+    fontWeight: t.style.fontWeight || '',
+    fontStyle: t.style.fontStyle || '',
+    color: t.style.color || ''
+  };
+  if (tx.fontFamily || tx.fontSize || tx.fontWeight || tx.fontStyle || tx.color) d.text = tx;
+  var ab = (el.querySelector && el.querySelector('p,h1,h2,h3,li,td,th')) || el;
+  if (ab.style && ab.style.textAlign) d.align = ab.style.textAlign;
+  var svg = shapeSvgOf(el);
+  if (svg) {
+    d.stroke = { width: svg.getAttribute('stroke-width') || '', color: svg.getAttribute('stroke') || '' };
+    var kind = svg.getAttribute('data-kind') || '';
+    var sp = shapeParams(svg);
+    d.geom = { kind: kind, params: sp ? sp.vals : {} };
+  }
+  var r = parseFloat(el.getAttribute('data-rot'));
+  if (isFinite(r) && r !== 0) d.rot = r;
+  if (!d.text && !d.align && !d.stroke && !d.geom && d.rot === null) return null;
+  return d;
+}
+function applyLook(el, desc){
+  if (!el || !desc || !document.contains(el)) return false;
+  var changed = false, i, list;
+  if (desc.text) {
+    list = el.querySelectorAll ? el.querySelectorAll('span') : [];
+    for (i = 0; i < list.length; i++) {
+      var sp = list[i];
+      ['fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'color'].forEach(function(p){
+        if (desc.text[p]) sp.style[p] = desc.text[p];
+      });
+      changed = true;
+    }
+    if (desc.text.color) pushRecentColor(desc.text.color);
+  }
+  if (desc.align) {
+    list = el.querySelectorAll ? el.querySelectorAll('p,h1,h2,h3,li,td,th') : [];
+    if (!list.length) { el.style.textAlign = desc.align; changed = true; }
+    for (i = 0; i < list.length; i++) { list[i].style.textAlign = desc.align; changed = true; }
+  }
+  var svg = shapeSvgOf(el);
+  if (desc.stroke && svg) {
+    if (desc.stroke.width) svg.setAttribute('stroke-width', desc.stroke.width);
+    if (desc.stroke.color) { svg.setAttribute('stroke', desc.stroke.color); pushRecentColor(desc.stroke.color); }
+    changed = true;
+  }
+  if (desc.geom && svg && (svg.getAttribute('data-kind') || '') === desc.geom.kind) {
+    Object.keys(desc.geom.params).forEach(function(k){
+      svg.setAttribute('data-' + k, String(desc.geom.params[k]));
+    });
+    renderShape(svg);
+    changed = true;
+  }
+  if (desc.rot !== null && desc.rot !== undefined) {
+    el.setAttribute('data-rot', String(desc.rot));
+    applyTransform(el);
+    changed = true;
+  }
+  return changed;
+}
 function trackDrag(host, onMove, onUp){
   /* one place for pointer-drag listener lifecycle (handle or window) */
   function off(){
@@ -3923,6 +4002,10 @@ function bind(){
     else applyCmd(b.dataset.cmd);
   });
   $('#font-select').addEventListener('change', function(e){ applySpanStyle('fontFamily', e.target.value); });
+  $('#btn-painter').addEventListener('click', function(){
+    if (paintArmed()) disarmPainter();
+    else { paintPicking = true; paintDesc = null; updatePainterBtn(); }
+  });
   $('#size-select').addEventListener('change', function(e){ applySpanStyle('fontSize', e.target.value); });
   $('#font-color').addEventListener('change', function(e){
     pushRecentColor(e.target.value);
@@ -3983,6 +4066,22 @@ function bind(){
       var m = t && t.closest ? t.closest('img,video') : null;
       if (m && stage.contains(m)) target = m;
     }
+    if (paintArmed()) {
+      /* style painter: clicks sample/apply instead of selecting */
+      e.preventDefault();
+      if (!target) { disarmPainter(); return; }
+      if (paintPicking) {
+        paintDesc = sampleLook(target);
+        paintPicking = false;
+        if (!paintDesc) disarmPainter();
+        updatePainterBtn();
+        return;
+      }
+      setSingleSelection(target);
+      if (applyLook(target, paintDesc)) { commitStepGeometries(); updateFormatUI(); }
+      if (!e.shiftKey) disarmPainter();
+      return;
+    }
     if (!target) { deselectMedia(); return; }
     if (e.ctrlKey || e.metaKey || e.shiftKey) { e.preventDefault(); toggleSelection(target); return; }
     var items = selectedItems();
@@ -4036,7 +4135,8 @@ function bind(){
       else if (e.key === 'End') { e.preventDefault(); showPresent(App.model.slideOrder.length - 1, true); }
       return;
     }
-    if (e.key === 'Escape' && resizer.el) { deselectMedia(); e.preventDefault(); }
+    if (e.key === 'Escape' && paintArmed()) { disarmPainter(); e.preventDefault(); }
+    else if (e.key === 'Escape' && resizer.el) { deselectMedia(); e.preventDefault(); }
     else if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
       if (!nativeUndoFocus()) { e.preventDefault(); if (e.shiftKey) redo(); else undo(); }
     }
