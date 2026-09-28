@@ -18,7 +18,7 @@ Repo file vs. saved copies: `browslide.html` in this repo is the maintained **te
 |---|---|
 | + Slide / Duplicate / Delete | Add after current, copy current, remove current — or use + below the list and 🗑 on each row (delete asks first; a deck always keeps ≥ 1 slide) |
 | ◀ ▶ | Previous / next slide |
-| Present | Fullscreen show (`Space`/`→` next, `←` prev, `Home`/`End`, `Esc` exit, click advances). Presentation settings (inspector): toolbar on/off, aesthetic border vs maximum fullscreen. Per-slide timings (via Rehearse) with optional auto-advance. |
+| Present | Fullscreen show (`Space`/`→` next, `←` prev, `Home`/`End`, `Esc` exit, click advances). Presentation settings (inspector): toolbar on/off, aesthetic border vs maximum fullscreen. Per-slide timings (via Rehearse) with optional auto-advance. **2nd screen** opens the show in another window with a notes/next console here. |
 | Export viewer | Downloads a small standalone copy (`<title>-viewer.html`) for sharing: slides + player only, no editor code, no notes. Works from `file://` everywhere. |
 | Format bar | Paragraph style (H1–H3), font (system fonts only), size and text color, bold/italic/underline/strikethrough, alignment, bullet/numbered lists with bullet styles (Tab indents list items), clear formatting. Applies to selected text — or set it first, then type. |
 | Blocks | Slide content lives in freely positionable blocks: click once to select, drag anywhere except text to move (text behaves as text: click for caret, drag to select), click again to edit text. Ctrl/Cmd/shift-click multi-selects (move/resize/animate together). Images land in blocks too; add more with + Text block under Insert. Copy/paste blocks with Ctrl+C / Ctrl+V. |

@@ -2,8 +2,8 @@
 
 ## Session state (update when switching tasks/sessions)
 
-- Status: items 1-17 DONE and committed (602 checks). Next: item 18
-  (presenter view).
+- Status: items 1-18 DONE and committed (612 checks). Next: item 19
+  (slide sorter).
 - Conventions: commit per item, suite green before each commit, flip that item's
   `[ ]` to `[x]` when committed.
 
@@ -310,7 +310,7 @@ green before each commit, commit per item, agent-map anchors stay resolving
   min 0.1s. Player string is now ~14.8k of the 16k export guard — the guard is
   getting tight; the next player addition should budget for it.
 
-## [ ] 18. Presenter view (second window)
+## [x] 18. Presenter view (second window)
 
 - Goal: audience sees clean slides on screen 2; you see current + notes +
   next + timer.
@@ -323,6 +323,12 @@ green before each commit, commit per item, agent-map anchors stay resolving
   alert if popups blocked.
 - Tests: builder emits notes/next/console and no editor code; console advance
   drives stage index (headless via function-level test); blocked-popup path.
+- Findings: viewer-doc construction extracted to `buildViewerDoc` (export
+  byte-identical behavior, presenter reuses). Cross-window works through
+  `document.write` origin inheritance; the stage reports slide changes back
+  via `__presenterSync`, the console drives via `stageWin.__presenter` with
+  close-on-throw. Console keys take precedence in the keydown chain. Player
+  string now ~15k of the 16k export guard.
 
 ## [ ] 19. Slide sorter overview
 

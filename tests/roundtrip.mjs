@@ -2576,6 +2576,55 @@ const DVT = domVT.window, DDT = DVT.document;
 await wait(250);
 check('viewer auto-advances on timing', DDT.querySelector('#count').textContent === '2 / 3');
 
+// ---------- 57. presenter view (second window) ----------
+const domPV = makeDom(html);
+await wait(400);
+const WPV = domPV.window, DPV = WPV.document;
+check('console hidden initially', DPV.querySelector('#presenter-console').hidden === true);
+WPV.__presenterSync(2);
+check('stage sync updates console', DPV.querySelector('#pcon-count').textContent === '3 / 3' &&
+  DPV.querySelector('#pcon-notes').textContent === '(no notes)');
+WPV.open = () => null;
+check('blocked popup alerts + stays shut', WPV.openPresenterView() === false &&
+  WPV.__alerts.length === 1 && DPV.querySelector('#presenter-console').hidden === true);
+const stageCalls = [];
+const fakeWin = {
+  closed: false,
+  written: null,
+  focus() {},
+  close() { this.closed = true; },
+  document: {
+    write(t) { fakeWin.written = t; },
+    close() {}
+  },
+  __presenter: {
+    advance() { stageCalls.push('advance'); },
+    show(i) { stageCalls.push('show:' + i); }
+  }
+};
+WPV.open = () => fakeWin;
+WPV.gotoSlide(WPV.App.model.slideOrder[1]);
+await wait(100);
+check('presenter opens stage + console', WPV.openPresenterView() === true &&
+  typeof fakeWin.written === 'string' && fakeWin.written.includes('id="deck"') &&
+  DPV.querySelector('#presenter-console').hidden === false);
+check('console shows notes + next', DPV.querySelector('#pcon-count').textContent === '2 / 3' &&
+  DPV.querySelector('#pcon-next').textContent.includes('Thanks'));
+DPV.querySelector('#btn-pcon-next').click();
+check('console next drives stage', stageCalls.join(',') === 'advance');
+DPV.dispatchEvent(new WPV.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+check('console keys drive stage', stageCalls.join(',') === 'advance,advance');
+WPV.__presenterSync(0);
+check('sync follows stage nav', DPV.querySelector('#pcon-count').textContent === '1 / 3');
+DPV.dispatchEvent(new WPV.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+check('console esc closes stage + console', fakeWin.closed === true &&
+  DPV.querySelector('#presenter-console').hidden === true);
+WPV.gotoSlide(WPV.App.model.slideOrder[0]);
+DPV.querySelector('#btn-export').click();
+await wait(300);
+const exPV = await blobToText(WPV.__savedBlob, WPV);
+check('export carries presenter hooks', exPV.includes('window.__presenter=') && exPV.includes('__presenterSync'));
+
 // ---------- 45. style painter ----------
 const domPT = makeDom(html);
 await wait(400);
