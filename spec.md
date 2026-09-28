@@ -2,8 +2,8 @@
 
 ## Session state (update when switching tasks/sessions)
 
-- Status: item 1 (undo/redo) DONE and committed (445 checks). Next: item 2
-  (nudge + duplicate).
+- Status: items 1-2 DONE and committed (452 checks). Next: item 3
+  (align / distribute / match size).
 - Conventions: commit per item, suite green before each commit, flip that item's
   `[ ]` to `[x]` when committed.
 
@@ -37,7 +37,7 @@ green before each commit, commit per item, agent-map anchors stay resolving
   undo-to-saved shows Saved flag, coalescing collapses rapid persists, caps
   trim, Ctrl+Z keeps native behavior in text caret, stacks reset on load.
 
-## [ ] 2. Nudge + Duplicate (tiny, daily value)
+## [x] 2. Nudge + Duplicate (tiny, daily value)
 
 - Goal: arrows move selection ~1px (Shift = x10); Ctrl+D duplicates.
 - UX: only when selection exists and caret is NOT in stage text (text keeps
@@ -49,6 +49,11 @@ green before each commit, commit per item, agent-map anchors stay resolving
   coalescing). Duplicate = `copySelection` + `pasteClipboard` (+5% offset).
 - Tests: nudge math/fallback, caret guard keeps native keys, duplicate offsets
   and selects the copy, step-editing nudge writes the step.
+- Findings: new `inFormField` helper folds inputs + filmstrip focus into the guard
+  (arrow keys must stay native in row fields and not fight filmstrip nav).
+  jsdom `clientWidth` stubs drop on every stage rebuild — tests re-stub after
+  undo/redo. `caretInStageText` needs a real text-node anchor (starter HTML
+  wraps text in styled spans).
 
 ## [ ] 3. Align / distribute / match size
 

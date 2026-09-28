@@ -2255,6 +2255,28 @@ function moveTargetTo(leftPct, topPct){
   positionResizer();
   return true;
 }
+function nudgeSelection(dxPx, dyPx){
+  /* arrow-key move (~1px, Shift = x10); same step-aware path as drags */
+  var items = selectedItems();
+  var sec = $('#stage .slide');
+  if (!items.length || !sec) return false;
+  items.forEach(ensurePositioned);
+  maybeAutoStepEdit(items);
+  var slideW = sec.clientWidth || 0, slideH = sec.clientHeight || 0;
+  var starts = items.map(function(el){
+    return { el: el, l: parseFloat(el.style.left) || 0, t: parseFloat(el.style.top) || 0 };
+  });
+  if (!moveItemsBy(starts, dxPx, dyPx, slideW, slideH)) return false;
+  positionResizer();
+  commitStepGeometries();
+  return true;
+}
+function inFormField(){
+  try {
+    var a = document.activeElement;
+    return !!(a && a.closest && a.closest('input,textarea,select,#filmstrip'));
+  } catch (e) { return false; }
+}
 function onGripDown(e){
   /* the ⋮⋮ grip is just a grabbed whole-item drag without caret placement */
   if (!selectedItems().length) return;
@@ -3772,6 +3794,9 @@ function bind(){
     else if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C')) {
       if (!stageTextSelected() && selectedItems().length && copySelection()) e.preventDefault();
     }
+    else if ((e.ctrlKey || e.metaKey) && (e.key === 'd' || e.key === 'D')) {
+      if (!inFormField() && !stageTextSelected() && selectedItems().length && copySelection() && pasteClipboard()) e.preventDefault();
+    }
     else if ((e.ctrlKey || e.metaKey) && (e.key === 'v' || e.key === 'V')) {
       var foc = document.activeElement;
       if (foc && foc.closest && foc.closest('input,textarea,select')) { /* native paste in fields */ }
@@ -3780,6 +3805,15 @@ function bind(){
     else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedItems().length && !caretInStageText()) {
       e.preventDefault();
       deleteSelectedItems();
+    }
+    else if (e.key.indexOf('Arrow') === 0 && selectedItems().length && !caretInStageText() && !inFormField()) {
+      var m = e.shiftKey ? 10 : 1, dx = 0, dy = 0;
+      if (e.key === 'ArrowLeft') dx = -m;
+      else if (e.key === 'ArrowRight') dx = m;
+      else if (e.key === 'ArrowUp') dy = -m;
+      else if (e.key === 'ArrowDown') dy = m;
+      e.preventDefault();
+      nudgeSelection(dx, dy);
     }
     else if ((e.key === 'PageDown' || e.key === 'PageUp' || e.key === 'Home' || e.key === 'End') && !isEditingFocus()) {
       e.preventDefault();

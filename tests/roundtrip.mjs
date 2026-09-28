@@ -1917,5 +1917,66 @@ WUN.loadModel(WUN.normalizeModel(JSON.parse(JSON.stringify({ app: 'browslide', v
 await wait(100);
 check('load resets stacks', WUN.undoStack.length === 1 && WUN.redoStack.length === 0 && WUN.undo() === false);
 
+// ---------- 41. nudge + duplicate ----------
+const domND = makeDom(html);
+await wait(400);
+const WND = domND.window, DND = WND.document;
+WND.gotoSlide(WND.App.model.slideOrder[1]);
+await wait(100);
+Object.defineProperty(DND.querySelector('#stage .slide'), 'clientWidth', { value: 800, configurable: true });
+Object.defineProperty(DND.querySelector('#stage .slide'), 'clientHeight', { value: 600, configurable: true });
+function stubSlideND() {
+  /* undo/redo rebuild the stage, dropping the stub: re-apply it */
+  Object.defineProperty(DND.querySelector('#stage .slide'), 'clientWidth', { value: 800, configurable: true });
+  Object.defineProperty(DND.querySelector('#stage .slide'), 'clientHeight', { value: 600, configurable: true });
+}
+const ndBlk0 = DND.querySelector('#stage .blk');
+let ndBlk = ndBlk0;
+WND.setSingleSelection(ndBlk);
+DND.dispatchEvent(new WND.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
+await wait(50);
+check('nudge moves ~1px', ndBlk.style.left === '8.1%');
+check('nudge persists + undoable', /left:\s*8\.1%/.test(WND.App.model.slides.s2.html) && (WND.undo(), /left:\s*8%/.test(WND.App.model.slides.s2.html)));
+WND.redo();
+await wait(50);
+stubSlideND();
+ndBlk = DND.querySelector('#stage .blk'); /* undo/redo rebuild the stage */
+WND.setSingleSelection(ndBlk);
+DND.dispatchEvent(new WND.KeyboardEvent('keydown', { key: 'ArrowRight', shiftKey: true, bubbles: true, cancelable: true }));
+await wait(50);
+check('shift-nudge moves x10', ndBlk.style.left === '9.4%');
+const caretRng = DND.createRange();
+caretRng.setStart(DND.querySelector('#stage .slide h1 span').firstChild, 0); /* text node, not the wrapping span */
+caretRng.collapse(true);
+DND.getSelection().removeAllRanges();
+DND.getSelection().addRange(caretRng);
+const beforeCaret = ndBlk.style.left;
+const caretEv = new WND.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true });
+DND.dispatchEvent(caretEv);
+check('caret keeps native arrows', ndBlk.style.left === beforeCaret && caretEv.defaultPrevented === false);
+DND.getSelection().removeAllRanges();
+DND.querySelector('#notes').focus();
+const fieldEv = new WND.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true });
+DND.dispatchEvent(fieldEv);
+check('fields keep native arrows', ndBlk.style.left === beforeCaret && fieldEv.defaultPrevented === false);
+DND.querySelector('#notes').blur();
+WND.setSingleSelection(ndBlk);
+const nBefore = DND.querySelectorAll('#stage .blk').length;
+DND.dispatchEvent(new WND.KeyboardEvent('keydown', { key: 'd', ctrlKey: true, bubbles: true, cancelable: true }));
+await wait(100);
+const nAfter = DND.querySelectorAll('#stage .blk');
+check('duplicate offsets + selects copy', nAfter.length === nBefore + 1 &&
+  nAfter[nAfter.length - 1].style.left === '14.4%' && WND.resizer.el === nAfter[nAfter.length - 1]);
+// step-editing nudge writes the step, not rest
+ndBlk = DND.querySelectorAll('#stage .blk')[0];
+WND.setSingleSelection(ndBlk);
+DND.querySelector('#btn-anim-add').click();
+await wait(50);
+DND.dispatchEvent(new WND.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
+await wait(50);
+const ndList = JSON.parse(ndBlk.getAttribute('data-anim'));
+check('nudge lands in displayed step', ndList[ndList.length - 1].to.left === 9.5 && ndBlk.style.left === '9.5%' &&
+  /left:\s*9\.4%/.test(WND.App.model.slides.s2.html));
+
 console.log(failures === 0 ? '\nALL TESTS PASSED' : `\n${failures} TEST(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);
